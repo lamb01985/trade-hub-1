@@ -1,8 +1,9 @@
 // ── ORB Tab ───────────────────────────────────────────────────────────────────
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Card, SLabel, Heading, Tile, Fld, Sel, Btn, Pill, CheckRow } from './ui.jsx'
 import { LIME, RED, YELLOW, BLUE, PURPLE, ORANGE, MONO, SANS, BORDER, DARK, PANEL, SETUP_TYPES, todayStr, tomorrowStr, uid, f2, fmtD, fmtU, rrColor, ivContext, calcOptionRR, bsCalc, getETMins, SESSION_LABELS, SESSION_COLORS, SESSION_TIPS } from '../constants.js'
-import { getOptionChain } from '../lib/massive.js'
+import { getOptionChain, getPrevDay, getHistoricalBars } from '../lib/massive.js'
+import { useLocalStorage } from '../hooks/useStore.js'
 
 const CL_ITEMS = [
   { id: 'c1', text: 'Opening range has fully formed for my chosen OR period', required: true },
@@ -611,101 +612,246 @@ export function StatsTab({ trades }) {
   )
 }
 
-// ── Watchlist Tab ─────────────────────────────────────────────────────────────
-const PR = { primary: { color: LIME, label: 'PRIMARY' }, backup: { color: YELLOW, label: 'BACKUP' }, watch: { color: '#555', label: 'WATCH' } }
-const ST = { watching: { color: BLUE, label: 'WATCHING' }, traded: { color: LIME, label: 'TRADED' }, passed: { color: '#444', label: 'PASSED' }, skipped: { color: '#333', label: 'SKIPPED' } }
+// ── Watchlist / Nightly Scanner Tab ──────────────────────────────────────────
 
-export function WatchlistTab({ watchlist, onWatchlistChange, onSendToPrep }) {
-  const [showAdd, setShowAdd] = useState(false)
-  const [sf, setSf] = useState('all')
-  const blank = { ticker: '', bias: 'long', priority: 'primary', catalyst: '', priorHigh: '', priorLow: '', keyResistance: '', keySupport: '', plannedStrike: '', plannedDTE: '', ivNote: '', status: 'watching' }
-  const [form, setForm] = useState(blank)
-  const upd = (k, v) => setForm(f => ({ ...f, [k]: v }))
-  function add() { if (!form.ticker) return; onWatchlistChange([...watchlist, { ...form, id: uid(), ticker: form.ticker.toUpperCase(), date: todayStr() }]); setForm(blank); setShowAdd(false) }
-  function upEntry(id, k, v) { onWatchlistChange(watchlist.map(w => w.id === id ? { ...w, [k]: v } : w)) }
-  const visible = (sf === 'all' ? watchlist : watchlist.filter(w => w.status === sf)).slice().sort((a, b) => ({ primary: 0, backup: 1, watch: 2 }[a.priority] ?? 3) - ({ primary: 0, backup: 1, watch: 2 }[b.priority] ?? 3))
-  const tonight = watchlist.filter(w => w.date === todayStr())
+const DEFAULT_TICKERS = ['QQQ', 'SPY', 'NVDA', 'PLTR', 'TSLA', 'AAPL', 'MSFT', 'AMZN', 'META', 'AMD', 'SMCI', 'MSTR', 'TQQQ']
+
+function calcSetupScore(pd, avgVol) {
+  if (!pd || !avgVol || pd.high <= pd.low) return null
+  const { open, high, low, close, volume } = pd
+  const range = high - low
+
+  // Range score (40%): range as % of close; 3% = 100 pts
+  const rangePct = range / close * 100
+  const rangeScore = Math.min(100, rangePct / 3 * 100)
+
+  // Volume score (30%): 0.5x avg = 0, 2x avg = 100
+  const volRatio = volume / avgVol
+  const volScore = Math.min(100, Math.max(0, (volRatio - 0.5) / 1.5 * 100))
+
+  // Structure score (30%): close near H or L vs midpoint
+  const closePos = (close - low) / range
+  const structureScore = Math.abs(closePos - 0.5) * 200
+
+  return {
+    total: Math.round(rangeScore * 0.4 + volScore * 0.3 + structureScore * 0.3),
+    rangeScore: Math.round(rangeScore),
+    volScore: Math.round(volScore),
+    structureScore: Math.round(structureScore),
+    rangePct,
+    volRatio,
+    closePos,
+  }
+}
+
+function buildObservation(pd, score) {
+  if (!pd || !score) return '—'
+  const { closePos, volRatio, rangeScore } = score
+
+  const structurePart = closePos > 0.75
+    ? 'closed near HOD, clean bullish structure'
+    : closePos < 0.25
+    ? 'closed near LOD, clean bearish structure'
+    : 'mid-range close, choppy — no clear direction'
+
+  const volPart = volRatio >= 2.0 ? 'heavy volume confirmation'
+    : volRatio >= 1.3 ? 'above-avg volume'
+    : volRatio <= 0.7 ? 'light volume, low conviction'
+    : 'average volume'
+
+  const rangePart = rangeScore >= 70 ? 'Strong range expansion'
+    : rangeScore >= 40 ? 'Decent range'
+    : 'Tight range'
+
+  return `${rangePart}, ${structurePart}, ${volPart}`
+}
+
+function DataChip({ label, value, color }) {
+  return (
+    <div>
+      <div style={{ fontSize: 8, color: '#333', fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>{label}</div>
+      <div style={{ fontSize: 12, fontFamily: MONO, fontWeight: 700, color: color || '#888' }}>{value}</div>
+    </div>
+  )
+}
+
+export function WatchlistTab({ apiKey, onSendToPrep }) {
+  const [tickers, setTickers] = useLocalStorage('th-scanner-tickers', DEFAULT_TICKERS)
+  const [results, setResults] = useState([])
+  const [scanning, setScanning] = useState(false)
+  const [scanTime, setScanTime] = useState(() => {
+    try { const t = localStorage.getItem('th-scanner-time'); return t ? parseInt(t) : null } catch { return null }
+  })
+  const [addInput, setAddInput] = useState('')
+  const autoScanned = useRef(false)
+
+  async function runScan() {
+    if (!apiKey || scanning) return
+    setScanning(true)
+
+    const settled = await Promise.allSettled(
+      tickers.map(async ticker => {
+        const [pd, hist] = await Promise.all([
+          getPrevDay(apiKey, ticker),
+          getHistoricalBars(apiKey, ticker, 21),
+        ])
+        // Use all bars except the most recent (which is the prev day itself) for avg
+        const histBars = hist.length > 1 ? hist.slice(0, -1) : hist
+        const avgVol = histBars.length > 0
+          ? histBars.reduce((s, b) => s + b.v, 0) / histBars.length
+          : null
+        const score = calcSetupScore(pd, avgVol)
+        return { ticker, pd, avgVol, score }
+      })
+    )
+
+    const data = settled
+      .filter(r => r.status === 'fulfilled' && r.value.pd)
+      .map(r => r.value)
+      .sort((a, b) => (b.score?.total ?? 0) - (a.score?.total ?? 0))
+
+    setResults(data)
+    const ts = Date.now()
+    setScanTime(ts)
+    try { localStorage.setItem('th-scanner-time', String(ts)) } catch {}
+    setScanning(false)
+  }
+
+  // Auto-scan on tab open if last scan was > 30 min ago
+  useEffect(() => {
+    if (autoScanned.current || !apiKey) return
+    autoScanned.current = true
+    if (!scanTime || Date.now() - scanTime > 30 * 60 * 1000) runScan()
+  }, [apiKey]) // eslint-disable-line
+
+  function addTicker() {
+    const t = addInput.trim().toUpperCase()
+    if (!t || tickers.includes(t)) { setAddInput(''); return }
+    setTickers([...tickers, t])
+    setAddInput('')
+  }
+
+  function removeTicker(t) {
+    setTickers(prev => prev.filter(x => x !== t))
+    setResults(prev => prev.filter(r => r.ticker !== t))
+  }
+
+  const timeSince = scanTime ? Math.round((Date.now() - scanTime) / 60000) : null
+  const scanLabel = timeSince === null ? null
+    : timeSince < 1 ? 'just now'
+    : timeSince === 1 ? '1 min ago'
+    : `${timeSince} min ago`
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div><SLabel>Nightly Scanning</SLabel><Heading>Watchlist</Heading></div>
-        <Btn small onClick={() => setShowAdd(!showAdd)}>{showAdd ? 'Cancel' : '+ Add Ticker'}</Btn>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10 }}>
+        <div>
+          <SLabel>Nightly Setup Scanner</SLabel>
+          <Heading>Watchlist</Heading>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {scanLabel && <span style={{ fontSize: 9, fontFamily: MONO, color: '#444' }}>Scanned {scanLabel}</span>}
+          {!apiKey && <span style={{ fontSize: 9, fontFamily: MONO, color: RED }}>No API key — add in Command</span>}
+          <Btn small onClick={runScan} disabled={!apiKey || scanning}>
+            {scanning ? 'Scanning...' : `Scan ${tickers.length} tickers`}
+          </Btn>
+        </div>
       </div>
-      {tonight.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-          <Tile compact label="Tonight" value={tonight.length} color={LIME} />
-          <Tile compact label="Primary" value={tonight.find(w => w.priority === 'primary')?.ticker || '—'} color={LIME} />
-          <Tile compact label="Backup" value={tonight.find(w => w.priority === 'backup')?.ticker || '—'} color={YELLOW} />
-          <Tile compact label="Watching" value={tonight.filter(w => w.priority === 'watch').length} />
+
+      {/* Ticker management */}
+      <Card>
+        <SLabel>Ticker List</SLabel>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+          {tickers.map(t => (
+            <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#141414', border: `1px solid ${BORDER}`, borderRadius: 3, padding: '4px 10px' }}>
+              <span style={{ fontSize: 11, fontFamily: MONO, color: '#888' }}>{t}</span>
+              <span onClick={() => removeTicker(t)} style={{ fontSize: 9, color: '#3a3a3a', cursor: 'pointer', lineHeight: 1 }}>✕</span>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            value={addInput}
+            onInput={e => setAddInput(e.target.value.toUpperCase())}
+            onKeyDown={e => e.key === 'Enter' && addTicker()}
+            placeholder="Add ticker..."
+            style={{ background: '#161616', border: `1px solid ${BORDER}`, borderRadius: 4, color: '#e8e8e8', fontFamily: MONO, fontSize: 12, padding: '7px 12px', outline: 'none', width: 130 }}
+          />
+          <Btn small variant="ghost" onClick={addTicker} disabled={!addInput.trim()}>Add</Btn>
+        </div>
+      </Card>
+
+      {/* Scanning indicator */}
+      {scanning && (
+        <div style={{ textAlign: 'center', padding: '40px 0', color: '#444', fontFamily: MONO, fontSize: 11 }}>
+          Fetching data for {tickers.length} tickers...
         </div>
       )}
-      {showAdd && (
-        <div style={{ background: '#0a0d0a', border: '1px solid #1a2a1a', borderRadius: 5, padding: '20px' }}>
-          <SLabel>Add Tonight's Setup</SLabel>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 14 }}>
-            <Fld label="Ticker" value={form.ticker} onChange={v => upd('ticker', v.toUpperCase())} type="text" placeholder="QQQ" mono />
-            <Sel label="Priority" value={form.priority} onChange={v => upd('priority', v)} options={[{ value: 'primary', label: 'Primary — A setup' }, { value: 'backup', label: 'Backup — B setup' }, { value: 'watch', label: 'Watch only' }]} />
-            <Sel label="Bias" value={form.bias} onChange={v => upd('bias', v)} options={[{ value: 'long', label: '↑ Bullish — Call' }, { value: 'short', label: '↓ Bearish — Put' }, { value: 'neutral', label: '◆ Neutral' }]} />
+
+      {/* Results */}
+      {!scanning && results.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase', paddingLeft: 2 }}>
+            {results.length} tickers ranked by setup score — best at top
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12, marginBottom: 14 }}>
-            <Fld label="Prior High" value={form.priorHigh} onChange={v => upd('priorHigh', v)} placeholder="714.00" prefix="$" />
-            <Fld label="Prior Low" value={form.priorLow} onChange={v => upd('priorLow', v)} placeholder="709.50" prefix="$" />
-            <Fld label="Resistance" value={form.keyResistance} onChange={v => upd('keyResistance', v)} placeholder="715.00" prefix="$" />
-            <Fld label="Support" value={form.keySupport} onChange={v => upd('keySupport', v)} placeholder="712.00" prefix="$" />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 14 }}>
-            <Fld label="Strike" value={form.plannedStrike} onChange={v => upd('plannedStrike', v)} placeholder="714" prefix="$" />
-            <Fld label="DTE" value={form.plannedDTE} onChange={v => upd('plannedDTE', v)} placeholder="1" step="1" suffix="d" />
-            <Fld label="IV Note" value={form.ivNote} onChange={v => upd('ivNote', v)} placeholder="~26%" mono />
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 16 }}>
-            <label style={{ fontSize: 9, letterSpacing: '0.14em', color: '#3a3a3a', textTransform: 'uppercase', fontFamily: MONO }}>Catalyst / Why this ticker</label>
-            <textarea value={form.catalyst} onInput={e => upd('catalyst', e.target.value)} placeholder="Setup, strike, entry trigger. Why are you watching this?"
-              style={{ background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 4, color: '#888', fontFamily: SANS, fontSize: 13, padding: '10px 14px', resize: 'vertical', minHeight: 60, outline: 'none', lineHeight: 1.7, width: '100%' }} />
-          </div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <Btn onClick={add} disabled={!form.ticker}>Save to Watchlist</Btn>
-            <Btn variant="ghost" onClick={() => setShowAdd(false)}>Cancel</Btn>
-          </div>
-        </div>
-      )}
-      {watchlist.length > 0 && (
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {['all', 'watching', 'traded', 'passed', 'skipped'].map(f => <Pill key={f} label={f} active={sf === f} onClick={() => setSf(f)} />)}
-        </div>
-      )}
-      {visible.length === 0
-        ? <div style={{ textAlign: 'center', padding: '60px 0', color: '#1e1e1e', fontFamily: MONO, fontSize: 12 }}><div style={{ fontSize: 28, marginBottom: 12, opacity: 0.3 }}>◈</div>No tickers yet.</div>
-        : <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {visible.map(entry => {
-            const pc = PR[entry.priority] || {}, sc2 = ST[entry.status] || {}, bc = entry.bias === 'long' ? LIME : entry.bias === 'short' ? RED : YELLOW
+          {results.map(({ ticker, pd, score }, idx) => {
+            if (!pd || !score) return null
+            const range = pd.high - pd.low
+            const movePct = (pd.close - pd.open) / pd.open * 100
+            const { volRatio, closePos, total } = score
+            const scoreColor = total >= 70 ? LIME : total >= 45 ? YELLOW : RED
+            const closeLbl = closePos > 0.75 ? 'Near High' : closePos < 0.25 ? 'Near Low' : 'Mid Range'
+            const closeLblColor = (closePos > 0.75 || closePos < 0.25) ? '#aaa' : '#444'
+            const volColor = volRatio >= 1.5 ? LIME : volRatio >= 1.0 ? '#777' : '#444'
+            const obs = buildObservation(pd, score)
             return (
-              <div key={entry.id} style={{ background: PANEL, border: `1px solid ${entry.priority === 'primary' ? LIME + '22' : BORDER}`, borderRadius: 5, overflow: 'hidden' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: `1px solid ${BORDER}` }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                    <div style={{ fontSize: 20, fontWeight: 900, fontFamily: MONO, color: entry.priority === 'primary' ? LIME : '#e8e8e8' }}>{entry.ticker}</div>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 9, color: pc.color, fontFamily: MONO, border: `1px solid ${pc.color}44`, borderRadius: 2, padding: '2px 7px' }}>{pc.label}</span>
-                      <span style={{ fontSize: 9, color: bc, fontFamily: MONO, border: `1px solid ${bc}44`, borderRadius: 2, padding: '2px 7px' }}>{entry.bias === 'long' ? '↑ CALL' : '↓ PUT'}</span>
-                      {entry.plannedStrike && <span style={{ fontSize: 9, color: PURPLE, fontFamily: MONO, border: `1px solid ${PURPLE}44`, borderRadius: 2, padding: '2px 7px' }}>${entry.plannedStrike}{entry.plannedDTE ? ' ' + entry.plannedDTE + 'DTE' : ''}</span>}
-                      {entry.ivNote && <span style={{ fontSize: 9, color: YELLOW, fontFamily: MONO, border: `1px solid ${YELLOW}44`, borderRadius: 2, padding: '2px 7px' }}>IV: {entry.ivNote}</span>}
+              <div key={ticker} style={{ background: PANEL, border: `1px solid ${total >= 70 ? LIME + '22' : BORDER}`, borderRadius: 5, overflow: 'hidden' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '14px 18px' }}>
+                  {/* Rank */}
+                  <div style={{ fontSize: 10, fontFamily: MONO, color: '#222', width: 18, flexShrink: 0, textAlign: 'right' }}>#{idx + 1}</div>
+
+                  {/* Ticker */}
+                  <div style={{ width: 58, fontSize: 16, fontWeight: 900, fontFamily: MONO, color: total >= 70 ? LIME : total >= 45 ? YELLOW : '#e8e8e8', flexShrink: 0 }}>{ticker}</div>
+
+                  {/* Data chips */}
+                  <div style={{ flex: 1, display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+                    <DataChip label="Prev Range" value={`$${f2(range)}`} />
+                    <DataChip label="% Move" value={`${movePct > 0 ? '+' : ''}${f2(movePct)}%`} color={movePct > 0.3 ? LIME : movePct < -0.3 ? RED : '#888'} />
+                    <DataChip label="Volume" value={`${volRatio.toFixed(1)}x avg`} color={volColor} />
+                    <DataChip label="Close Position" value={closeLbl} color={closeLblColor} />
+                  </div>
+
+                  {/* Score */}
+                  <div style={{ textAlign: 'right', flexShrink: 0, minWidth: 60 }}>
+                    <div style={{ fontSize: 8, color: '#333', fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>Score</div>
+                    <div style={{ fontSize: 22, fontWeight: 900, fontFamily: MONO, color: scoreColor, lineHeight: 1 }}>{total}</div>
+                    <div style={{ width: 60, height: 3, background: '#1a1a1a', borderRadius: 2, marginTop: 5 }}>
+                      <div style={{ height: '100%', width: `${total}%`, background: scoreColor, borderRadius: 2 }} />
                     </div>
                   </div>
-                  <span style={{ fontSize: 9, color: sc2.color, fontFamily: MONO, border: `1px solid ${sc2.color}44`, borderRadius: 2, padding: '2px 8px' }}>{sc2.label}</span>
                 </div>
-                {entry.catalyst && <div style={{ padding: '12px 18px', borderBottom: `1px solid ${BORDER}` }}>
-                  <div style={{ fontSize: 11, color: '#666', fontFamily: SANS, lineHeight: 1.6 }}><span style={{ color: YELLOW, fontFamily: MONO, fontSize: 9, letterSpacing: '0.1em', marginRight: 8 }}>THESIS</span>{entry.catalyst}</div>
-                </div>}
-                <div style={{ display: 'flex', gap: 8, padding: '10px 18px', background: '#0a0a0a', alignItems: 'center' }}>
-                  <Btn small variant="blue" onClick={() => onSendToPrep(entry)}>Send to Prep →</Btn>
-                  <Sel value={entry.status} onChange={v => upEntry(entry.id, 'status', v)} options={[{ value: 'watching', label: 'Watching' }, { value: 'traded', label: 'Traded' }, { value: 'passed', label: 'Passed' }, { value: 'skipped', label: 'Skipped' }]} small />
-                  <div style={{ flex: 1 }} />
-                  <Btn small variant="danger" onClick={() => onWatchlistChange(watchlist.filter(w => w.id !== entry.id))}>Remove</Btn>
+
+                {/* Observation + Send to Prep */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '9px 18px', background: '#0a0a0a', borderTop: '1px solid #111' }}>
+                  <span style={{ fontSize: 10, fontFamily: MONO, color: '#444', flex: 1 }}>{obs}</span>
+                  <Btn small variant="blue" onClick={() => onSendToPrep({ ticker, priorHigh: String(f2(pd.high)), priorLow: String(f2(pd.low)) })}>
+                    Send to Prep →
+                  </Btn>
                 </div>
               </div>
             )
           })}
-        </div>}
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!scanning && results.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '60px 0', color: '#1e1e1e', fontFamily: MONO, fontSize: 12 }}>
+          <div style={{ fontSize: 28, marginBottom: 12, opacity: 0.3 }}>◈</div>
+          {apiKey ? "Hit Scan to analyze tonight's setups." : 'Add your Massive API key in Command to enable scanning.'}
+        </div>
+      )}
     </div>
   )
 }

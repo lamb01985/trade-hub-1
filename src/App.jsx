@@ -30,7 +30,6 @@ export default function App() {
   const [trades, setTrades] = useLocalStorage('th-trades', [])
   const [settings, setSettings] = useLocalStorage('th-settings', defaultSettings)
   const [prep, setPrep] = useLocalStorage('th-prep', defaultPrep)
-  const [watchlist, setWatchlist] = useLocalStorage('th-watchlist', [])
   const [orbPrefill, setOrbPrefill] = useState(null)
   const [calcPrefill, setCalcPrefill] = useState(null)
   const [checklistPassed, setChecklistPassed] = useState(false)
@@ -184,8 +183,7 @@ export default function App() {
       <div style={{ maxWidth: 960, margin: '0 auto', padding: '28px 20px 60px' }}>
         {activeTab === 'watchlist' && (
           <WatchlistTab
-            watchlist={watchlist}
-            onWatchlistChange={setWatchlist}
+            apiKey={apiKey}
             onSendToPrep={entry => { setPrep(p => ({ ...p, ticker: entry.ticker, orbHigh: entry.priorHigh || '', orbLow: entry.priorLow || '', plannedStrike: entry.plannedStrike || '', plannedDTE: entry.plannedDTE || '', ivNote: entry.ivNote || '' })); setActiveTab('prep') }}
           />
         )}
