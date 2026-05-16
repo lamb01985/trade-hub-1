@@ -21,7 +21,7 @@ const TABS = [
 ]
 
 const defaultSettings = { dailyLossLimit: 500, maxTradesPerDay: 5, orPeriod: '15', alertsEnabled: false }
-const defaultPrep = { ticker: 'QQQ', orPeriod: '15', orbHigh: '', orbLow: '', keyLevel: '', plannedStrike: '', plannedDTE: '1', ivNote: '', gamePlan: '', avoidNotes: '', dayReview: '' }
+const defaultPrep = { ticker: 'QQQ', orPeriod: '15', orbHigh: '', orbLow: '', keyLevel: '', plannedStrike: '', plannedDTE: '1', ivNote: '', gamePlan: '', avoidNotes: '', dayReview: '', marketEvents: '' }
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('command')
@@ -211,6 +211,7 @@ export default function App() {
             anthropicKey={anthropicKey}
             onAnthropicKeyChange={setAnthropicKey}
             liveData={liveData}
+            marketEvents={prep.marketEvents}
           />
         )}
 
@@ -257,6 +258,8 @@ export default function App() {
             trades={trades}
             onUpdate={handleUpdateTrade}
             onDelete={handleDeleteTrade}
+            anthropicKey={anthropicKey}
+            prep={prep}
           />
         )}
 

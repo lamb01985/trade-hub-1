@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Card, SLabel, Heading, Tile, Fld, Sel, Btn, Pill, CheckRow } from './ui.jsx'
 import { LIME, RED, YELLOW, BLUE, PURPLE, ORANGE, MONO, SANS, BORDER, DARK, PANEL, SETUP_TYPES, todayStr, tomorrowStr, uid, f2, fmtD, fmtU, rrColor, ivContext, calcOptionRR, bsCalc, getETMins, SESSION_LABELS, SESSION_COLORS, SESSION_TIPS } from '../constants.js'
-import { getOptionChain, getPrevDay, getHistoricalBars } from '../lib/massive.js'
+import { getOptionChain, getPrevDay, getHistoricalBars, getOptionsPCRatio } from '../lib/massive.js'
 import { useLocalStorage } from '../hooks/useStore.js'
 
 const CL_ITEMS = [
@@ -518,14 +518,76 @@ function TradeRow({ trade, onUpdate, onDelete }) {
   )
 }
 
-export function JournalTab({ trades, onUpdate, onDelete }) {
+export function JournalTab({ trades, onUpdate, onDelete, anthropicKey, prep }) {
   const [sf, setSf] = useState('all')
   const [tf, setTf] = useState('all')
+  const [eodNotes, setEodNotes] = useLocalStorage('th-eod-notes', {})
+  const [coachLoading, setCoachLoading] = useState(false)
+  const [coachError, setCoachError] = useState('')
+
   let visible = trades.slice()
   if (sf !== 'all') visible = visible.filter(t => t.status === sf)
   if (tf !== 'all') visible = visible.filter(t => t.setupType === tf)
   visible.reverse()
   const usedSetups = [...new Set(trades.map(t => t.setupType).filter(Boolean))]
+
+  const today = todayStr()
+  const todayTrades = trades.filter(t => t.date?.slice(0, 10) === today)
+  const hasClosedToday = todayTrades.some(t => t.status !== 'open')
+  const todayNote = eodNotes[today]
+
+  async function generateCoaching() {
+    if (!anthropicKey || coachLoading) return
+    setCoachLoading(true)
+    setCoachError('')
+    const tradeList = todayTrades.map((t, i) =>
+      `${i + 1}. ${t.ticker} ${(t.optType || '').toUpperCase()} $${t.strike || '?'} — Entry $${f2(t.entry)}, Stop $${f2(t.stop)}, Target $${f2(t.target)}, ${t.contracts || 1}c — Status: ${t.status} — P&L: ${t.pnl != null ? fmtD(t.pnl) : 'open'} — Notes: ${t.notes || '—'}`
+    ).join('\n')
+    const prompt = `You are a trading performance coach. Be direct, specific, and brief. Under 250 words total.
+
+Today: ${today}
+Morning game plan:
+${prep?.gamePlan || '(no game plan recorded)'}
+
+Today's trades:
+${tradeList || '(none)'}
+
+Write an EOD coaching note using exactly these section headers:
+
+EXECUTED WELL
+[1-2 specific things — reference actual trades if possible]
+
+MISTAKES PATTERN
+[The repeating pattern in any mistakes. If clean execution, say so.]
+
+ONE ADJUSTMENT TOMORROW
+[One specific, actionable thing to change or keep]
+
+GRADE: [A, B, C, or D]
+A = disciplined, followed plan. B = mostly disciplined, minor deviations. C = multiple violations. D = rule violations or emotional trading.
+Grade on PROCESS only. A disciplined loss = B or higher. An undisciplined win = C or lower.`
+
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+        body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 500, messages: [{ role: 'user', content: prompt }] })
+      })
+      const data = await res.json()
+      if (data.content?.[0]?.text) {
+        const note = data.content[0].text
+        const gradeMatch = note.match(/GRADE:\s*([ABCD])/i)
+        const grade = gradeMatch?.[1]?.toUpperCase() || null
+        setEodNotes(prev => ({ ...prev, [today]: { note, grade, ts: Date.now() } }))
+      } else {
+        setCoachError(data.error?.message || 'Coaching failed — check Claude API key in Command tab')
+      }
+    } catch (e) { setCoachError('Network error: ' + e.message) }
+    setCoachLoading(false)
+  }
+
+  const gradeColor = g => g === 'A' ? LIME : g === 'B' ? YELLOW : g === 'C' ? ORANGE : g === 'D' ? RED : '#555'
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10 }}>
@@ -541,12 +603,50 @@ export function JournalTab({ trades, onUpdate, onDelete }) {
           </div>
           {visible.map(t => <TradeRow key={t.id} trade={t} onUpdate={onUpdate} onDelete={onDelete} />)}
         </div>}
+
+      {/* EOD Coach */}
+      {hasClosedToday && (
+        <div style={{ background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 5, padding: '16px 20px' }}>
+          {todayNote ? (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <SLabel style={{ marginBottom: 0 }}>EOD Coach</SLabel>
+                  {todayNote.grade && (
+                    <div style={{ fontSize: 18, fontWeight: 900, fontFamily: MONO, color: gradeColor(todayNote.grade), border: `1px solid ${gradeColor(todayNote.grade)}44`, borderRadius: 4, padding: '2px 10px', lineHeight: 1.4 }}>{todayNote.grade}</div>
+                  )}
+                </div>
+                <Btn small variant="ghost" onClick={generateCoaching} disabled={coachLoading || !anthropicKey}>
+                  {coachLoading ? 'Coaching...' : 'Regenerate'}
+                </Btn>
+              </div>
+              <pre style={{ fontFamily: MONO, fontSize: 11, color: '#888', lineHeight: 1.75, whiteSpace: 'pre-wrap', margin: 0 }}>{todayNote.note}</pre>
+            </>
+          ) : (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#aaa', fontFamily: MONO, marginBottom: 4 }}>EOD Coach</div>
+                <div style={{ fontSize: 11, color: '#555', fontFamily: MONO }}>
+                  {anthropicKey ? `${todayTrades.length} trade${todayTrades.length !== 1 ? 's' : ''} today. Get Claude's coaching on your execution and process.` : 'Add Claude API key in Command to enable EOD coaching.'}
+                </div>
+              </div>
+              {anthropicKey && (
+                <Btn small variant="lime" onClick={generateCoaching} disabled={coachLoading}>
+                  {coachLoading ? '✦ Coaching...' : '✦ EOD Coach'}
+                </Btn>
+              )}
+            </div>
+          )}
+          {coachError && <div style={{ fontSize: 10, color: RED, fontFamily: MONO, marginTop: 10 }}>{coachError}</div>}
+        </div>
+      )}
     </div>
   )
 }
 
 // ── Stats Tab ─────────────────────────────────────────────────────────────────
 export function StatsTab({ trades }) {
+  const [eodNotes] = useLocalStorage('th-eod-notes', {})
   const closed = trades.filter(t => t.status === 'win' || t.status === 'loss')
   const wins = trades.filter(t => t.status === 'win'), losses = trades.filter(t => t.status === 'loss')
   const winRate = closed.length ? (wins.length / closed.length) * 100 : null
@@ -608,6 +708,43 @@ export function StatsTab({ trades }) {
           </div>
         </div>
       )}
+
+      {Object.keys(eodNotes).length > 0 && (() => {
+        const gradeColor = g => g === 'A' ? LIME : g === 'B' ? YELLOW : g === 'C' ? ORANGE : g === 'D' ? RED : '#333'
+        const sorted = Object.entries(eodNotes).sort(([a], [b]) => a.localeCompare(b))
+        const graded = sorted.filter(([, v]) => v.grade)
+        const avgScore = graded.length ? graded.reduce((s, [, v]) => s + ({ A: 4, B: 3, C: 2, D: 1 }[v.grade] || 0), 0) / graded.length : null
+        const avgGrade = avgScore ? (avgScore >= 3.5 ? 'A' : avgScore >= 2.5 ? 'B' : avgScore >= 1.5 ? 'C' : 'D') : null
+        return (
+          <Card>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <SLabel style={{ marginBottom: 0 }}>Discipline Grade History</SLabel>
+              {avgGrade && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 9, color: '#444', fontFamily: MONO }}>Avg</span>
+                  <span style={{ fontSize: 16, fontWeight: 900, fontFamily: MONO, color: gradeColor(avgGrade) }}>{avgGrade}</span>
+                </div>
+              )}
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+              {sorted.map(([date, { grade }]) => {
+                const color = gradeColor(grade)
+                return (
+                  <div key={date} title={`${date}: ${grade || '?'}`} style={{ width: 26, height: 26, borderRadius: 4, background: grade ? color + '28' : '#141414', border: `1px solid ${grade ? color + '55' : '#222'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontFamily: MONO, fontWeight: 900, color: grade ? color : '#2a2a2a', cursor: 'default' }}>
+                    {grade || '·'}
+                  </div>
+                )
+              })}
+            </div>
+            <div style={{ display: 'flex', gap: 16, marginTop: 12, fontSize: 9, fontFamily: MONO, color: '#333' }}>
+              {[['A', LIME], ['B', YELLOW], ['C', ORANGE], ['D', RED]].map(([g, c]) => (
+                <span key={g} style={{ color: c }}>{g} — {graded.filter(([, v]) => v.grade === g).length} day{graded.filter(([, v]) => v.grade === g).length !== 1 ? 's' : ''}</span>
+              ))}
+              <span style={{ marginLeft: 'auto' }}>process grade, not P&L</span>
+            </div>
+          </Card>
+        )
+      })()}
     </div>
   )
 }
@@ -691,17 +828,17 @@ export function WatchlistTab({ apiKey, onSendToPrep }) {
 
     const settled = await Promise.allSettled(
       tickers.map(async ticker => {
-        const [pd, hist] = await Promise.all([
+        const [pd, hist, pcr] = await Promise.all([
           getPrevDay(apiKey, ticker),
           getHistoricalBars(apiKey, ticker, 21),
+          getOptionsPCRatio(apiKey, ticker),
         ])
-        // Use all bars except the most recent (which is the prev day itself) for avg
         const histBars = hist.length > 1 ? hist.slice(0, -1) : hist
         const avgVol = histBars.length > 0
           ? histBars.reduce((s, b) => s + b.v, 0) / histBars.length
           : null
         const score = calcSetupScore(pd, avgVol)
-        return { ticker, pd, avgVol, score }
+        return { ticker, pd, avgVol, score, pcr }
       })
     )
 
@@ -792,10 +929,15 @@ export function WatchlistTab({ apiKey, onSendToPrep }) {
       {/* Results */}
       {!scanning && results.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase', paddingLeft: 2 }}>
-            {results.length} tickers ranked by setup score — best at top
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingLeft: 2 }}>
+            <span style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+              {results.length} tickers ranked by setup score — best at top
+            </span>
+            {results.some(r => r.pcr?.planError) && (
+              <span style={{ fontSize: 9, color: '#333', fontFamily: MONO }}>◦ P/C ratio requires Options Advanced plan</span>
+            )}
           </div>
-          {results.map(({ ticker, pd, score }, idx) => {
+          {results.map(({ ticker, pd, score, pcr }, idx) => {
             if (!pd || !score) return null
             const range = pd.high - pd.low
             const movePct = (pd.close - pd.open) / pd.open * 100
@@ -805,21 +947,28 @@ export function WatchlistTab({ apiKey, onSendToPrep }) {
             const closeLblColor = (closePos > 0.75 || closePos < 0.25) ? '#aaa' : '#444'
             const volColor = volRatio >= 1.5 ? LIME : volRatio >= 1.0 ? '#777' : '#444'
             const obs = buildObservation(pd, score)
+            const unusualVol = volRatio >= 2.0
+            const hasPCR = pcr && !pcr.planError && !pcr.error && pcr.pcRatio != null
+            const pcrColor = hasPCR ? (pcr.pcRatio > 1.2 ? RED : pcr.pcRatio < 0.8 ? LIME : '#888') : '#444'
             return (
               <div key={ticker} style={{ background: PANEL, border: `1px solid ${total >= 70 ? LIME + '22' : BORDER}`, borderRadius: 5, overflow: 'hidden' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '14px 18px' }}>
                   {/* Rank */}
                   <div style={{ fontSize: 10, fontFamily: MONO, color: '#222', width: 18, flexShrink: 0, textAlign: 'right' }}>#{idx + 1}</div>
 
-                  {/* Ticker */}
-                  <div style={{ width: 58, fontSize: 16, fontWeight: 900, fontFamily: MONO, color: total >= 70 ? LIME : total >= 45 ? YELLOW : '#e8e8e8', flexShrink: 0 }}>{ticker}</div>
+                  {/* Ticker + flash */}
+                  <div style={{ flexShrink: 0, minWidth: 60 }}>
+                    <div style={{ fontSize: 16, fontWeight: 900, fontFamily: MONO, color: total >= 70 ? LIME : total >= 45 ? YELLOW : '#e8e8e8' }}>{ticker}</div>
+                    {unusualVol && <div style={{ fontSize: 8, color: YELLOW, fontFamily: MONO, letterSpacing: '0.08em' }}>⚡ UNUSUAL VOL</div>}
+                  </div>
 
                   {/* Data chips */}
-                  <div style={{ flex: 1, display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, display: 'flex', gap: 18, flexWrap: 'wrap' }}>
                     <DataChip label="Prev Range" value={`$${f2(range)}`} />
                     <DataChip label="% Move" value={`${movePct > 0 ? '+' : ''}${f2(movePct)}%`} color={movePct > 0.3 ? LIME : movePct < -0.3 ? RED : '#888'} />
                     <DataChip label="Volume" value={`${volRatio.toFixed(1)}x avg`} color={volColor} />
                     <DataChip label="Close Position" value={closeLbl} color={closeLblColor} />
+                    <DataChip label="P/C Ratio" value={hasPCR ? pcr.pcRatio.toFixed(2) : '—'} color={pcrColor} />
                   </div>
 
                   {/* Score */}
@@ -915,6 +1064,7 @@ Market context:
 - VWAP: $${d(vwapData?.vwap)} | VWAP +1σ: $${d(vwapData?.band1up)} | -1σ: $${d(vwapData?.band1dn)}
 - Planned strike: $${prep.plannedStrike || 'not set'} | DTE: ${prep.plannedDTE || 1}
 - IV note: ${prep.ivNote || 'not recorded'}
+- Market events tomorrow: ${prep.marketEvents || 'none noted'}
 
 Write a tight, specific game plan with these exact sections:
 
@@ -1041,6 +1191,18 @@ Only use the levels provided. No generic advice.`
           <label style={{ fontSize: 9, letterSpacing: '0.14em', color: '#666', textTransform: 'uppercase', fontFamily: MONO }}>What to Avoid Tomorrow</label>
           <textarea value={prep.avoidNotes || ''} onInput={e => upd('avoidNotes', e.target.value)} placeholder="What traps will you stay out of?"
             style={{ background: '#111', border: `1px solid ${BORDER}`, borderRadius: 4, color: '#888', fontFamily: MONO, fontSize: 12, padding: '12px 14px', resize: 'vertical', minHeight: 52, outline: 'none', lineHeight: 1.7, width: '100%' }} />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginTop: 10 }}>
+          <label style={{ fontSize: 9, letterSpacing: '0.14em', color: '#666', textTransform: 'uppercase', fontFamily: MONO }}>Market Events Tomorrow</label>
+          <input
+            type="text"
+            value={prep.marketEvents || ''}
+            onInput={e => upd('marketEvents', e.target.value)}
+            placeholder="CPI 8:30 CT, FOMC 2pm, NVDA earnings AH..."
+            style={{ background: '#111', border: `1px solid ${BORDER}`, borderRadius: 4, color: '#888', fontFamily: MONO, fontSize: 12, padding: '9px 12px', outline: 'none', width: '100%' }}
+            onFocus={e => { e.target.style.borderColor = YELLOW }}
+            onBlur={e => { e.target.style.borderColor = BORDER }}
+          />
         </div>
       </div>
 

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Card, SLabel, Heading, Tile, Fld, Sel, Btn } from './ui.jsx'
 import { LIME, RED, YELLOW, MONO, BORDER, SESSION_LABELS, SESSION_COLORS, SESSION_TIPS, getSession, todayStr, f2, fmtD, fmtU } from '../constants.js'
 
-export default function Command({ trades, settings, onSettingsChange, lockedOut, onUnlock, apiKey, onApiKeyChange, anthropicKey, onAnthropicKeyChange, liveData }) {
+export default function Command({ trades, settings, onSettingsChange, lockedOut, onUnlock, apiKey, onApiKeyChange, anthropicKey, onAnthropicKeyChange, liveData, marketEvents }) {
   const [time, setTime] = useState(new Date())
   useEffect(() => { const t = setInterval(() => setTime(new Date()), 1000); return () => clearInterval(t) }, [])
 
@@ -34,6 +34,16 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
             <div style={{ fontSize: 11, color: '#aa5555', fontFamily: MONO, marginTop: 4 }}>Daily loss limit reached. Step away and review.</div>
           </div>
           <Btn variant="danger" small onClick={onUnlock}>Override?</Btn>
+        </div>
+      )}
+
+      {marketEvents && (
+        <div style={{ background: '#110e00', border: `1px solid ${YELLOW}44`, borderRadius: 5, padding: '14px 18px', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+          <span style={{ color: YELLOW, fontSize: 16, flexShrink: 0, lineHeight: 1.2 }}>⚠</span>
+          <div>
+            <div style={{ fontSize: 9, fontWeight: 700, color: YELLOW, fontFamily: MONO, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 4 }}>Market Event</div>
+            <div style={{ fontSize: 12, color: '#c8a030', fontFamily: MONO, lineHeight: 1.5 }}>{marketEvents} — reassess size and setup before trading</div>
+          </div>
         </div>
       )}
 
@@ -84,6 +94,63 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
           </div>
         </div>
       )}
+
+      {/* Pre-market gap analysis */}
+      {session === 'pre-market' && liveData?.price && liveData?.prevDay && (() => {
+        const { price } = liveData
+        const { high: pdh, low: pdl, close: pdc } = liveData.prevDay
+        if (!pdc || !pdh || !pdl || pdh <= pdl) return null
+        const gap = price - pdc
+        const priorRange = pdh - pdl
+        const gapPct = Math.abs(gap) / priorRange * 100
+        const isGapUp = gap >= 0
+
+        const margin = Math.max(priorRange * 0.08, 0.40)
+        const minP = Math.min(pdl, price) - margin
+        const maxP = Math.max(pdh, price) + margin
+        const totalR = maxP - minP
+        const toPct = v => `${((v - minP) / totalR * 100).toFixed(1)}%`
+
+        let context, ctxColor
+        if (gapPct < 25) { context = 'Small gap — likely fills before trending'; ctxColor = YELLOW }
+        else if (gapPct <= 50) { context = 'Moderate gap — watch for fill attempt before trend'; ctxColor = YELLOW }
+        else { context = `Large gap — gap-and-go likely, OR forms ${isGapUp ? 'above' : 'below'} prior range`; ctxColor = LIME }
+
+        return (
+          <div style={{ background: '#0d0d08', border: `1px solid ${YELLOW}33`, borderRadius: 5, padding: '14px 18px' }}>
+            <SLabel>Pre-Market Gap Analysis</SLabel>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+              <div>
+                <div style={{ fontSize: 24, fontWeight: 900, fontFamily: MONO, color: isGapUp ? LIME : RED, lineHeight: 1 }}>
+                  {isGapUp ? '▲' : '▼'} {isGapUp ? '+' : ''}{f2(gap)}
+                </div>
+                <div style={{ fontSize: 10, color: '#555', fontFamily: MONO, marginTop: 4 }}>
+                  {f2(gapPct)}% of prior range · PDC ${f2(pdc)} → PM ${f2(price)}
+                </div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: 9, color: '#333', fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>Prior Range</div>
+                <div style={{ fontSize: 14, fontWeight: 700, fontFamily: MONO, color: '#555' }}>${f2(pdl)} – ${f2(pdh)}</div>
+              </div>
+            </div>
+
+            {/* Position bar */}
+            <div style={{ position: 'relative', height: 6, background: '#1a1a1a', borderRadius: 3, margin: '10px 0' }}>
+              {/* Prior range band */}
+              <div style={{ position: 'absolute', left: toPct(pdl), right: `${100 - parseFloat(toPct(pdh))}%`, top: 0, bottom: 0, background: '#2a2a2a', borderRadius: 3 }} />
+              {/* PDC tick */}
+              <div style={{ position: 'absolute', left: toPct(pdc), top: -2, bottom: -2, width: 2, background: '#555', transform: 'translateX(-50%)' }} />
+              {/* Current price dot */}
+              <div style={{ position: 'absolute', left: toPct(price), top: '50%', transform: 'translate(-50%, -50%)', width: 10, height: 10, borderRadius: '50%', background: isGapUp ? LIME : RED, boxShadow: `0 0 6px ${isGapUp ? LIME : RED}88`, zIndex: 1 }} />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 8, color: '#333', fontFamily: MONO, marginBottom: 10 }}>
+              <span>PDL ${f2(pdl)}</span><span>PDC ${f2(pdc)}</span><span>PDH ${f2(pdh)}</span>
+            </div>
+
+            <div style={{ fontSize: 11, fontFamily: MONO, color: ctxColor }}>{context}</div>
+          </div>
+        )
+      })()}
 
       {/* Clock + Session */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

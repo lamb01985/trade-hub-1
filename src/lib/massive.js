@@ -78,6 +78,24 @@ export async function getHistoricalBars(apiKey, ticker, days = 20) {
   return getDayBars(apiKey, ticker, from, to)
 }
 
+export async function getOptionsPCRatio(apiKey, ticker) {
+  try {
+    const d = await get(apiKey, `/v3/snapshot/options/${ticker}`, { limit: '250' })
+    const results = d.results || []
+    let callVol = 0, putVol = 0
+    for (const r of results) {
+      const vol = r.day?.volume || 0
+      const type = r.details?.contract_type || ''
+      if (type === 'call') callVol += vol
+      else if (type === 'put') putVol += vol
+    }
+    if (callVol + putVol === 0) return { callVol: 0, putVol: 0, pcRatio: null }
+    return { callVol, putVol, pcRatio: callVol > 0 ? putVol / callVol : null }
+  } catch (e) {
+    return { planError: e.message?.includes('403'), error: e.message }
+  }
+}
+
 // ── WebSocket ────────────────────────────────────────────────────────────────
 
 export class MassiveStream {
