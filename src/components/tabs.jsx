@@ -828,6 +828,7 @@ export function WatchlistTab({ apiKey, onSendToPrep }) {
   const [tickers, setTickers] = useLocalStorage('th-scanner-tickers', DEFAULT_TICKERS)
   const [results, setResults] = useState([])
   const [scanning, setScanning] = useState(false)
+  const [scanErrors, setScanErrors] = useState(0)
   const [scanTime, setScanTime] = useState(() => {
     try { const t = localStorage.getItem('th-scanner-time'); return t ? parseInt(t) : null } catch { return null }
   })
@@ -837,15 +838,18 @@ export function WatchlistTab({ apiKey, onSendToPrep }) {
   async function runScan() {
     if (!apiKey || scanning) return
     setScanning(true)
+    setScanErrors(0)
 
+    // Each call has its own .catch() so a single failure doesn't drop the ticker.
+    // This scan is pure REST — no WebSocket dependency.
     const settled = await Promise.allSettled(
       tickers.map(async ticker => {
         const [pd, hist, pcr] = await Promise.all([
-          getPrevDay(apiKey, ticker),
-          getHistoricalBars(apiKey, ticker, 21),
-          getOptionsPCRatio(apiKey, ticker),
+          getPrevDay(apiKey, ticker).catch(() => null),
+          getHistoricalBars(apiKey, ticker, 21).catch(() => []),
+          getOptionsPCRatio(apiKey, ticker).catch(() => ({})),
         ])
-        const histBars = hist.length > 1 ? hist.slice(0, -1) : hist
+        const histBars = Array.isArray(hist) && hist.length > 1 ? hist.slice(0, -1) : (hist || [])
         const avgVol = histBars.length > 0
           ? histBars.reduce((s, b) => s + b.v, 0) / histBars.length
           : null
@@ -859,6 +863,8 @@ export function WatchlistTab({ apiKey, onSendToPrep }) {
       .map(r => r.value)
       .sort((a, b) => (b.score?.total ?? 0) - (a.score?.total ?? 0))
 
+    const errCount = settled.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value?.pd)).length
+    setScanErrors(errCount)
     setResults(data)
     const ts = Date.now()
     setScanTime(ts)
@@ -951,13 +957,18 @@ export function WatchlistTab({ apiKey, onSendToPrep }) {
       {/* Results */}
       {!scanning && results.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingLeft: 2 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingLeft: 2, flexWrap: 'wrap', gap: 6 }}>
             <span style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
               {results.length} tickers ranked by setup score — best at top
             </span>
-            {results.some(r => r.pcr?.planError) && (
-              <span style={{ fontSize: 9, color: '#333', fontFamily: MONO }}>◦ P/C ratio requires Options Advanced plan</span>
-            )}
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+              {scanErrors > 0 && (
+                <span style={{ fontSize: 9, color: '#4a3a2a', fontFamily: MONO }}>⚠ {scanErrors} ticker{scanErrors > 1 ? 's' : ''} returned no data (API limit or bad ticker)</span>
+              )}
+              {results.some(r => r.pcr?.planError) && (
+                <span style={{ fontSize: 9, color: '#333', fontFamily: MONO }}>◦ P/C ratio requires Options Advanced plan</span>
+              )}
+            </div>
           </div>
           {results.map(({ ticker, pd, score, pcr }, idx) => {
             if (!pd) return null
