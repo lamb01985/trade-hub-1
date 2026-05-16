@@ -754,27 +754,32 @@ export function StatsTab({ trades }) {
 const DEFAULT_TICKERS = ['QQQ', 'SPY', 'NVDA', 'PLTR', 'TSLA', 'AAPL', 'MSFT', 'AMZN', 'META', 'AMD', 'SMCI', 'MSTR', 'TQQQ']
 
 function calcSetupScore(pd, avgVol) {
-  if (!pd || !avgVol || pd.high <= pd.low) return null
-  const { open, high, low, close, volume } = pd
+  if (!pd || pd.high <= pd.low) return null
+  const { high, low, close, volume } = pd
   const range = high - low
 
-  // Range score (40%): range as % of close; 3% = 100 pts
+  // Range (45%) — primary filter. Under 0.5% = 0, 3% = 100.
   const rangePct = range / close * 100
-  const rangeScore = Math.min(100, rangePct / 3 * 100)
+  const rangeScore = rangePct < 0.5
+    ? 0
+    : Math.min(100, (rangePct - 0.5) / 2.5 * 100)
 
-  // Volume score (30%): 0.5x avg = 0, 2x avg = 100
-  const volRatio = volume / avgVol
-  const volScore = Math.min(100, Math.max(0, (volRatio - 0.5) / 1.5 * 100))
-
-  // Structure score (30%): close near H or L vs midpoint
+  // Structure (40%) — trending vs choppy. Hard 0 if close is in the middle 30%.
   const closePos = (close - low) / range
-  const structureScore = Math.abs(closePos - 0.5) * 200
+  const extremity = Math.abs(closePos - 0.5)
+  const structureScore = extremity < 0.15 ? 0 : Math.min(100, extremity * 200)
+
+  // Volume (15%) — bonus, works without avgVol (neutral 40 if no history)
+  const volRatio = avgVol ? volume / avgVol : 1
+  const volScore = avgVol
+    ? Math.min(100, Math.max(0, (volRatio - 0.7) / 1.3 * 100))
+    : 40
 
   return {
-    total: Math.round(rangeScore * 0.4 + volScore * 0.3 + structureScore * 0.3),
+    total: Math.round(rangeScore * 0.45 + structureScore * 0.40 + volScore * 0.15),
     rangeScore: Math.round(rangeScore),
-    volScore: Math.round(volScore),
     structureScore: Math.round(structureScore),
+    volScore: Math.round(volScore),
     rangePct,
     volRatio,
     closePos,
@@ -783,24 +788,31 @@ function calcSetupScore(pd, avgVol) {
 
 function buildObservation(pd, score) {
   if (!pd || !score) return '—'
-  const { closePos, volRatio, rangeScore } = score
+  const { closePos, volRatio, rangePct, structureScore, total } = score
 
-  const structurePart = closePos > 0.75
-    ? 'closed near HOD, clean bullish structure'
-    : closePos < 0.25
-    ? 'closed near LOD, clean bearish structure'
-    : 'mid-range close, choppy — no clear direction'
+  const rangeStr = rangePct >= 2.5 ? `Strong expansion (${f2(rangePct)}% range)`
+    : rangePct >= 1.5 ? `Decent range (${f2(rangePct)}%)`
+    : `Tight range (${f2(rangePct)}%)`
 
-  const volPart = volRatio >= 2.0 ? 'heavy volume confirmation'
-    : volRatio >= 1.3 ? 'above-avg volume'
-    : volRatio <= 0.7 ? 'light volume, low conviction'
-    : 'average volume'
+  const closeStr = closePos > 0.80 ? 'closed at HOD'
+    : closePos > 0.65 ? 'closed near HOD'
+    : closePos < 0.20 ? 'closed at LOD'
+    : closePos < 0.35 ? 'closed near LOD'
+    : 'mid-range close'
 
-  const rangePart = rangeScore >= 70 ? 'Strong range expansion'
-    : rangeScore >= 40 ? 'Decent range'
-    : 'Tight range'
+  const volStr = volRatio >= 2.5 ? `${volRatio.toFixed(1)}x avg vol`
+    : volRatio >= 1.5 ? `${volRatio.toFixed(1)}x avg vol`
+    : volRatio < 0.8 ? `light vol (${volRatio.toFixed(1)}x avg)`
+    : 'avg vol'
 
-  return `${rangePart}, ${structurePart}, ${volPart}`
+  if (structureScore === 0) {
+    return `${rangeStr}, ${closeStr}, ${volStr} — choppy day, low conviction. Consider passing.`
+  }
+  const verdict = total >= 75 ? 'strong ORB candidate tomorrow'
+    : total >= 50 ? 'watch for follow-through'
+    : 'low-quality setup'
+
+  return `${rangeStr}, ${closeStr}, ${volStr} — ${verdict}`
 }
 
 function DataChip({ label, value, color }) {
@@ -919,10 +931,20 @@ export function WatchlistTab({ apiKey, onSendToPrep }) {
         </div>
       </Card>
 
-      {/* Scanning indicator */}
+      {/* Scanning — skeleton rows */}
       {scanning && (
-        <div style={{ textAlign: 'center', padding: '40px 0', color: '#444', fontFamily: MONO, fontSize: 11 }}>
-          Fetching data for {tickers.length} tickers...
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <span style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase', paddingLeft: 2 }}>
+            Scanning {tickers.length} tickers...
+          </span>
+          {tickers.map(t => (
+            <div key={t} style={{ background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 5, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 16 }}>
+              <div style={{ fontSize: 10, fontFamily: MONO, color: '#1e1e1e', width: 18 }}>—</div>
+              <div style={{ fontSize: 16, fontWeight: 900, fontFamily: MONO, color: '#1e1e1e', minWidth: 60 }}>{t}</div>
+              <div style={{ flex: 1, height: 8, background: '#161616', borderRadius: 3 }} />
+              <div style={{ width: 40, height: 22, background: '#161616', borderRadius: 3 }} />
+            </div>
+          ))}
         </div>
       )}
 
@@ -938,20 +960,24 @@ export function WatchlistTab({ apiKey, onSendToPrep }) {
             )}
           </div>
           {results.map(({ ticker, pd, score, pcr }, idx) => {
-            if (!pd || !score) return null
+            if (!pd) return null
             const range = pd.high - pd.low
-            const movePct = (pd.close - pd.open) / pd.open * 100
-            const { volRatio, closePos, total } = score
+            const rangePct = pd.close > 0 ? range / pd.close * 100 : 0
+            const movePct = pd.open > 0 ? (pd.close - pd.open) / pd.open * 100 : 0
+            const total = score?.total ?? 0
+            const volRatio = score?.volRatio ?? 1
+            const closePos = score?.closePos ?? 0.5
             const scoreColor = total >= 70 ? LIME : total >= 45 ? YELLOW : RED
-            const closeLbl = closePos > 0.75 ? 'Near High' : closePos < 0.25 ? 'Near Low' : 'Mid Range'
-            const closeLblColor = (closePos > 0.75 || closePos < 0.25) ? '#aaa' : '#444'
+            const topThree = idx < 3
+            const closeLbl = closePos > 0.80 ? 'Near HOD' : closePos < 0.20 ? 'Near LOD' : 'Mid Range'
+            const closeLblColor = (closePos > 0.80 || closePos < 0.20) ? '#aaa' : '#444'
             const volColor = volRatio >= 1.5 ? LIME : volRatio >= 1.0 ? '#777' : '#444'
             const obs = buildObservation(pd, score)
             const unusualVol = volRatio >= 2.0
             const hasPCR = pcr && !pcr.planError && !pcr.error && pcr.pcRatio != null
             const pcrColor = hasPCR ? (pcr.pcRatio > 1.2 ? RED : pcr.pcRatio < 0.8 ? LIME : '#888') : '#444'
             return (
-              <div key={ticker} style={{ background: PANEL, border: `1px solid ${total >= 70 ? LIME + '22' : BORDER}`, borderRadius: 5, overflow: 'hidden' }}>
+              <div key={ticker} style={{ background: PANEL, border: `1px solid ${topThree ? LIME + '44' : BORDER}`, borderRadius: 5, overflow: 'hidden' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '14px 18px' }}>
                   {/* Rank */}
                   <div style={{ fontSize: 10, fontFamily: MONO, color: '#222', width: 18, flexShrink: 0, textAlign: 'right' }}>#{idx + 1}</div>
@@ -964,10 +990,10 @@ export function WatchlistTab({ apiKey, onSendToPrep }) {
 
                   {/* Data chips */}
                   <div style={{ flex: 1, display: 'flex', gap: 18, flexWrap: 'wrap' }}>
-                    <DataChip label="Prev Range" value={`$${f2(range)}`} />
+                    <DataChip label="Prev Range" value={`$${f2(range)} (${f2(rangePct)}%)`} />
                     <DataChip label="% Move" value={`${movePct > 0 ? '+' : ''}${f2(movePct)}%`} color={movePct > 0.3 ? LIME : movePct < -0.3 ? RED : '#888'} />
                     <DataChip label="Volume" value={`${volRatio.toFixed(1)}x avg`} color={volColor} />
-                    <DataChip label="Close Position" value={closeLbl} color={closeLblColor} />
+                    <DataChip label="Structure" value={closeLbl} color={closeLblColor} />
                     <DataChip label="P/C Ratio" value={hasPCR ? pcr.pcRatio.toFixed(2) : '—'} color={pcrColor} />
                   </div>
 
@@ -985,7 +1011,7 @@ export function WatchlistTab({ apiKey, onSendToPrep }) {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '9px 18px', background: '#0a0a0a', borderTop: '1px solid #111' }}>
                   <span style={{ fontSize: 10, fontFamily: MONO, color: '#444', flex: 1 }}>{obs}</span>
                   <Btn small variant="blue" onClick={() => onSendToPrep({ ticker, priorHigh: String(f2(pd.high)), priorLow: String(f2(pd.low)) })}>
-                    Send to Prep →
+                    → Prep
                   </Btn>
                 </div>
               </div>
