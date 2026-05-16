@@ -79,16 +79,43 @@ function CurrentPriceMarker({ price }) {
   )
 }
 
+function buildSetupMsg(quality, nearestAbove, nearestBelow, price) {
+  const gapAbove = nearestAbove ? nearestAbove.price - price : null
+  const gapBelow = nearestBelow ? price - nearestBelow.price : null
+  const closestIsAbove = gapAbove !== null && gapBelow !== null ? gapAbove <= gapBelow : gapAbove !== null
+
+  if (quality === 'ON LEVEL') {
+    const lvl = closestIsAbove ? nearestAbove : nearestBelow
+    if (!lvl) return 'On a level. Wait for the candle close to confirm direction.'
+    return `CALLS if price holds above ${lvl.label} and closes a 5-min candle above it. PUTS if price rejects and closes below it. Wait for the candle close — do not front-run.`
+  }
+  if (quality === 'APPROACHING') {
+    const lvl = closestIsAbove ? nearestAbove : nearestBelow
+    if (!lvl) return 'Approaching a level. Get ready.'
+    return `Approaching ${lvl.label} at $${f2(lvl.price)}. Get ready. Watch for rejection or breakout on the next 5-min candle close. Do not enter until the candle confirms direction.`
+  }
+  if (quality === 'TIGHT RANGE') {
+    if (!nearestAbove || !nearestBelow) return 'Tight range between levels. Watch for breakout.'
+    return `Price compressed between ${nearestAbove.label} at $${f2(nearestAbove.price)} and ${nearestBelow.label} at $${f2(nearestBelow.price)}. Wait for a breakout candle close. The tighter the range, the bigger the move — but direction unknown until it breaks.`
+  }
+  if (quality === 'BETWEEN LEVELS') {
+    if (!nearestAbove || !nearestBelow) return 'Between levels. No setup. Wait for a touch.'
+    return `Between ${nearestAbove.label} at $${f2(nearestAbove.price)} ($${f2(gapAbove)} away) and ${nearestBelow.label} at $${f2(nearestBelow.price)} ($${f2(gapBelow)} away). No edge here. Wait for price to reach a level before considering a trade.`
+  }
+  return null
+}
+
 function SetupBadge({ quality, nearestAbove, nearestBelow, price }) {
   const configs = {
-    'ON LEVEL': { color: LIME, bg: '#071208', border: '#1a3010', msg: 'You are ON a level. This is your entry window.' },
-    'APPROACHING': { color: YELLOW, bg: '#0e0c04', border: '#2a2008', msg: 'Approaching a level. Prepare your entry.' },
-    'TIGHT RANGE': { color: ORANGE, bg: '#0e0800', border: '#2a1800', msg: 'Tight range between levels. Watch for breakout.' },
-    'BETWEEN LEVELS': { color: '#555', bg: '#0a0a0a', border: '#161616', msg: 'Between levels. No setup. Wait for a touch.' },
+    'ON LEVEL': { color: LIME, bg: '#071208', border: '#1a3010' },
+    'APPROACHING': { color: YELLOW, bg: '#0e0c04', border: '#2a2008' },
+    'TIGHT RANGE': { color: ORANGE, bg: '#0e0800', border: '#2a1800' },
+    'BETWEEN LEVELS': { color: '#555', bg: '#0a0a0a', border: '#161616' },
   }
   const c = configs[quality] || configs['BETWEEN LEVELS']
   const gapAbove = nearestAbove ? nearestAbove.price - price : null
   const gapBelow = nearestBelow ? price - nearestBelow.price : null
+  const msg = buildSetupMsg(quality, nearestAbove, nearestBelow, price)
 
   return (
     <div style={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: 5, padding: '14px 18px' }}>
@@ -104,7 +131,7 @@ function SetupBadge({ quality, nearestAbove, nearestBelow, price }) {
           </div>
         )}
       </div>
-      <div style={{ fontSize: 11, color: c.color === '#555' ? '#333' : c.color, fontFamily: MONO, opacity: 0.8 }}>{c.msg}</div>
+      {msg && <div style={{ fontSize: 11, color: c.color === '#555' ? '#333' : c.color, fontFamily: MONO, opacity: 0.8 }}>{msg}</div>}
     </div>
   )
 }
