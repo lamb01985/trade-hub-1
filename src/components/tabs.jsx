@@ -840,30 +840,44 @@ export function WatchlistTab({ apiKey, onSendToPrep }) {
     setScanning(true)
     setScanErrors(0)
 
-    // Each call has its own .catch() so a single failure doesn't drop the ticker.
-    // This scan is pure REST — no WebSocket dependency.
     const settled = await Promise.allSettled(
       tickers.map(async ticker => {
-        const [pd, hist, pcr] = await Promise.all([
-          getPrevDay(apiKey, ticker).catch(() => null),
-          getHistoricalBars(apiKey, ticker, 21).catch(() => []),
-          getOptionsPCRatio(apiKey, ticker).catch(() => ({})),
-        ])
+        let pd = null, hist = [], pcr = {}, fetchError = null
+        try { pd = await getPrevDay(apiKey, ticker) } catch (e) { fetchError = e.message }
+        try { hist = await getHistoricalBars(apiKey, ticker, 21) } catch {}
+        try { pcr = await getOptionsPCRatio(apiKey, ticker) } catch {}
+
+        console.log(`[scanner] ${ticker}`, { pd, histLen: hist?.length, pcr })
+
         const histBars = Array.isArray(hist) && hist.length > 1 ? hist.slice(0, -1) : (hist || [])
         const avgVol = histBars.length > 0
           ? histBars.reduce((s, b) => s + b.v, 0) / histBars.length
           : null
-        const score = calcSetupScore(pd, avgVol)
-        return { ticker, pd, avgVol, score, pcr }
+        const score = pd ? calcSetupScore(pd, avgVol) : null
+        return { ticker, pd, avgVol, score, pcr, fetchError }
       })
     )
 
-    const data = settled
-      .filter(r => r.status === 'fulfilled' && r.value.pd)
-      .map(r => r.value)
-      .sort((a, b) => (b.score?.total ?? 0) - (a.score?.total ?? 0))
+    console.log('[scanner] settled:', settled)
 
-    const errCount = settled.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value?.pd)).length
+    // Keep ALL results so failures are visible as error rows, not silent omissions.
+    // Sort: scored tickers first (desc), no-data tickers at bottom.
+    const data = settled
+      .filter(r => r.status === 'fulfilled')
+      .map(r => r.value)
+      .concat(
+        settled.filter(r => r.status === 'rejected')
+          .map(r => ({ ticker: '?', pd: null, score: null, pcr: {}, fetchError: r.reason?.message || 'Request failed' }))
+      )
+      .sort((a, b) => {
+        const sa = a.score?.total ?? -1
+        const sb = b.score?.total ?? -1
+        return sb - sa
+      })
+
+    console.log('[scanner] data to render:', data)
+
+    const errCount = data.filter(r => !r.pd).length
     setScanErrors(errCount)
     setResults(data)
     const ts = Date.now()
@@ -954,24 +968,36 @@ export function WatchlistTab({ apiKey, onSendToPrep }) {
         </div>
       )}
 
-      {/* Results */}
+      {/* Results — shown after any scan attempt, including all-error cases */}
       {!scanning && results.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingLeft: 2, flexWrap: 'wrap', gap: 6 }}>
             <span style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-              {results.length} tickers ranked by setup score — best at top
+              {results.filter(r => r.pd).length} of {results.length} tickers scored — ranked best to worst
             </span>
             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
               {scanErrors > 0 && (
-                <span style={{ fontSize: 9, color: '#4a3a2a', fontFamily: MONO }}>⚠ {scanErrors} ticker{scanErrors > 1 ? 's' : ''} returned no data (API limit or bad ticker)</span>
+                <span style={{ fontSize: 9, color: '#4a3a2a', fontFamily: MONO }}>⚠ {scanErrors} returned no data</span>
               )}
               {results.some(r => r.pcr?.planError) && (
                 <span style={{ fontSize: 9, color: '#333', fontFamily: MONO }}>◦ P/C ratio requires Options Advanced plan</span>
               )}
             </div>
           </div>
-          {results.map(({ ticker, pd, score, pcr }, idx) => {
-            if (!pd) return null
+          {results.map(({ ticker, pd, score, pcr, fetchError }, idx) => {
+            // Error row — ticker fetched but no prev-day data came back
+            if (!pd) {
+              return (
+                <div key={ticker + idx} style={{ background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 5, padding: '12px 18px', display: 'flex', alignItems: 'center', gap: 16, opacity: 0.5 }}>
+                  <div style={{ fontSize: 10, fontFamily: MONO, color: '#333', width: 18 }}>—</div>
+                  <div style={{ fontSize: 15, fontWeight: 900, fontFamily: MONO, color: '#333', minWidth: 60 }}>{ticker}</div>
+                  <span style={{ fontSize: 10, fontFamily: MONO, color: '#333', flex: 1 }}>
+                    {fetchError ? `API error: ${fetchError}` : 'No data — ticker may be invalid or API plan restriction'}
+                  </span>
+                </div>
+              )
+            }
+
             const range = pd.high - pd.low
             const rangePct = pd.close > 0 ? range / pd.close * 100 : 0
             const movePct = pd.open > 0 ? (pd.close - pd.open) / pd.open * 100 : 0
@@ -979,7 +1005,8 @@ export function WatchlistTab({ apiKey, onSendToPrep }) {
             const volRatio = score?.volRatio ?? 1
             const closePos = score?.closePos ?? 0.5
             const scoreColor = total >= 70 ? LIME : total >= 45 ? YELLOW : RED
-            const topThree = idx < 3
+            const scoredIdx = results.slice(0, idx).filter(r => r.pd).length
+            const topThree = scoredIdx < 3
             const closeLbl = closePos > 0.80 ? 'Near HOD' : closePos < 0.20 ? 'Near LOD' : 'Mid Range'
             const closeLblColor = (closePos > 0.80 || closePos < 0.20) ? '#aaa' : '#444'
             const volColor = volRatio >= 1.5 ? LIME : volRatio >= 1.0 ? '#777' : '#444'
@@ -991,7 +1018,7 @@ export function WatchlistTab({ apiKey, onSendToPrep }) {
               <div key={ticker} style={{ background: PANEL, border: `1px solid ${topThree ? LIME + '44' : BORDER}`, borderRadius: 5, overflow: 'hidden' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '14px 18px' }}>
                   {/* Rank */}
-                  <div style={{ fontSize: 10, fontFamily: MONO, color: '#222', width: 18, flexShrink: 0, textAlign: 'right' }}>#{idx + 1}</div>
+                  <div style={{ fontSize: 10, fontFamily: MONO, color: '#222', width: 18, flexShrink: 0, textAlign: 'right' }}>#{scoredIdx + 1}</div>
 
                   {/* Ticker + flash */}
                   <div style={{ flexShrink: 0, minWidth: 60 }}>
