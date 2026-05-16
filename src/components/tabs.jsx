@@ -32,7 +32,6 @@ export function ORBTab({ settings, onSendToCalc, prepFill, liveData }) {
     if (prepFill.ticker) setTicker(prepFill.ticker)
     if (prepFill.orbHigh) setOrbH(prepFill.orbHigh)
     if (prepFill.orbLow) setOrbL(prepFill.orbLow)
-    setDir(prepFill.bias === 'short' ? 'short' : 'long')
   }, [prepFill])
 
   const oh = parseFloat(orbH), ol = parseFloat(orbL)
@@ -746,7 +745,7 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
     if (prevDay?.high) updates.orbHigh = f2(prevDay.high)
     if (prevDay?.low) updates.orbLow = f2(prevDay.low)
     if (pivots?.pp) updates.keyLevel = f2(pivots.pp)
-    if (price) updates.plannedStrike = String(prep.bias === 'short' ? Math.floor(price) : Math.ceil(price))
+    if (price) updates.plannedStrike = String(Math.round(price))
     onPrepChange({ ...prep, ...updates })
     setDataLoaded(true)
     setTimeout(() => setDataLoaded(false), 4000)
@@ -763,7 +762,7 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
 
 Market context:
 - Ticker: ${prep.ticker || 'QQQ'} | Current price: $${d(price)}
-- Bias: ${prep.bias || 'neutral'} | OR Period: ${prep.orPeriod || 15} min
+- OR Period: ${prep.orPeriod || 15} min
 - Prev Day High: $${d(prevDay?.high, prep.orbHigh)} | Low: $${d(prevDay?.low, prep.orbLow)} | Close: $${d(prevDay?.close)}
 - Pivot Point: $${d(pivots?.pp)} | R1: $${d(pivots?.r1)} | R2: $${d(pivots?.r2)} | R3: $${d(pivots?.r3)}
 - S1: $${d(pivots?.s1)} | S2: $${d(pivots?.s2)} | S3: $${d(pivots?.s3)}
@@ -774,7 +773,7 @@ Market context:
 Write a tight, specific game plan with these exact sections:
 
 THESIS
-[1-2 sentences: why this bias today, what the market structure supports]
+[1-2 sentences: what the market structure supports today and why]
 
 KEY LEVELS
 [List 4-6 levels from the data with $ price and what a touch/break means. Format: • $XXX.XX — [explanation]]
@@ -857,9 +856,8 @@ Only use the levels provided. No generic advice.`
           )}
           {dataLoaded && <span style={{ fontSize: 9, fontFamily: MONO, color: LIME }}>✓ PDH/PDL/PP/Strike loaded from Massive</span>}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
           <Fld label="Primary Ticker" value={prep.ticker || ''} onChange={v => upd('ticker', v.toUpperCase())} type="text" placeholder="QQQ" mono />
-          <Sel label="Bias" value={prep.bias || 'long'} onChange={v => upd('bias', v)} options={[{ value: 'long', label: '↑ Bullish — Call' }, { value: 'short', label: '↓ Bearish — Put' }, { value: 'neutral', label: '◆ Neutral' }]} />
           <Sel label="OR Period" value={prep.orPeriod || settings.orPeriod || '15'} onChange={v => upd('orPeriod', v)} options={[{ value: '5', label: '5 min (8:35 CT)' }, { value: '15', label: '15 min (8:45 CT)' }, { value: '30', label: '30 min (9:00 CT)' }]} />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12, marginBottom: 14 }}>
@@ -875,8 +873,8 @@ Only use the levels provided. No generic advice.`
         {range && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 14 }}>
             <Tile compact label="Day Range" value={`$${f2(range)}`} />
-            <Tile compact label="2:1 Long" value={prep.bias !== 'short' ? `$${f2(oh + range * 2)}` : '—'} color={LIME} />
-            <Tile compact label="2:1 Short" value={prep.bias === 'short' ? `$${f2(ol - range * 2)}` : '—'} color={RED} />
+            <Tile compact label="2:1 Long" value={`$${f2(oh + range * 2)}`} color={LIME} />
+            <Tile compact label="2:1 Short" value={`$${f2(ol - range * 2)}`} color={RED} />
           </div>
         )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 12 }}>
@@ -910,7 +908,7 @@ Only use the levels provided. No generic advice.`
               At {prep.orPeriod === '5' ? '8:35' : prep.orPeriod === '30' ? '9:00' : '8:45'} CT, load into ORB tab and verify in IV tab.
             </div>
           </div>
-          <Btn onClick={() => onSendToORB({ ticker: prep.ticker, orbHigh: prep.orbHigh, orbLow: prep.orbLow, bias: prep.bias, orPeriod: prep.orPeriod })}>Load into ORB →</Btn>
+          <Btn onClick={() => onSendToORB({ ticker: prep.ticker, orbHigh: prep.orbHigh, orbLow: prep.orbLow, orPeriod: prep.orPeriod })}>Load into ORB →</Btn>
         </div>
       )}
 

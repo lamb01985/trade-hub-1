@@ -21,7 +21,7 @@ const TABS = [
 ]
 
 const defaultSettings = { dailyLossLimit: 500, maxTradesPerDay: 5, orPeriod: '15', alertsEnabled: false }
-const defaultPrep = { ticker: 'QQQ', bias: 'long', orPeriod: '15', orbHigh: '', orbLow: '', keyLevel: '', plannedStrike: '', plannedDTE: '1', ivNote: '', gamePlan: '', avoidNotes: '', dayReview: '' }
+const defaultPrep = { ticker: 'QQQ', orPeriod: '15', orbHigh: '', orbLow: '', keyLevel: '', plannedStrike: '', plannedDTE: '1', ivNote: '', gamePlan: '', avoidNotes: '', dayReview: '' }
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('command')
@@ -186,7 +186,7 @@ export default function App() {
           <WatchlistTab
             watchlist={watchlist}
             onWatchlistChange={setWatchlist}
-            onSendToPrep={entry => { setPrep(p => ({ ...p, ticker: entry.ticker, bias: entry.bias || 'long', orbHigh: entry.priorHigh || '', orbLow: entry.priorLow || '', plannedStrike: entry.plannedStrike || '', plannedDTE: entry.plannedDTE || '', ivNote: entry.ivNote || '' })); setActiveTab('prep') }}
+            onSendToPrep={entry => { setPrep(p => ({ ...p, ticker: entry.ticker, orbHigh: entry.priorHigh || '', orbLow: entry.priorLow || '', plannedStrike: entry.plannedStrike || '', plannedDTE: entry.plannedDTE || '', ivNote: entry.ivNote || '' })); setActiveTab('prep') }}
           />
         )}
 
