@@ -907,7 +907,7 @@ function DataChip({ label, value, color }) {
   )
 }
 
-export function WatchlistTab({ apiKey, onSendToPrep }) {
+export function WatchlistTab({ apiKey, onSendToPrep, savedPreps, onLoadSavedPrep }) {
   const [tickers, setTickers] = useLocalStorage('th-scanner-tickers', DEFAULT_TICKERS)
   const [results, setResults] = useState([])
   const [scanning, setScanning] = useState(false)
@@ -1131,9 +1131,10 @@ export function WatchlistTab({ apiKey, onSendToPrep }) {
                 {/* Observation + Send to Prep */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '9px 18px', background: '#0a0a0a', borderTop: '1px solid #111' }}>
                   <span style={{ fontSize: 10, fontFamily: MONO, color: '#444', flex: 1 }}>{obs}</span>
-                  <Btn small variant="blue" onClick={() => onSendToPrep({ ticker, priorHigh: String(f2(pd.high)), priorLow: String(f2(pd.low)) })}>
-                    → Prep
-                  </Btn>
+                  {savedPreps?.[ticker]
+                    ? <Btn small variant="lime" onClick={() => onLoadSavedPrep(savedPreps[ticker])}>Load Saved Prep</Btn>
+                    : <Btn small variant="blue" onClick={() => onSendToPrep({ ticker, priorHigh: String(f2(pd.high)), priorLow: String(f2(pd.low)) })}>→ Prep</Btn>
+                  }
                 </div>
               </div>
             )
@@ -1167,16 +1168,40 @@ const ROUTINE = [
   { time: '10:30 CT', label: 'Chop starts. No new entries. Trailing winner? Decide now: trail stop or close. Do not hold through chop.' },
 ]
 
-export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, anthropicKey }) {
+export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, anthropicKey, savedPreps, onSavedPrepsChange }) {
   const [rc, setRc] = useState({})
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState('')
   const [dataLoaded, setDataLoaded] = useState(false)
+  const [justSaved, setJustSaved] = useState(false)
 
   const oh = parseFloat(prep.orbHigh), ol = parseFloat(prep.orbLow)
   const range = !isNaN(oh) && !isNaN(ol) && oh > ol ? oh - ol : null
   const dc = ROUTINE.filter((_, i) => rc[i]).length
   const upd = (k, v) => onPrepChange({ ...prep, [k]: v })
+
+  const canSave = !!(prep.ticker && prep.orbHigh && prep.orbLow && prep.gamePlan)
+  const hasSaved = savedPreps && Object.keys(savedPreps).length > 0
+  const isAlreadySaved = !!(savedPreps && prep.ticker && savedPreps[prep.ticker])
+
+  function savePrep() {
+    if (!canSave) return
+    const { dayReview, ...prepToSave } = prep
+    onSavedPrepsChange({ ...savedPreps, [prep.ticker]: { ...prepToSave, dateSaved: new Date().toISOString() } })
+    setJustSaved(true)
+    setTimeout(() => setJustSaved(false), 2500)
+  }
+
+  function loadSavedPrep(saved) {
+    const { dateSaved, ...data } = saved
+    onPrepChange({ ...prep, ...data })
+  }
+
+  function deleteSavedPrep(ticker) {
+    const next = { ...savedPreps }
+    delete next[ticker]
+    onSavedPrepsChange(next)
+  }
 
   const hasLiveData = !!(liveData?.prevDay?.high || liveData?.pivots?.pp)
   const hasClaudeKey = !!anthropicKey
@@ -1301,6 +1326,11 @@ Only use the levels provided. No generic advice.`
               {dataLoaded ? '✓ Loaded' : '↓ Load Market Data'}
             </Btn>
           )}
+          {canSave && (
+            <Btn small variant="ghost" onClick={savePrep}>
+              {justSaved ? '✓ Saved' : isAlreadySaved ? '↑ Update Saved' : '+ Save Prep'}
+            </Btn>
+          )}
           <Btn small variant={hasClaudeKey ? 'lime' : 'ghost'} onClick={generateBrief} disabled={!hasClaudeKey || aiLoading}>
             {aiLoading ? '✦ Writing...' : hasClaudeKey ? '✦ Generate AI Brief' : 'Add Claude Key → Command'}
           </Btn>
@@ -1408,6 +1438,42 @@ Only use the levels provided. No generic advice.`
             </div>
           </div>
           <Btn onClick={() => onSendToORB({ ticker: prep.ticker, orbHigh: prep.orbHigh, orbLow: prep.orbLow, orPeriod: prep.orPeriod })}>Load into ORB →</Btn>
+        </div>
+      )}
+
+      {/* Saved Preps panel — only shown when saves exist */}
+      {hasSaved && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <SLabel>Saved Preps</SLabel>
+            <span style={{ fontSize: 9, fontFamily: MONO, color: '#333' }}>{Object.keys(savedPreps).length} saved</span>
+          </div>
+          <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4 }}>
+            {Object.values(savedPreps).map(saved => {
+              const planLines = (saved.gamePlan || '').split('\n').filter(l => l.trim()).slice(0, 2).join(' ')
+              const preview = planLines.length > 100 ? planLines.slice(0, 100) + '...' : planLines || 'No game plan'
+              const dateStr = new Date(saved.dateSaved).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+              const isCurrent = prep.ticker === saved.ticker
+              return (
+                <div key={saved.ticker} style={{ background: '#0d0d0d', border: `1px solid ${isCurrent ? LIME + '44' : BORDER}`, borderRadius: 5, padding: '14px 16px', minWidth: 200, maxWidth: 200, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div style={{ fontSize: 18, fontWeight: 900, fontFamily: MONO, color: LIME, letterSpacing: '-0.02em' }}>{saved.ticker}</div>
+                    <div style={{ fontSize: 9, color: '#333', fontFamily: MONO, paddingTop: 3 }}>{dateStr}</div>
+                  </div>
+                  {saved.orbHigh && saved.orbLow && (
+                    <div style={{ fontSize: 9, color: '#444', fontFamily: MONO }}>${saved.orbLow} — ${saved.orbHigh}</div>
+                  )}
+                  <div style={{ fontSize: 10, color: '#2a2a2a', fontFamily: MONO, lineHeight: 1.5, flex: 1, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                    {preview}
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <Btn small variant="blue" onClick={() => loadSavedPrep(saved)}>Load</Btn>
+                    <Btn small variant="ghost" onClick={() => deleteSavedPrep(saved.ticker)}>Delete</Btn>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 
