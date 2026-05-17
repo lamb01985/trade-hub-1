@@ -101,10 +101,15 @@ function buildSetupMsg(quality, nearestAbove, nearestBelow, price, atr, vwapData
       ? ` Above POC ($${f2(volProfile.poc)}) — buyers in control.`
       : ` Below POC ($${f2(volProfile.poc)}) — sellers in control.`)
     : ''
-  const alignRel = alignment?.score >= 85 ? ` HIGH CONVICTION — all timeframes aligned.`
-    : alignment?.score >= 70 ? ` ${alignment.label} (${alignment.score}/100) — normal size.`
-    : alignment?.score >= 55 ? ` MIXED SIGNALS — reduce size 50%.`
-    : alignment?.score > 0 ? ` LOW CONVICTION (${alignment.score}/100) — stand aside.`
+  const oneH = alignment?.mtf?.['1h']?.state
+  const oneHText = oneH === 'BULLISH' ? ' 1H structure: BULLISH — higher TF confirms long bias.'
+    : oneH === 'BEARISH' ? ' 1H structure: BEARISH — caution on longs, prefer puts.'
+    : oneH === 'RANGING' || oneH === 'TRANSITION' ? ` 1H structure: ${oneH} — no clear higher TF bias.`
+    : ''
+  const alignRel = alignment?.score >= 85 ? `${oneHText} HIGH CONVICTION — all 4 timeframes aligned.`
+    : alignment?.score >= 70 ? `${oneHText} ${alignment.label} (${alignment.score}/100) — normal size.`
+    : alignment?.score >= 55 ? `${oneHText} MIXED SIGNALS — reduce size 50%.`
+    : alignment?.score > 0 ? `${oneHText} LOW CONVICTION (${alignment.score}/100) — stand aside.`
     : ''
 
   if (quality === 'ON LEVEL') {
@@ -278,7 +283,7 @@ export default function Levels({ liveData, orbHigh, orbLow, settings, onSettings
         return (
           <div style={{ background: '#0c0c0c', border: `1px solid ${c}33`, borderRadius: 4, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
             <div style={{ display: 'flex', gap: 6 }}>
-              {['1m', '5m', '15m'].map(tf => {
+              {['1h', '15m', '5m', '1m'].map(tf => {
                 const s = a.mtf?.[tf]?.state
                 const sc = stateColor(s)
                 return (

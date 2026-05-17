@@ -690,7 +690,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
       {mtfAlignment && mtfAlignment.score > 0 && (() => {
         const a = mtfAlignment
         const c = a.score >= 85 ? LIME : a.score >= 70 ? LIME : a.score >= 55 ? YELLOW : a.score >= 40 ? ORANGE : RED
-        const states = a.mtf ? ['1m', '5m', '15m'].map(tf => ({ tf, state: a.mtf[tf]?.state })) : []
+        const states = a.mtf ? ['1h', '15m', '5m', '1m'].map(tf => ({ tf, state: a.mtf[tf]?.state })) : []
         return (
           <div style={{ background: PANEL, border: `1px solid ${c}55`, borderRadius: 5, padding: '16px 20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
@@ -755,7 +755,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
               <span style={{ fontSize: 9, fontFamily: MONO, color: '#666', textTransform: 'uppercase', letterSpacing: '0.14em' }}>Market Structure — {timeframe}</span>
               {mtf && (
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  {['1m', '5m', '15m'].map(tf => {
+                  {['1h', '15m', '5m', '1m'].map(tf => {
                     const s = mtf[tf]?.state
                     const c = s === 'BULLISH' ? LIME : s === 'BEARISH' ? RED : s === 'TRANSITION' ? ORANGE : YELLOW
                     return (

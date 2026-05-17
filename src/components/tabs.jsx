@@ -529,7 +529,7 @@ export function ChecklistTab({ onPass, instrument, setupQuality, alignmentScore 
   }
   const alignItem = {
     id: 'ca',
-    text: `Alignment score is above 55 — timeframes not fully conflicted (currently: ${alignmentScore || 0}/100${alignmentScore >= 70 ? ' — ideal' : alignmentScore >= 55 ? ' — acceptable' : ' — too low, stand aside'})`,
+    text: `1H structure confirms trade direction AND alignment score above 55 (currently: ${alignmentScore || 0}/100${alignmentScore >= 70 ? ' — ideal' : alignmentScore >= 55 ? ' — acceptable' : ' — too low, stand aside'})`,
     required: true,
   }
   const items = [sqItem, alignItem, ...(isStock ? CL_ITEMS_STOCK : CL_ITEMS)]
@@ -1274,7 +1274,7 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
       ? `POC $${d(volProfile.poc)}, VAH $${d(volProfile.vah)}, VAL $${d(volProfile.val)}`
       : 'not computed yet'
     const alignStr = mtfAlignment?.score > 0
-      ? `1m ${mtfAlignment.mtf?.['1m']?.state}, 5m ${mtfAlignment.mtf?.['5m']?.state}, 15m ${mtfAlignment.mtf?.['15m']?.state}. Score: ${mtfAlignment.score}/100. ${mtfAlignment.label}.`
+      ? `1H ${mtfAlignment.mtf?.['1h']?.state || '—'}, 15M ${mtfAlignment.mtf?.['15m']?.state || '—'}, 5M ${mtfAlignment.mtf?.['5m']?.state || '—'}, 1M ${mtfAlignment.mtf?.['1m']?.state || '—'}. Score: ${mtfAlignment.score}/100. ${mtfAlignment.label}.`
       : 'not yet calculated'
     const prompt = isStock
       ? `You are a professional day trader assistant. Generate a pre-market game plan for ${prep.ticker || 'SPY'} stock/ETF.
