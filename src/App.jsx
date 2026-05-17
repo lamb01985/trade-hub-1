@@ -7,6 +7,7 @@ import Command from './components/Command.jsx'
 import Levels from './components/Levels.jsx'
 import ChartTab from './components/Chart.jsx'
 import CalendarTab from './components/Calendar.jsx'
+import Playbook from './components/Playbook.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
 import { getAllEvents, highImpactToday } from './lib/calendar.js'
 import { ORBTab, IVAnalyzerTab, CalculatorTab, ChecklistTab, JournalTab, StatsTab, WatchlistTab, PrepTab } from './components/tabs.jsx'
@@ -16,6 +17,7 @@ import { LIME, RED, YELLOW, MONO, SANS, DARK, BORDER, todayStr, uid, getSession 
 const TABS = [
   { id: 'watchlist', label: 'Watchlist', desc: 'Stocks to watch' },
   { id: 'prep', label: 'Prep', desc: 'Morning game plan' },
+  { id: 'playbook', label: 'Playbook', desc: 'Daily system' },
   { id: 'command', label: 'Command', desc: 'Session center' },
   { id: 'calendar', label: 'Calendar', desc: 'Events & catalysts' },
   { id: 'levels', label: 'Levels', desc: 'Live level map', accent: true },
@@ -256,6 +258,12 @@ export default function App() {
             levelMap={fullLevelMap}
             mtfAlignment={mtfAlignment}
           />
+        )}
+
+        {activeTab === 'playbook' && (
+          <ErrorBoundary label="Playbook tab">
+            <Playbook trades={trades} settings={settings} lockedOut={lockedOut} />
+          </ErrorBoundary>
         )}
 
         {activeTab === 'command' && (
