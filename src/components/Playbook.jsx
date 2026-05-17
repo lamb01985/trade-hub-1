@@ -1,6 +1,12 @@
-import { useMemo, useEffect } from 'react'
+import { useMemo, useEffect, useState } from 'react'
 import { useLocalStorage } from '../hooks/useStore.js'
 import { LIME, RED, YELLOW, MONO, SANS, BORDER, todayStr, getSession, SESSION_LABELS, SESSION_TIPS, fmtD, fmtU } from '../constants.js'
+
+const SUBTABS = [
+  { id: 'process',  label: 'PROCESS' },
+  { id: 'rules',    label: 'RULES' },
+  { id: 'decision', label: 'DECISION' },
+]
 
 const NON_NEGOTIABLES = [
   { n: 1, text: 'Three losses = stop. Close the platform.', tier: 'hard' },
@@ -190,6 +196,7 @@ function DecisionTreeSVG() {
 
 export default function Playbook({ trades, settings, lockedOut }) {
   const [pbState, setPbState] = useLocalStorage('th-playbook', { date: '', steps: {} })
+  const [subTab, setSubTab] = useState('process')
   const today = todayStr()
 
   // Reset checks at midnight CT (we use ymd which is local; close enough for personal use)
@@ -274,118 +281,152 @@ export default function Playbook({ trades, settings, lockedOut }) {
         }
       `}</style>
 
-      {/* ── Daily Status Bar ────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16, padding: '14px 18px', background: '#0c0c0c', border: `1px solid ${BORDER}`, borderRadius: 5, marginBottom: 40 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-          <span style={{ fontFamily: MONO, fontSize: 11, color: '#888', letterSpacing: '0.04em' }}>{dateLabel}</span>
-          <span style={{ fontFamily: MONO, fontSize: 10, color: LIME, letterSpacing: '0.14em', border: `1px solid ${LIME}33`, borderRadius: 3, padding: '2px 8px' }}>{sessionLabel}</span>
-        </div>
-        <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap', fontFamily: MONO, fontSize: 11 }}>
-          <span style={{ color: '#666' }}>Trades: <strong style={{ color: maxTrades && tt.length >= maxTrades ? RED : '#e8e8e8' }}>{tt.length}{maxTrades ? `/${maxTrades}` : ''}</strong></span>
-          <span style={{ color: '#666' }}>P&L: <strong style={{ color: todayPnl >= 0 ? LIME : RED }}>{fmtD(todayPnl)}</strong></span>
-          <span style={{ color: '#666' }}>Loss remaining: <strong style={{ color: lossRemaining === 0 && settings.dailyLossLimit > 0 ? RED : '#e8e8e8' }}>{settings.dailyLossLimit > 0 ? fmtU(lossRemaining) : '—'}</strong></span>
-          {lockedOut && <span style={{ color: RED, fontWeight: 700, letterSpacing: '0.1em' }}>LOCKED</span>}
-        </div>
-      </div>
-      <div style={{ fontFamily: MONO, fontSize: 12, color: '#666', marginBottom: 56, padding: '0 4px', lineHeight: 1.6, fontStyle: 'italic' }}>
-        Right now: {rightNow}
+      {/* ── Sub-tab switcher ────────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 36, borderBottom: '1px solid #161616' }}>
+        {SUBTABS.map(t => {
+          const active = subTab === t.id
+          return (
+            <button
+              key={t.id}
+              onClick={() => setSubTab(t.id)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                borderBottom: active ? `2px solid ${LIME}` : '2px solid transparent',
+                color: active ? LIME : '#555',
+                fontFamily: MONO,
+                fontSize: 11,
+                fontWeight: active ? 700 : 500,
+                letterSpacing: '0.18em',
+                padding: '10px 18px',
+                cursor: 'pointer',
+                marginBottom: -1,
+                transition: 'color 0.15s, border-color 0.15s',
+              }}
+            >
+              {t.label}
+            </button>
+          )
+        })}
       </div>
 
-      {/* ── Section 1: The Non-Negotiables ──────────────────────────────────── */}
-      <section className="pb-section" style={{ marginTop: 0 }}>
-        <h2 className="pb-h2">The Non-Negotiables</h2>
-        <p className="pb-sub">These override everything. Every day. No exceptions.</p>
-        <div>
-          {NON_NEGOTIABLES.map(r => (
-            <div key={r.n} className={`pb-rule ${r.tier}`}>
-              <span className="pb-rule-n">{r.n}.</span>
-              <span className="pb-rule-t">{r.text}</span>
+      {/* ── PROCESS sub-tab: status + process timeline + quick reference ───── */}
+      {subTab === 'process' && (
+        <>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16, padding: '14px 18px', background: '#0c0c0c', border: `1px solid ${BORDER}`, borderRadius: 5, marginBottom: 40 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+              <span style={{ fontFamily: MONO, fontSize: 11, color: '#888', letterSpacing: '0.04em' }}>{dateLabel}</span>
+              <span style={{ fontFamily: MONO, fontSize: 10, color: LIME, letterSpacing: '0.14em', border: `1px solid ${LIME}33`, borderRadius: 3, padding: '2px 8px' }}>{sessionLabel}</span>
             </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ── Section 3 (placed up high for impact): The One Question ─────────── */}
-      <section className="pb-section">
-        <div className="pb-question">
-          Before every trade ask:<br />
-          Am I taking this because the <em>SYSTEM</em> says to,<br />
-          or because I <em>WANT</em> to?<br />
-          <br />
-          <span style={{ fontSize: 16, color: '#999' }}>If the answer is "because I want to" — you don't take it.</span>
-        </div>
-      </section>
-
-      {/* ── Section 2: The Process ──────────────────────────────────────────── */}
-      <section className="pb-section">
-        <h2 className="pb-h2">The Process</h2>
-        <p className="pb-sub">Follow this in order. Every day.</p>
-
-        <div style={{ marginBottom: 18, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontFamily: MONO, fontSize: 11, color: '#888' }}>Morning routine: <strong style={{ color: morningDone === morningTotal && morningTotal > 0 ? LIME : '#e8e8e8' }}>{morningDone}/{morningTotal}</strong> complete</span>
-          <div style={{ width: 200, height: 4, background: '#1a1a1a', borderRadius: 2, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${morningTotal > 0 ? (morningDone / morningTotal) * 100 : 0}%`, background: morningDone === morningTotal && morningTotal > 0 ? LIME : YELLOW, transition: 'width 0.3s' }} />
+            <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap', fontFamily: MONO, fontSize: 11 }}>
+              <span style={{ color: '#666' }}>Trades: <strong style={{ color: maxTrades && tt.length >= maxTrades ? RED : '#e8e8e8' }}>{tt.length}{maxTrades ? `/${maxTrades}` : ''}</strong></span>
+              <span style={{ color: '#666' }}>P&L: <strong style={{ color: todayPnl >= 0 ? LIME : RED }}>{fmtD(todayPnl)}</strong></span>
+              <span style={{ color: '#666' }}>Loss remaining: <strong style={{ color: lossRemaining === 0 && settings.dailyLossLimit > 0 ? RED : '#e8e8e8' }}>{settings.dailyLossLimit > 0 ? fmtU(lossRemaining) : '—'}</strong></span>
+              {lockedOut && <span style={{ color: RED, fontWeight: 700, letterSpacing: '0.1em' }}>LOCKED</span>}
+            </div>
           </div>
-        </div>
+          <div style={{ fontFamily: MONO, fontSize: 12, color: '#666', marginBottom: 56, padding: '0 4px', lineHeight: 1.6, fontStyle: 'italic' }}>
+            Right now: {rightNow}
+          </div>
 
-        <div>
-          {PROCESS_BLOCKS.map((block, bi) => (
-            <div key={bi} className="pb-block">
-              <div className="pb-time" style={{ color: block.morning ? LIME : '#888' }}>{block.time}</div>
-              {block.steps.map((step, si) => {
-                const key = `${bi}_${si}`
-                const done = !!checks[key]
-                return (
-                  <div key={si} className={`pb-step ${done ? 'done' : ''}`} onClick={() => toggle(key)}>
-                    <span className={`pb-cb ${done ? 'on' : ''}`} />
-                    <span className="pb-step-t">{step}</span>
-                  </div>
-                )
-              })}
+          <section className="pb-section" style={{ marginTop: 0 }}>
+            <h2 className="pb-h2">The Process</h2>
+            <p className="pb-sub">Follow this in order. Every day.</p>
+
+            <div style={{ marginBottom: 18, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontFamily: MONO, fontSize: 11, color: '#888' }}>Morning routine: <strong style={{ color: morningDone === morningTotal && morningTotal > 0 ? LIME : '#e8e8e8' }}>{morningDone}/{morningTotal}</strong> complete</span>
+              <div style={{ width: 200, height: 4, background: '#1a1a1a', borderRadius: 2, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${morningTotal > 0 ? (morningDone / morningTotal) * 100 : 0}%`, background: morningDone === morningTotal && morningTotal > 0 ? LIME : YELLOW, transition: 'width 0.3s' }} />
+              </div>
             </div>
-          ))}
-        </div>
-      </section>
 
-      {/* ── Section 4: Decision Tree ────────────────────────────────────────── */}
-      <section className="pb-section">
-        <h2 className="pb-h2">The Decision Tree</h2>
-        <p className="pb-sub">Every time you think you see a setup.</p>
-        <div className="pb-decision-wrap">
-          <DecisionTreeSVG />
-        </div>
-      </section>
-
-      {/* ── Section 5: Quick Reference ──────────────────────────────────────── */}
-      <section className="pb-section">
-        <h2 className="pb-h2">Quick Reference</h2>
-        <div className="pb-ref-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 36 }}>
-          {Object.entries(QUICK_REF).map(([col, rows]) => (
-            <div key={col} className="pb-ref-col">
-              <h4>{col}</h4>
-              {rows.map(([l, r], i) => (
-                <div key={i} className="pb-ref-row">
-                  <span className="pb-ref-l">{l}</span>
-                  <span className="pb-ref-r">{r}</span>
+            <div>
+              {PROCESS_BLOCKS.map((block, bi) => (
+                <div key={bi} className="pb-block">
+                  <div className="pb-time" style={{ color: block.morning ? LIME : '#888' }}>{block.time}</div>
+                  {block.steps.map((step, si) => {
+                    const key = `${bi}_${si}`
+                    const done = !!checks[key]
+                    return (
+                      <div key={si} className={`pb-step ${done ? 'done' : ''}`} onClick={() => toggle(key)}>
+                        <span className={`pb-cb ${done ? 'on' : ''}`} />
+                        <span className="pb-step-t">{step}</span>
+                      </div>
+                    )
+                  })}
                 </div>
               ))}
             </div>
-          ))}
-        </div>
-      </section>
+          </section>
 
-      {/* ── Section 6: Mindset ──────────────────────────────────────────────── */}
-      <section className="pb-section">
-        <div className="pb-quote">"{quote}"</div>
-        <div style={{ textAlign: 'center', fontFamily: MONO, fontSize: 10, color: '#444', marginTop: 12, letterSpacing: '0.16em' }}>{day.toUpperCase()}</div>
-      </section>
+          <section className="pb-section">
+            <h2 className="pb-h2">Quick Reference</h2>
+            <div className="pb-ref-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 36 }}>
+              {Object.entries(QUICK_REF).map(([col, rows]) => (
+                <div key={col} className="pb-ref-col">
+                  <h4>{col}</h4>
+                  {rows.map(([l, r], i) => (
+                    <div key={i} className="pb-ref-row">
+                      <span className="pb-ref-l">{l}</span>
+                      <span className="pb-ref-r">{r}</span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </section>
+        </>
+      )}
 
-      {/* ── Emergency Reminders (always at bottom) ──────────────────────────── */}
-      <div className="pb-emergency">
-        <div className="pb-emer-line"><strong>Three losses today?</strong> STOP. Close this tab.</div>
-        <div className="pb-emer-line"><strong>Feeling revenge?</strong> STOP. Walk away.</div>
-        <div className="pb-emer-line"><strong>Already hit your limit?</strong> STOP. Come back tomorrow.</div>
-      </div>
+      {/* ── RULES sub-tab: non-negotiables + one question + mindset + emergency ── */}
+      {subTab === 'rules' && (
+        <>
+          <section className="pb-section" style={{ marginTop: 0 }}>
+            <h2 className="pb-h2">The Non-Negotiables</h2>
+            <p className="pb-sub">These override everything. Every day. No exceptions.</p>
+            <div>
+              {NON_NEGOTIABLES.map(r => (
+                <div key={r.n} className={`pb-rule ${r.tier}`}>
+                  <span className="pb-rule-n">{r.n}.</span>
+                  <span className="pb-rule-t">{r.text}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="pb-section">
+            <div className="pb-question">
+              Before every trade ask:<br />
+              Am I taking this because the <em>SYSTEM</em> says to,<br />
+              or because I <em>WANT</em> to?<br />
+              <br />
+              <span style={{ fontSize: 16, color: '#999' }}>If the answer is "because I want to" — you don't take it.</span>
+            </div>
+          </section>
+
+          <section className="pb-section">
+            <div className="pb-quote">"{quote}"</div>
+            <div style={{ textAlign: 'center', fontFamily: MONO, fontSize: 10, color: '#444', marginTop: 12, letterSpacing: '0.16em' }}>{day.toUpperCase()}</div>
+          </section>
+
+          <div className="pb-emergency">
+            <div className="pb-emer-line"><strong>Three losses today?</strong> STOP. Close this tab.</div>
+            <div className="pb-emer-line"><strong>Feeling revenge?</strong> STOP. Walk away.</div>
+            <div className="pb-emer-line"><strong>Already hit your limit?</strong> STOP. Come back tomorrow.</div>
+          </div>
+        </>
+      )}
+
+      {/* ── DECISION sub-tab: just the decision tree, with room to breathe ──── */}
+      {subTab === 'decision' && (
+        <section className="pb-section" style={{ marginTop: 0 }}>
+          <h2 className="pb-h2">The Decision Tree</h2>
+          <p className="pb-sub">Every time you think you see a setup.</p>
+          <div className="pb-decision-wrap">
+            <DecisionTreeSVG />
+          </div>
+        </section>
+      )}
     </div>
   )
 }
