@@ -5,6 +5,7 @@ import { buildLevelMap } from './lib/levels.js'
 import Command from './components/Command.jsx'
 import Levels from './components/Levels.jsx'
 import ChartTab from './components/Chart.jsx'
+import ErrorBoundary from './components/ErrorBoundary.jsx'
 import { ORBTab, IVAnalyzerTab, CalculatorTab, ChecklistTab, JournalTab, StatsTab, WatchlistTab, PrepTab } from './components/tabs.jsx'
 import GlossaryModal from './components/Glossary.jsx'
 import { LIME, RED, YELLOW, MONO, SANS, DARK, BORDER, todayStr, uid, getSession } from './constants.js'
@@ -239,14 +240,16 @@ export default function App() {
         )}
 
         {activeTab === 'chart' && (
-          <ChartTab
-            liveData={liveData}
-            levelMap={fullLevelMap}
-            trades={trades}
-            ticker={prep.ticker || 'QQQ'}
-            customLevels={customLevels}
-            onCustomLevelsChange={setCustomLevels}
-          />
+          <ErrorBoundary label="Chart tab">
+            <ChartTab
+              liveData={liveData}
+              levelMap={fullLevelMap}
+              trades={trades}
+              ticker={prep.ticker || 'QQQ'}
+              customLevels={customLevels}
+              onCustomLevelsChange={setCustomLevels}
+            />
+          </ErrorBoundary>
         )}
 
         {activeTab === 'orb' && (

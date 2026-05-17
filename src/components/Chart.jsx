@@ -141,6 +141,26 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
   const [newLabel, setNewLabel] = useState('')
   const [newPrice, setNewPrice] = useState('')
 
+  // ── Structure analysis (current timeframe + multi-TF) ──────────────────────
+  // MUST be declared before any useEffect that depends on it — TDZ otherwise.
+  const currentAnalysis = useMemo(() => {
+    const mins = TIMEFRAMES.find(t => t.id === timeframe)?.mins || 5
+    const agg = aggregateBars(liveData?.intradayBars || [], mins)
+    return fullAnalysis(agg)
+  }, [liveData?.intradayBars, timeframe])
+
+  const mtfAnalysis = useMemo(() => {
+    const bars = liveData?.intradayBars || []
+    if (!bars.length) return null
+    const r = {}
+    for (const tf of ['1m', '5m', '15m']) {
+      const m = TIMEFRAMES.find(t => t.id === tf)?.mins
+      if (!m) continue
+      r[tf] = fullAnalysis(aggregateBars(bars, m))
+    }
+    return r
+  }, [liveData?.intradayBars])
+
   // ── Initialize chart ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!wrapRef.current) return
@@ -438,24 +458,6 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
       }
     }
   }, [trades, layers.signals])
-
-  // ── Structure analysis (current timeframe + multi-TF) ──────────────────────
-  const currentAnalysis = useMemo(() => {
-    const mins = TIMEFRAMES.find(t => t.id === timeframe)?.mins || 5
-    const agg = aggregateBars(liveData?.intradayBars || [], mins)
-    return fullAnalysis(agg)
-  }, [liveData?.intradayBars, timeframe])
-
-  const mtfAnalysis = useMemo(() => {
-    const bars = liveData?.intradayBars || []
-    if (!bars.length) return null
-    const r = {}
-    for (const tf of ['1m', '5m', '15m']) {
-      const m = TIMEFRAMES.find(t => t.id === tf).mins
-      r[tf] = fullAnalysis(aggregateBars(bars, m))
-    }
-    return r
-  }, [liveData?.intradayBars])
 
   // ── Render structure: swing lines, BOS, swing/CHoCH markers ────────────────
   useEffect(() => {
