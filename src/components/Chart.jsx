@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useMemo } from 'react'
 import { createChart, CandlestickSeries, HistogramSeries, LineSeries, LineStyle, createSeriesMarkers } from 'lightweight-charts'
 import { Pill } from './ui.jsx'
 import { LIME, RED, YELLOW, BLUE, PURPLE, ORANGE, MONO, BORDER, PANEL, f2 } from '../constants.js'
+import { fullAnalysis } from '../lib/structure.js'
 
 const TIMEFRAMES = [
   { id: '1m', mins: 1, label: '1m' },
@@ -17,6 +18,7 @@ const LAYER_GROUPS = [
   { id: 'fibs', label: 'Fibs', types: ['fib'] },
   { id: 'zones', label: 'Zones', types: ['supply', 'demand', 'poc', 'hvn', 'lvn'] },
   { id: 'signals', label: 'Signals', types: [] },
+  { id: 'structure', label: 'Structure', types: [] },
 ]
 
 function colorFor(type, label = '') {
@@ -129,9 +131,12 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
   const tradeLinesRef = useRef([])
   const markersRef = useRef(null)
   const currentCandleRef = useRef(null)
+  const swingHighLineRef = useRef(null)
+  const swingLowLineRef = useRef(null)
+  const bosLineRef = useRef(null)
 
   const [timeframe, setTimeframe] = useState('5m')
-  const [layers, setLayers] = useState({ pivots: true, vwap: true, fibs: true, zones: true, signals: true })
+  const [layers, setLayers] = useState({ pivots: true, vwap: true, fibs: true, zones: true, signals: true, structure: true })
   const [addOpen, setAddOpen] = useState(false)
   const [newLabel, setNewLabel] = useState('')
   const [newPrice, setNewPrice] = useState('')
@@ -191,10 +196,21 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
       crosshairMarkerVisible: false,
     })
 
+    const swingHighLine = chart.addSeries(LineSeries, {
+      color: '#888', lineWidth: 1, lineStyle: LineStyle.Dotted,
+      lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
+    })
+    const swingLowLine = chart.addSeries(LineSeries, {
+      color: '#888', lineWidth: 1, lineStyle: LineStyle.Dotted,
+      lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
+    })
+
     chartRef.current = chart
     candleRef.current = candle
     volumeRef.current = volume
     avgVolLineRef.current = avgVolLine
+    swingHighLineRef.current = swingHighLine
+    swingLowLineRef.current = swingLowLine
 
     const onResize = () => {
       if (!el || !chartRef.current) return
@@ -209,6 +225,9 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
       candleRef.current = null
       volumeRef.current = null
       avgVolLineRef.current = null
+      swingHighLineRef.current = null
+      swingLowLineRef.current = null
+      bosLineRef.current = null
       linesRef.current = []
       tradeLinesRef.current = []
       markersRef.current = null
@@ -357,14 +376,38 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
       }
     }
 
-    markers.sort((a, b) => a.time - b.time)
+    if (layers.structure && currentAnalysis?.swings?.length) {
+      for (const s of currentAnalysis.swings) {
+        markers.push({
+          time: Math.floor(s.time / 1000),
+          position: s.type === 'high' ? 'aboveBar' : 'belowBar',
+          color: s.type === 'high' ? RED : LIME,
+          shape: s.type === 'high' ? 'arrowDown' : 'arrowUp',
+          text: s.type === 'high' ? 'SH' : 'SL',
+        })
+      }
+      if (currentAnalysis.choch?.swing) {
+        markers.push({
+          time: Math.floor(currentAnalysis.choch.swing.time / 1000),
+          position: currentAnalysis.choch.type === 'bullish' ? 'belowBar' : 'aboveBar',
+          color: YELLOW,
+          shape: 'circle',
+          text: 'CHoCH',
+        })
+      }
+    }
+
+    // Deduplicate by time+position (latest wins)
+    const dedup = new Map()
+    for (const m of markers) dedup.set(`${m.time}-${m.position}-${m.text}`, m)
+    const finalMarkers = [...dedup.values()].sort((a, b) => a.time - b.time)
 
     if (markersRef.current) {
-      markersRef.current.setMarkers(markers)
+      markersRef.current.setMarkers(finalMarkers)
     } else {
-      markersRef.current = createSeriesMarkers(candleRef.current, markers)
+      markersRef.current = createSeriesMarkers(candleRef.current, finalMarkers)
     }
-  }, [trades, layers.signals, levelMap?.setupQuality])
+  }, [trades, layers.signals, layers.structure, levelMap?.setupQuality, currentAnalysis])
 
   // ── Stop / target lines for open trades ─────────────────────────────────────
   useEffect(() => {
@@ -395,6 +438,64 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
       }
     }
   }, [trades, layers.signals])
+
+  // ── Structure analysis (current timeframe + multi-TF) ──────────────────────
+  const currentAnalysis = useMemo(() => {
+    const mins = TIMEFRAMES.find(t => t.id === timeframe)?.mins || 5
+    const agg = aggregateBars(liveData?.intradayBars || [], mins)
+    return fullAnalysis(agg)
+  }, [liveData?.intradayBars, timeframe])
+
+  const mtfAnalysis = useMemo(() => {
+    const bars = liveData?.intradayBars || []
+    if (!bars.length) return null
+    const r = {}
+    for (const tf of ['1m', '5m', '15m']) {
+      const m = TIMEFRAMES.find(t => t.id === tf).mins
+      r[tf] = fullAnalysis(aggregateBars(bars, m))
+    }
+    return r
+  }, [liveData?.intradayBars])
+
+  // ── Render structure: swing lines, BOS, swing/CHoCH markers ────────────────
+  useEffect(() => {
+    if (!candleRef.current || !swingHighLineRef.current || !swingLowLineRef.current) return
+
+    if (bosLineRef.current) {
+      try { candleRef.current.removePriceLine(bosLineRef.current) } catch {}
+      bosLineRef.current = null
+    }
+
+    if (!layers.structure || !currentAnalysis?.swings?.length) {
+      swingHighLineRef.current.setData([])
+      swingLowLineRef.current.setData([])
+      return
+    }
+
+    const highs = currentAnalysis.swings.filter(s => s.type === 'high')
+    const lows = currentAnalysis.swings.filter(s => s.type === 'low')
+
+    const lastHighLabel = highs[highs.length - 1]?.label
+    const lastLowLabel = lows[lows.length - 1]?.label
+    const highColor = lastHighLabel === 'HH' ? LIME : lastHighLabel === 'LH' ? RED : '#666'
+    const lowColor = lastLowLabel === 'HL' ? LIME : lastLowLabel === 'LL' ? RED : '#666'
+
+    swingHighLineRef.current.applyOptions({ color: highColor })
+    swingLowLineRef.current.applyOptions({ color: lowColor })
+
+    swingHighLineRef.current.setData(highs.map(s => ({ time: Math.floor(s.time / 1000), value: s.price })))
+    swingLowLineRef.current.setData(lows.map(s => ({ time: Math.floor(s.time / 1000), value: s.price })))
+
+    if (currentAnalysis.bos) {
+      const b = currentAnalysis.bos
+      const color = b.type === 'bullish' ? LIME : RED
+      bosLineRef.current = candleRef.current.createPriceLine({
+        price: b.price, color, lineWidth: 2, lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true, axisLabelColor: '#1a1a1a', axisLabelTextColor: color,
+        title: `BOS ${b.type === 'bullish' ? '▲' : '▼'} $${f2(b.price)}`,
+      })
+    }
+  }, [currentAnalysis, layers.structure])
 
   function autoFit() {
     chartRef.current?.timeScale().fitContent()
@@ -489,6 +590,96 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
           </div>
         )}
       </div>
+
+      {/* Market Structure Panel */}
+      {(() => {
+        const a = currentAnalysis
+        const mtf = mtfAnalysis
+        const stateColor = a?.state === 'BULLISH' ? LIME : a?.state === 'BEARISH' ? RED : a?.state === 'TRANSITION' ? ORANGE : YELLOW
+        const strength = a?.strength || 0
+        const strengthLabel = strength >= 5 ? 'Strong trend' : strength >= 3 ? 'Moderate trend' : strength >= 1 ? 'Weak trend' : 'No trend'
+        const strengthPct = Math.min(100, (strength / 6) * 100)
+        const labelColor = lbl => (lbl === 'HH' || lbl === 'HL') ? LIME : (lbl === 'LH' || lbl === 'LL') ? RED : '#888'
+
+        // Multi-timeframe alignment
+        const states = mtf ? [mtf['1m']?.state, mtf['5m']?.state, mtf['15m']?.state] : []
+        const allBull = states.length === 3 && states.every(s => s === 'BULLISH')
+        const allBear = states.length === 3 && states.every(s => s === 'BEARISH')
+        const aligned = allBull || allBear
+
+        const showBOS = a?.bos && a.bos.barsAgo <= 3
+        const showCHoCH = !!a?.choch
+
+        return (
+          <div style={{ background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 5, padding: '14px 18px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <span style={{ fontSize: 9, fontFamily: MONO, color: '#666', textTransform: 'uppercase', letterSpacing: '0.14em' }}>Market Structure — {timeframe}</span>
+              {mtf && (
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  {['1m', '5m', '15m'].map(tf => {
+                    const s = mtf[tf]?.state
+                    const c = s === 'BULLISH' ? LIME : s === 'BEARISH' ? RED : s === 'TRANSITION' ? ORANGE : YELLOW
+                    return (
+                      <span key={tf} style={{ fontSize: 9, fontFamily: MONO, color: c, border: `1px solid ${c}33`, borderRadius: 3, padding: '2px 7px', letterSpacing: '0.06em' }}>
+                        {tf.toUpperCase()}: {s || '—'}
+                      </span>
+                    )
+                  })}
+                  <span style={{ marginLeft: 6, fontSize: 9, fontFamily: MONO, color: aligned ? LIME : YELLOW, letterSpacing: '0.08em', fontWeight: 700 }}>
+                    {aligned ? 'ALIGNED ✓' : 'MIXED'}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '170px 1fr', gap: 16, alignItems: 'stretch' }}>
+              {/* Badge */}
+              <div style={{ background: `${stateColor}11`, border: `1px solid ${stateColor}55`, borderRadius: 4, padding: '12px 14px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <div style={{ fontSize: 9, color: '#555', fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>Current</div>
+                <div style={{ fontSize: 18, fontFamily: MONO, fontWeight: 900, color: stateColor, letterSpacing: '0.04em' }}>{a?.state || 'NO DATA'}</div>
+                <div style={{ fontSize: 9, fontFamily: MONO, color: '#555', marginTop: 4 }}>{strengthLabel}</div>
+                <div style={{ height: 3, background: '#1a1a1a', borderRadius: 2, overflow: 'hidden', marginTop: 6 }}>
+                  <div style={{ height: '100%', width: `${strengthPct}%`, background: stateColor, transition: 'width 0.3s' }} />
+                </div>
+              </div>
+
+              {/* Last 4 swings */}
+              <div style={{ background: '#080808', border: '1px solid #161616', borderRadius: 4, padding: '10px 14px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 8 }}>
+                <div style={{ fontSize: 9, color: '#555', fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Last 4 Swings</div>
+                {a?.lastSwings?.length ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    {a.lastSwings.map((s, i) => (
+                      <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 11, fontFamily: MONO, fontWeight: 700, color: labelColor(s.label) }}>
+                          {s.label} ${f2(s.price)}
+                        </span>
+                        {i < a.lastSwings.length - 1 && <span style={{ fontSize: 11, color: '#333' }}>→</span>}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 10, fontFamily: MONO, color: '#3a3a3a' }}>Not enough bars to detect swings yet.</div>
+                )}
+              </div>
+            </div>
+
+            {(showBOS || showCHoCH) && (
+              <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {showBOS && (
+                  <div style={{ background: a.bos.type === 'bullish' ? '#0a1208' : '#150808', border: `1px solid ${a.bos.type === 'bullish' ? LIME : RED}44`, borderRadius: 4, padding: '10px 14px', fontSize: 11, fontFamily: MONO, color: a.bos.type === 'bullish' ? LIME : RED, fontWeight: 700, animation: 'hdrpulse 1.5s infinite' }}>
+                    ⚡ BREAK OF STRUCTURE {a.bos.type === 'bullish' ? '▲' : '▼'} at ${f2(a.bos.price)} — trend may be reversing. Watch next swing point.
+                  </div>
+                )}
+                {showCHoCH && (
+                  <div style={{ background: '#110d04', border: `1px solid ${YELLOW}44`, borderRadius: 4, padding: '10px 14px', fontSize: 11, fontFamily: MONO, color: YELLOW, fontWeight: 700 }}>
+                    ⚠ CHARACTER CHANGE — first sign of reversal at ${f2(a.choch.swing.price)}. Do not fight the new direction.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       <div style={{ background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 5, padding: '10px 14px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
