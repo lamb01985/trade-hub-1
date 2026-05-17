@@ -21,7 +21,7 @@ const TABS = [
 ]
 
 const defaultSettings = { dailyLossLimit: 500, maxTradesPerDay: 5, orPeriod: '15', alertsEnabled: false }
-const defaultPrep = { ticker: 'QQQ', orPeriod: '15', orbHigh: '', orbLow: '', keyLevel: '', plannedStrike: '', plannedDTE: '1', ivNote: '', gamePlan: '', avoidNotes: '', dayReview: '', marketEvents: '' }
+const defaultPrep = { ticker: 'QQQ', orPeriod: '15', orbHigh: '', orbLow: '', keyLevel: '', plannedStrike: '', plannedDTE: '1', ivNote: '', gamePlan: '', avoidNotes: '', dayReview: '', marketEvents: '', instrument: 'options' }
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('command')
@@ -212,6 +212,7 @@ export default function App() {
             onAnthropicKeyChange={setAnthropicKey}
             liveData={liveData}
             marketEvents={prep.marketEvents}
+            instrument={prep.instrument || 'options'}
           />
         )}
 
@@ -235,11 +236,11 @@ export default function App() {
         )}
 
         {activeTab === 'iv' && (
-          <IVAnalyzerTab apiKey={apiKey} />
+          <IVAnalyzerTab apiKey={apiKey} instrument={prep.instrument || 'options'} />
         )}
 
         {activeTab === 'checklist' && (
-          <ChecklistTab onPass={() => { setChecklistPassed(true); setActiveTab('calc') }} />
+          <ChecklistTab onPass={() => { setChecklistPassed(true); setActiveTab('calc') }} instrument={prep.instrument || 'options'} />
         )}
 
         {activeTab === 'calc' && (
@@ -250,6 +251,7 @@ export default function App() {
             lockedOut={lockedOut}
             maxTradesReached={maxTradesReached}
             apiKey={apiKey}
+            instrument={prep.instrument || 'options'}
           />
         )}
 

@@ -20,6 +20,21 @@ const CL_ITEMS = [
   { id: 'c12', text: 'I know my exact exit — stop AND target — on the option price', required: true },
 ]
 
+const CL_ITEMS_STOCK = [
+  { id: 'c1', text: 'Opening range has fully formed for my chosen OR period', required: true },
+  { id: 'c2', text: 'Underlying has CLOSED above OR high or below OR low — no wicks', required: true },
+  { id: 'c3', text: 'Entry is a retest or first confirmed breakout — not a chase', required: true },
+  { id: 'c4', text: 'My stop is set on the SHARE PRICE, defined before entry', required: true },
+  { id: 'c5', text: 'This trade has minimum 2:1 R:R on the share price move', required: true },
+  { id: 'c6', text: 'Stock has sufficient liquidity and volume today', required: true },
+  { id: 'c7', text: 'Position size fits within daily risk budget', required: false },
+  { id: 'c8', text: 'Time is before 10:30 CT — not trading midday chop', required: true },
+  { id: 'c9', text: 'I do NOT have 3 or more consecutive losses today', required: true },
+  { id: 'c10', text: 'I am emotionally flat — not revenge, not FOMO', required: true },
+  { id: 'c11', text: 'Shares fit within my remaining daily risk budget', required: true },
+  { id: 'c12', text: 'I know my exact exit — stop AND target — on the share price', required: true },
+]
+
 export function ORBTab({ settings, onSendToCalc, prepFill, liveData }) {
   const [ticker, setTicker] = useState('')
   const [orbH, setOrbH] = useState('')
@@ -149,7 +164,19 @@ export function ORBTab({ settings, onSendToCalc, prepFill, liveData }) {
 }
 
 // ── IV Analyzer ────────────────────────────────────────────────────────────────
-export function IVAnalyzerTab({ apiKey }) {
+export function IVAnalyzerTab({ apiKey, instrument }) {
+  if (instrument === 'stock') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <div><SLabel>Black-Scholes Pricing Engine</SLabel><Heading>IV Analyzer</Heading></div>
+        <div style={{ background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 5, padding: '40px 28px', textAlign: 'center' }}>
+          <div style={{ fontSize: 24, marginBottom: 14, color: '#2a2a2a' }}>◈</div>
+          <div style={{ fontSize: 13, fontFamily: MONO, color: '#555', marginBottom: 8 }}>IV analysis is for options contracts only.</div>
+          <div style={{ fontSize: 11, fontFamily: MONO, color: '#333', lineHeight: 1.7 }}>Switch to <strong style={{ color: LIME }}>Options</strong> in the Prep tab to access IV analysis.</div>
+        </div>
+      </div>
+    )
+  }
   const [fetching, setFetching] = useState(false)
   const [fetchError, setFetchError] = useState(null)
   const [fetchTicker, setFetchTicker] = useState('QQQ')
@@ -337,7 +364,7 @@ export function IVAnalyzerTab({ apiKey }) {
 }
 
 // ── Calculator Tab ────────────────────────────────────────────────────────────
-export function CalculatorTab({ prefill, onLogTrade, checklistPassed, lockedOut, maxTradesReached, apiKey }) {
+export function CalculatorTab({ prefill, onLogTrade, checklistPassed, lockedOut, maxTradesReached, apiKey, instrument }) {
   const [ticker, setTicker] = useState('')
   const [optType, setOptType] = useState('call')
   const [strike, setStrike] = useState('')
@@ -349,6 +376,8 @@ export function CalculatorTab({ prefill, onLogTrade, checklistPassed, lockedOut,
   const [setupType, setSetupType] = useState('ORB')
   const [liveAskLoading, setLiveAskLoading] = useState(false)
   const [liveAskError, setLiveAskError] = useState(null)
+
+  const isStock = instrument === 'stock'
 
   useEffect(() => {
     if (!prefill) return
@@ -369,24 +398,38 @@ export function CalculatorTab({ prefill, onLogTrade, checklistPassed, lockedOut,
     setLiveAskLoading(false)
   }
 
-  const calc = calcOptionRR(entry, stop, target, contracts)
+  // Options R:R
+  const calcOpts = !isStock ? calcOptionRR(entry, stop, target, contracts) : null
+
+  // Stock R:R — same math, no ×100 multiplier
+  const sharesN = parseInt(contracts) || 1
+  const eN = parseFloat(entry), sN = parseFloat(stop), tN = parseFloat(target)
+  const calcStock = isStock && eN > 0 && sN > 0 && tN > 0 && eN > sN && tN > eN ? (() => {
+    const risk = eN - sN, reward = tN - eN, rr = reward / risk
+    return { rr, risk, reward, dollarRisk: risk * sharesN, dollarReward: reward * sharesN, totalCost: eN * sharesN, breakEvenWin: (1 / (1 + rr)) * 100 }
+  })() : null
+
+  const calc = isStock ? calcStock : calcOpts
   const blocked = lockedOut || maxTradesReached
   const valid = calc !== null
   const color = valid ? rrColor(calc.rr) : '#333'
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <div><SLabel>Options-First Trade Entry</SLabel><Heading>R:R Calculator</Heading></div>
+      <div><SLabel>{isStock ? 'Stock/ETF Trade Entry' : 'Options-First Trade Entry'}</SLabel><Heading>R:R Calculator</Heading></div>
       <div style={{ background: '#0a0d08', border: '1px solid #1a2a18', borderRadius: 5, padding: '12px 16px' }}>
         <div style={{ fontSize: 10, color: '#3a5030', fontFamily: MONO, lineHeight: 1.8 }}>
-          <span style={{ color: LIME, fontWeight: 700 }}>Options mode:</span> Entry, stop, and target are the option contract prices — not QQQ. Amounts auto-calculate at ×100 per contract.
+          {isStock
+            ? <><span style={{ color: LIME, fontWeight: 700 }}>Stock mode:</span> Entry, stop, and target are share prices. Dollar amounts = price difference × shares.</>
+            : <><span style={{ color: LIME, fontWeight: 700 }}>Options mode:</span> Entry, stop, and target are the option contract prices — not QQQ. Amounts auto-calculate at ×100 per contract.</>
+          }
         </div>
       </div>
       {!checklistPassed && <div style={{ background: '#120d00', border: '1px solid #2a1e00', borderRadius: 4, padding: '11px 16px', fontSize: 11, fontFamily: MONO, color: YELLOW }}>Checklist not confirmed. Run the Pre-Trade Checklist first.</div>}
       {blocked && <div style={{ background: '#150000', border: `1px solid ${RED}33`, borderRadius: 4, padding: '11px 16px', fontSize: 11, fontFamily: MONO, color: RED }}>{lockedOut ? 'Trading locked — daily loss limit reached.' : 'Daily trade limit reached.'}</div>}
       <div style={{ background: '#0a0a0a', border: `1px solid ${valid ? color + '44' : BORDER}`, borderRadius: 5, padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <div style={{ fontSize: 9, color: '#333', letterSpacing: '0.14em', fontFamily: MONO, textTransform: 'uppercase', marginBottom: 10 }}>Risk : Reward (on premium)</div>
+          <div style={{ fontSize: 9, color: '#333', letterSpacing: '0.14em', fontFamily: MONO, textTransform: 'uppercase', marginBottom: 10 }}>{isStock ? 'Risk : Reward (on share price)' : 'Risk : Reward (on premium)'}</div>
           <div style={{ fontSize: 48, fontWeight: 900, color, fontFamily: MONO, lineHeight: 1, letterSpacing: '-0.03em' }}>{valid ? '1 : ' + f2(calc.rr) : '— : —'}</div>
           {valid && <div style={{ fontSize: 10, color, fontFamily: MONO, letterSpacing: '0.14em', marginTop: 8, textTransform: 'uppercase' }}>{calc.rr >= 3 ? 'STRONG EDGE' : calc.rr >= 2 ? 'ACCEPTABLE' : 'POOR SETUP — DO NOT TRADE'}</div>}
         </div>
@@ -396,64 +439,104 @@ export function CalculatorTab({ prefill, onLogTrade, checklistPassed, lockedOut,
           ))}
         </div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-        <Fld label="Ticker" value={ticker} onChange={setTicker} type="text" placeholder="QQQ" mono />
-        <Sel label="Option Type" value={optType} onChange={setOptType} options={[{ value: 'call', label: 'Call — Bullish ↑' }, { value: 'put', label: 'Put — Bearish ↓' }]} />
-        <Sel label="Setup Type" value={setupType} onChange={setSetupType} options={SETUP_TYPES.map(s => ({ value: s, label: s }))} />
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-        <Fld label="Strike" value={strike} onChange={setStrike} placeholder="714" prefix="$" />
-        <Fld label="DTE" value={dte} onChange={setDte} placeholder="0" step="1" suffix="d" />
-        <Fld label="Contracts" value={contracts} onChange={setContracts} placeholder="1" step="1" />
-      </div>
-      <div style={{ background: '#080d05', border: '1px solid #1a2a10', borderRadius: 5, padding: '16px 18px' }}>
-        <div style={{ fontSize: 9, letterSpacing: '0.16em', color: '#3a5030', textTransform: 'uppercase', fontFamily: MONO, marginBottom: 6 }}>Option Contract Prices (premium per share)</div>
-        <div style={{ fontSize: 10, color: '#3a5030', fontFamily: MONO, marginBottom: 14, lineHeight: 1.7 }}>Entry, stop, target = option's own price. 1 contract = 100 shares. $ amounts = price × 100 × contracts.</div>
-        {apiKey && (
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 12 }}>
-            <Btn small variant="blue" onClick={fetchLiveAsk} disabled={liveAskLoading || !ticker || !strike}>{liveAskLoading ? 'Fetching...' : 'Get Live Ask →'}</Btn>
-            {liveAskError && <span style={{ fontSize: 10, color: RED, fontFamily: MONO }}>{liveAskError}</span>}
-            {!liveAskError && entry && <span style={{ fontSize: 10, color: LIME, fontFamily: MONO }}>✓ Entry from live ask</span>}
-          </div>
-        )}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-          <Fld label="Entry Premium" value={entry} onChange={setEntry} placeholder="2.40" prefix="$" accent />
-          <Fld label="Stop (option price)" value={stop} onChange={setStop} placeholder="1.20" prefix="$" accent />
-          <Fld label="Target (option price)" value={target} onChange={setTarget} placeholder="4.80" prefix="$" accent />
+
+      {/* Ticker + direction + setup */}
+      {isStock ? (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <Fld label="Ticker" value={ticker} onChange={setTicker} type="text" placeholder="SPY" mono />
+          <Sel label="Setup Type" value={setupType} onChange={setSetupType} options={SETUP_TYPES.map(s => ({ value: s, label: s }))} />
         </div>
+      ) : (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+            <Fld label="Ticker" value={ticker} onChange={setTicker} type="text" placeholder="QQQ" mono />
+            <Sel label="Option Type" value={optType} onChange={setOptType} options={[{ value: 'call', label: 'Call — Bullish ↑' }, { value: 'put', label: 'Put — Bearish ↓' }]} />
+            <Sel label="Setup Type" value={setupType} onChange={setSetupType} options={SETUP_TYPES.map(s => ({ value: s, label: s }))} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+            <Fld label="Strike" value={strike} onChange={setStrike} placeholder="714" prefix="$" />
+            <Fld label="DTE" value={dte} onChange={setDte} placeholder="0" step="1" suffix="d" />
+            <Fld label="Contracts" value={contracts} onChange={setContracts} placeholder="1" step="1" />
+          </div>
+        </>
+      )}
+
+      {/* Price fields */}
+      <div style={{ background: '#080d05', border: '1px solid #1a2a10', borderRadius: 5, padding: '16px 18px' }}>
+        {isStock ? (
+          <>
+            <div style={{ fontSize: 9, letterSpacing: '0.16em', color: '#3a5030', textTransform: 'uppercase', fontFamily: MONO, marginBottom: 6 }}>Share Prices</div>
+            <div style={{ fontSize: 10, color: '#3a5030', fontFamily: MONO, marginBottom: 14, lineHeight: 1.7 }}>All prices are share prices. Dollar risk/reward = price difference × number of shares.</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12, marginBottom: 14 }}>
+              <Fld label="Entry (share price)" value={entry} onChange={setEntry} placeholder="512.50" prefix="$" accent />
+              <Fld label="Stop (share price)" value={stop} onChange={setStop} placeholder="510.00" prefix="$" accent />
+              <Fld label="Target (share price)" value={target} onChange={setTarget} placeholder="517.50" prefix="$" accent />
+              <Fld label="Shares" value={contracts} onChange={setContracts} placeholder="100" step="1" />
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ fontSize: 9, letterSpacing: '0.16em', color: '#3a5030', textTransform: 'uppercase', fontFamily: MONO, marginBottom: 6 }}>Option Contract Prices (premium per share)</div>
+            <div style={{ fontSize: 10, color: '#3a5030', fontFamily: MONO, marginBottom: 14, lineHeight: 1.7 }}>Entry, stop, target = option's own price. 1 contract = 100 shares. $ amounts = price × 100 × contracts.</div>
+            {apiKey && (
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 12 }}>
+                <Btn small variant="blue" onClick={fetchLiveAsk} disabled={liveAskLoading || !ticker || !strike}>{liveAskLoading ? 'Fetching...' : 'Get Live Ask →'}</Btn>
+                {liveAskError && <span style={{ fontSize: 10, color: RED, fontFamily: MONO }}>{liveAskError}</span>}
+                {!liveAskError && entry && <span style={{ fontSize: 10, color: LIME, fontFamily: MONO }}>✓ Entry from live ask</span>}
+              </div>
+            )}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+              <Fld label="Entry Premium" value={entry} onChange={setEntry} placeholder="2.40" prefix="$" accent />
+              <Fld label="Stop (option price)" value={stop} onChange={setStop} placeholder="1.20" prefix="$" accent />
+              <Fld label="Target (option price)" value={target} onChange={setTarget} placeholder="4.80" prefix="$" accent />
+            </div>
+          </>
+        )}
         {valid && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginTop: 14 }}>
-            <div style={{ background: '#060606', border: '1px solid #1a1a1a', borderRadius: 4, padding: '10px 12px' }}><div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, textTransform: 'uppercase', marginBottom: 3 }}>Risk / contract</div><div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: RED }}>-${f2(calc.risk)} <span style={{ fontSize: 10, color: '#444' }}>= -${f2(calc.risk * 100)}</span></div></div>
-            <div style={{ background: '#060606', border: '1px solid #1a1a1a', borderRadius: 4, padding: '10px 12px' }}><div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, textTransform: 'uppercase', marginBottom: 3 }}>Reward / contract</div><div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: LIME }}>${f2(calc.reward)} <span style={{ fontSize: 10, color: '#444' }}>= ${f2(calc.reward * 100)}</span></div></div>
-            <div style={{ background: '#060606', border: '1px solid #1a1a1a', borderRadius: 4, padding: '10px 12px' }}><div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, textTransform: 'uppercase', marginBottom: 3 }}>Total cost ({contracts}c)</div><div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: '#aaa' }}>{fmtU(calc.totalCost)}</div></div>
+            {isStock ? (
+              <>
+                <div style={{ background: '#060606', border: '1px solid #1a1a1a', borderRadius: 4, padding: '10px 12px' }}><div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, textTransform: 'uppercase', marginBottom: 3 }}>Risk / share</div><div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: RED }}>-${f2(calc.risk)}</div></div>
+                <div style={{ background: '#060606', border: '1px solid #1a1a1a', borderRadius: 4, padding: '10px 12px' }}><div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, textTransform: 'uppercase', marginBottom: 3 }}>Reward / share</div><div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: LIME }}>${f2(calc.reward)}</div></div>
+                <div style={{ background: '#060606', border: '1px solid #1a1a1a', borderRadius: 4, padding: '10px 12px' }}><div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, textTransform: 'uppercase', marginBottom: 3 }}>Total cost ({sharesN} shares)</div><div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: '#aaa' }}>{fmtU(calc.totalCost)}</div></div>
+              </>
+            ) : (
+              <>
+                <div style={{ background: '#060606', border: '1px solid #1a1a1a', borderRadius: 4, padding: '10px 12px' }}><div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, textTransform: 'uppercase', marginBottom: 3 }}>Risk / contract</div><div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: RED }}>-${f2(calc.risk)} <span style={{ fontSize: 10, color: '#444' }}>= -${f2(calc.risk * 100)}</span></div></div>
+                <div style={{ background: '#060606', border: '1px solid #1a1a1a', borderRadius: 4, padding: '10px 12px' }}><div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, textTransform: 'uppercase', marginBottom: 3 }}>Reward / contract</div><div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: LIME }}>${f2(calc.reward)} <span style={{ fontSize: 10, color: '#444' }}>= ${f2(calc.reward * 100)}</span></div></div>
+                <div style={{ background: '#060606', border: '1px solid #1a1a1a', borderRadius: 4, padding: '10px 12px' }}><div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, textTransform: 'uppercase', marginBottom: 3 }}>Total cost ({contracts}c)</div><div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: '#aaa' }}>{fmtU(calc.totalCost)}</div></div>
+              </>
+            )}
           </div>
         )}
       </div>
       <Btn disabled={!valid || blocked} onClick={() => {
         if (!valid || blocked) return
-        onLogTrade({ id: uid(), ticker: ticker || '—', optType, strike: parseFloat(strike) || null, dte: parseInt(dte) || null, setupType, entry: parseFloat(entry), stop: parseFloat(stop), target: parseFloat(target), contracts: parseInt(contracts) || 1, rr: calc.rr, dollarRisk: calc.dollarRisk, dollarReward: calc.dollarReward, totalCost: calc.totalCost, status: 'open', pnl: null, notes: '', date: new Date().toISOString() })
-      }}>{blocked ? 'Trading Locked' : !valid ? 'Enter premium prices above' : 'Log This Trade →'}</Btn>
+        onLogTrade({ id: uid(), ticker: ticker || '—', instrument: instrument || 'options', optType: isStock ? null : optType, strike: isStock ? null : (parseFloat(strike) || null), dte: isStock ? null : (parseInt(dte) || null), setupType, entry: parseFloat(entry), stop: parseFloat(stop), target: parseFloat(target), contracts: parseInt(contracts) || 1, rr: calc.rr, dollarRisk: calc.dollarRisk, dollarReward: calc.dollarReward, totalCost: calc.totalCost, status: 'open', pnl: null, notes: '', date: new Date().toISOString() })
+      }}>{blocked ? 'Trading Locked' : !valid ? (isStock ? 'Enter share prices above' : 'Enter premium prices above') : 'Log This Trade →'}</Btn>
     </div>
   )
 }
 
 // ── Checklist Tab ─────────────────────────────────────────────────────────────
-export function ChecklistTab({ onPass }) {
+export function ChecklistTab({ onPass, instrument }) {
   const [checked, setChecked] = useState({})
-  const req = CL_ITEMS.filter(i => i.required), allReq = req.every(i => checked[i.id])
-  const done = CL_ITEMS.filter(i => checked[i.id]).length, pct = Math.round((done / CL_ITEMS.length) * 100)
+  const isStock = instrument === 'stock'
+  const items = isStock ? CL_ITEMS_STOCK : CL_ITEMS
+  const req = items.filter(i => i.required), allReq = req.every(i => checked[i.id])
+  const done = items.filter(i => checked[i.id]).length, pct = Math.round((done / items.length) * 100)
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div><SLabel>Options Discipline Gate</SLabel><Heading>Pre-Trade Checklist</Heading></div>
-        <div style={{ textAlign: 'right' }}><div style={{ fontSize: 32, fontWeight: 900, fontFamily: MONO, color: allReq ? LIME : YELLOW, letterSpacing: '-0.03em' }}>{pct}%</div><div style={{ fontSize: 9, color: '#333', fontFamily: MONO, textTransform: 'uppercase' }}>{done}/{CL_ITEMS.length}</div></div>
+        <div><SLabel>{isStock ? 'Stock Discipline Gate' : 'Options Discipline Gate'}</SLabel><Heading>Pre-Trade Checklist</Heading></div>
+        <div style={{ textAlign: 'right' }}><div style={{ fontSize: 32, fontWeight: 900, fontFamily: MONO, color: allReq ? LIME : YELLOW, letterSpacing: '-0.03em' }}>{pct}%</div><div style={{ fontSize: 9, color: '#333', fontFamily: MONO, textTransform: 'uppercase' }}>{done}/{items.length}</div></div>
       </div>
       <div style={{ background: allReq ? '#070e04' : '#100c04', border: `1px solid ${allReq ? '#162210' : '#231a08'}`, borderRadius: 4, padding: '12px 18px', display: 'flex', alignItems: 'center', gap: 12 }}>
         <div style={{ width: 9, height: 9, borderRadius: '50%', background: allReq ? LIME : YELLOW, flexShrink: 0, boxShadow: `0 0 10px ${allReq ? LIME : YELLOW}` }} />
         <span style={{ fontFamily: MONO, fontSize: 12, color: allReq ? LIME : YELLOW, fontWeight: 700, letterSpacing: '0.06em' }}>{allReq ? 'CLEAR TO TRADE — All required rules confirmed.' : 'NOT CLEAR — Complete all required rules first.'}</span>
       </div>
       <Card style={{ padding: 0, overflow: 'hidden' }}>
-        {CL_ITEMS.map(item => (
+        {items.map(item => (
           <div key={item.id} style={{ padding: '0 18px', background: checked[item.id] ? '#0b0e09' : 'transparent' }}>
             <CheckRow text={item.text} required={item.required} checked={!!checked[item.id]} onToggle={() => setChecked(c => ({ ...c, [item.id]: !c[item.id] }))} />
           </div>
@@ -1117,7 +1200,38 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
     const { prevDay, pivots, vwapData, price } = liveData || {}
     const d = (v, fb = 'unknown') => v != null && !isNaN(v) ? f2(v) : fb
 
-    const prompt = `You are a professional options day trader assistant. Generate a pre-market game plan for 0DTE ${prep.ticker || 'QQQ'} options.
+    const isStock = (prep.instrument || 'options') === 'stock'
+    const prompt = isStock
+      ? `You are a professional day trader assistant. Generate a pre-market game plan for ${prep.ticker || 'SPY'} stock/ETF.
+
+Market context:
+- Ticker: ${prep.ticker || 'SPY'} | Current price: $${d(price)}
+- OR Period: ${prep.orPeriod || 15} min
+- Prev Day High: $${d(prevDay?.high, prep.orbHigh)} | Low: $${d(prevDay?.low, prep.orbLow)} | Close: $${d(prevDay?.close)}
+- Pivot Point: $${d(pivots?.pp)} | R1: $${d(pivots?.r1)} | R2: $${d(pivots?.r2)} | R3: $${d(pivots?.r3)}
+- S1: $${d(pivots?.s1)} | S2: $${d(pivots?.s2)} | S3: $${d(pivots?.s3)}
+- VWAP: $${d(vwapData?.vwap)} | VWAP +1σ: $${d(vwapData?.band1up)} | -1σ: $${d(vwapData?.band1dn)}
+- Market events tomorrow: ${prep.marketEvents || 'none noted'}
+
+Write a tight, specific game plan with these exact sections:
+
+THESIS
+[1-2 sentences: what the market structure supports today and why]
+
+KEY LEVELS
+[List 4-6 levels from the data with $ price and what a touch/break means. Format: • $XXX.XX — [explanation]]
+
+ENTRY CONDITIONS
+[Exactly what must happen on the 5-min chart before entering. Candle behavior, volume, level confirmation. Be specific — "wait for a candle CLOSE above $X" not vague.]
+
+IDEAL SETUP
+Entry: $X.XX | Stop: $X.XX (if [level] fails) | Target: $X.XX (at [level]) | R:R: X:1
+
+STAND ASIDE IF
+[3 specific conditions that kill today's setup. Be concrete.]
+
+Only use the levels provided. No generic advice.`
+      : `You are a professional options day trader assistant. Generate a pre-market game plan for 0DTE ${prep.ticker || 'QQQ'} options.
 
 Market context:
 - Ticker: ${prep.ticker || 'QQQ'} | Current price: $${d(price)}
@@ -1216,8 +1330,21 @@ Only use the levels provided. No generic advice.`
           )}
           {dataLoaded && <span style={{ fontSize: 9, fontFamily: MONO, color: LIME }}>✓ PDH/PDL/PP/Strike loaded from Massive</span>}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 12, marginBottom: 14, alignItems: 'end' }}>
           <Fld label="Primary Ticker" value={prep.ticker || ''} onChange={v => upd('ticker', v.toUpperCase())} type="text" placeholder="QQQ" mono />
+          <div>
+            <div style={{ fontSize: 9, letterSpacing: '0.14em', color: '#3a3a3a', textTransform: 'uppercase', fontFamily: MONO, marginBottom: 6 }}>Instrument</div>
+            <div style={{ display: 'flex', border: `1px solid ${BORDER}`, borderRadius: 4, overflow: 'hidden' }}>
+              {[{ v: 'options', l: 'Options' }, { v: 'stock', l: 'Stock/ETF' }].map(({ v, l }) => {
+                const active = (prep.instrument || 'options') === v
+                return (
+                  <button key={v} onClick={() => upd('instrument', v)} style={{ flex: 1, background: active ? '#1e1e1e' : 'transparent', color: active ? LIME : '#444', border: 'none', borderRight: v === 'options' ? `1px solid ${BORDER}` : 'none', fontFamily: MONO, fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '9px 14px', cursor: 'pointer', fontWeight: active ? 700 : 400, whiteSpace: 'nowrap' }}>
+                    {l}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
           <Sel label="OR Period" value={prep.orPeriod || settings.orPeriod || '15'} onChange={v => upd('orPeriod', v)} options={[{ value: '5', label: '5 min (8:35 CT)' }, { value: '15', label: '15 min (8:45 CT)' }, { value: '30', label: '30 min (9:00 CT)' }]} />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12, marginBottom: 14 }}>

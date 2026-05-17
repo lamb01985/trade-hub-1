@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Card, SLabel, Heading, Tile, Fld, Sel, Btn } from './ui.jsx'
 import { LIME, RED, YELLOW, MONO, BORDER, SESSION_LABELS, SESSION_COLORS, SESSION_TIPS, getSession, todayStr, f2, fmtD, fmtU } from '../constants.js'
 
-export default function Command({ trades, settings, onSettingsChange, lockedOut, onUnlock, apiKey, onApiKeyChange, anthropicKey, onAnthropicKeyChange, liveData, marketEvents }) {
+export default function Command({ trades, settings, onSettingsChange, lockedOut, onUnlock, apiKey, onApiKeyChange, anthropicKey, onAnthropicKeyChange, liveData, marketEvents, instrument }) {
   const [time, setTime] = useState(new Date())
   useEffect(() => { const t = setInterval(() => setTime(new Date()), 1000); return () => clearInterval(t) }, [])
 
@@ -339,8 +339,15 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
 
       {/* Non-negotiables */}
       <div style={{ background: '#0d1208', border: '1px solid #1e2a18', borderRadius: 5, padding: '16px 20px' }}>
-        <SLabel>Options ORB Non-Negotiables</SLabel>
-        {[
+        <SLabel>{instrument === 'stock' ? 'Stock/ETF ORB Non-Negotiables' : 'Options ORB Non-Negotiables'}</SLabel>
+        {(instrument === 'stock' ? [
+          'Wait for OR to fully form. Never trade inside the range.',
+          'Underlying must CLOSE above/below OR level. Wicks do not count.',
+          'Entry, stop, and target are SHARE PRICES.',
+          'Minimum 2:1 R:R on the trade. No exceptions.',
+          '10:30–1:30 CT is chop. No new positions.',
+          'Three consecutive losses = stop for the day.',
+        ] : [
           'Wait for the OR to fully form. Never trade inside the range.',
           'Underlying must CLOSE above/below OR level. Wicks do not count.',
           'Check IV before buying. High IV means expensive premium.',
@@ -348,8 +355,8 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
           'Minimum 2:1 R:R on the contract premium. No exceptions.',
           '10:30–1:30 CT is chop. Theta burns. No new positions.',
           'Three consecutive losses = close the platform.',
-        ].map((r, i) => (
-          <div key={i} style={{ display: 'flex', gap: 10, padding: '7px 0', borderBottom: i < 6 ? '1px solid #151e10' : 'none' }}>
+        ]).map((r, i, arr) => (
+          <div key={i} style={{ display: 'flex', gap: 10, padding: '7px 0', borderBottom: i < arr.length - 1 ? '1px solid #151e10' : 'none' }}>
             <span style={{ color: LIME, fontFamily: MONO, fontSize: 11, minWidth: 18, opacity: 0.5 }}>{i + 1}.</span>
             <span style={{ color: '#6a8060', fontFamily: MONO, fontSize: 11, lineHeight: 1.6 }}>{r}</span>
           </div>
