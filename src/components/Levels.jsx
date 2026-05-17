@@ -137,27 +137,29 @@ function SetupBadge({ quality, nearestAbove, nearestBelow, price }) {
 }
 
 export default function Levels({ liveData, orbHigh, orbLow, settings, onSettingsChange }) {
-  const [fibHigh, setFibHigh] = useState('')
-  const [fibLow, setFibLow] = useState('')
   const [customLabel, setCustomLabel] = useState('')
   const [customPrice, setCustomPrice] = useState('')
   const [customLevels, setCustomLevels] = useState([])
-  const [showFibForm, setShowFibForm] = useState(false)
   const [notifGranted, setNotifGranted] = useState(Notification.permission === 'granted')
-  const [alertLog, setAlertLog] = useState([])
   const [filter, setFilter] = useState('all')
 
   const { price, vwapData, prevDay, weeklyData, pivots, sdZones } = liveData || {}
 
-  const fibs = useMemo(() => {
-    const h = parseFloat(fibHigh), l = parseFloat(fibLow)
-    if (!isNaN(h) && !isNaN(l) && h > l) return calcFibs(h, l)
+  // Auto-compute Fibonacci from best available range: OR high/low → prev day → none
+  const autoFibs = useMemo(() => {
+    const oh = parseFloat(orbHigh), ol = parseFloat(orbLow)
+    if (!isNaN(oh) && !isNaN(ol) && oh > ol) {
+      return { fibs: calcFibs(oh, ol), source: `OR ($${f2(ol)} — $${f2(oh)})` }
+    }
+    if (prevDay?.high && prevDay?.low && prevDay.high > prevDay.low) {
+      return { fibs: calcFibs(prevDay.high, prevDay.low), source: `prior day range ($${f2(prevDay.low)} — $${f2(prevDay.high)})` }
+    }
     return null
-  }, [fibHigh, fibLow])
+  }, [orbHigh, orbLow, prevDay])
 
   const levelMap = useMemo(() => buildLevelMap(price, {
     pivots,
-    fibs,
+    fibs: autoFibs?.fibs ?? null,
     vwapData,
     prevDay,
     weeklyData,
@@ -165,7 +167,7 @@ export default function Levels({ liveData, orbHigh, orbLow, settings, onSettings
     orbLow: parseFloat(orbLow) || null,
     sdZones,
     customLevels,
-  }), [price, pivots, fibs, vwapData, prevDay, weeklyData, orbHigh, orbLow, sdZones, customLevels])
+  }), [price, pivots, autoFibs, vwapData, prevDay, weeklyData, orbHigh, orbLow, sdZones, customLevels])
 
   const { levels, nearestAbove, nearestBelow, setupQuality } = levelMap
 
@@ -215,7 +217,6 @@ export default function Levels({ liveData, orbHigh, orbLow, settings, onSettings
           ) : (
             <span style={{ fontSize: 9, fontFamily: MONO, color: LIME }}>✓ ALERTS ON</span>
           )}
-          <Btn small variant="ghost" onClick={() => setShowFibForm(!showFibForm)}>{showFibForm ? 'Hide Fibs' : '+ Fibonacci'}</Btn>
         </div>
       </div>
 
@@ -252,23 +253,6 @@ export default function Levels({ liveData, orbHigh, orbLow, settings, onSettings
         </div>
       )}
 
-      {/* Fibonacci form */}
-      {showFibForm && (
-        <Card style={{ background: '#0a0d08', border: '1px solid #1a2a1a' }}>
-          <SLabel>Fibonacci Levels — Enter Swing Points</SLabel>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 10, alignItems: 'flex-end' }}>
-            <Fld label="Swing High" value={fibHigh} onChange={setFibHigh} placeholder="716.50" prefix="$" />
-            <Fld label="Swing Low" value={fibLow} onChange={setFibLow} placeholder="709.00" prefix="$" />
-            <Btn small onClick={() => { setFibHigh(''); setFibLow('') }} variant="ghost">Clear</Btn>
-          </div>
-          {fibs && (
-            <div style={{ marginTop: 12, fontSize: 10, fontFamily: MONO, color: YELLOW }}>
-              ✓ Fib levels calculated from ${fibLow} to ${fibHigh} (range: ${f2(parseFloat(fibHigh) - parseFloat(fibLow))})
-            </div>
-          )}
-        </Card>
-      )}
-
       {/* Filter pills */}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         {[
@@ -282,6 +266,13 @@ export default function Levels({ liveData, orbHigh, orbLow, settings, onSettings
           <Pill key={f.id} label={f.label} active={filter === f.id} onClick={() => setFilter(f.id)} />
         ))}
       </div>
+
+      {/* Fib source label */}
+      {autoFibs && (
+        <div style={{ fontSize: 9, fontFamily: MONO, color: '#2a2a2a', paddingLeft: 2, letterSpacing: '0.06em' }}>
+          Fibonacci drawn from {autoFibs.source}
+        </div>
+      )}
 
       {/* The level map */}
       <Card style={{ padding: 0, overflow: 'hidden' }}>
