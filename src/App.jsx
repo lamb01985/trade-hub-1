@@ -4,6 +4,7 @@ import { useLiveData } from './hooks/useLiveData.js'
 import { buildLevelMap } from './lib/levels.js'
 import Command from './components/Command.jsx'
 import Levels from './components/Levels.jsx'
+import ChartTab from './components/Chart.jsx'
 import { ORBTab, IVAnalyzerTab, CalculatorTab, ChecklistTab, JournalTab, StatsTab, WatchlistTab, PrepTab } from './components/tabs.jsx'
 import GlossaryModal from './components/Glossary.jsx'
 import { LIME, RED, YELLOW, MONO, SANS, DARK, BORDER, todayStr, uid, getSession } from './constants.js'
@@ -13,6 +14,7 @@ const TABS = [
   { id: 'prep', label: 'Prep', desc: 'Morning game plan' },
   { id: 'command', label: 'Command', desc: 'Session center' },
   { id: 'levels', label: 'Levels', desc: 'Live level map', accent: true },
+  { id: 'chart', label: 'Chart', desc: 'Live price chart', accent: true },
   { id: 'orb', label: 'ORB', desc: 'Opening range' },
   { id: 'iv', label: 'IV', desc: 'Options pricing' },
   { id: 'checklist', label: 'Checklist', desc: 'Discipline gate' },
@@ -232,6 +234,15 @@ export default function App() {
             orbLow={orbPrefill?.orbLow || prep.orbLow}
             settings={settings}
             onSettingsChange={setSettings}
+          />
+        )}
+
+        {activeTab === 'chart' && (
+          <ChartTab
+            liveData={liveData}
+            levelMap={fullLevelMap}
+            trades={trades}
+            ticker={prep.ticker || 'QQQ'}
           />
         )}
 

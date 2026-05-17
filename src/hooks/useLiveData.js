@@ -24,6 +24,7 @@ export function useLiveData(apiKey, ticker = 'QQQ', levelMap = null, settings = 
   const [atr, setAtr] = useState(null)
   const [openPrice, setOpenPrice] = useState(null)
   const [volProfile, setVolProfile] = useState(null)
+  const [intradayBars, setIntradayBars] = useState([])
 
   const streamRef = useRef(null)
   const vwapBarsRef = useRef([]) // Accumulate bars for VWAP
@@ -85,6 +86,7 @@ export function useLiveData(apiKey, ticker = 'QQQ', levelMap = null, settings = 
       ])
 
       vwapBarsRef.current = intradayBars
+      setIntradayBars(intradayBars)
       const vwap = calcVWAP(intradayBars)
       setVwapData(vwap)
       setPrevDay(pd)
@@ -160,5 +162,6 @@ export function useLiveData(apiKey, ticker = 'QQQ', levelMap = null, settings = 
     atr,
     openPrice,
     volProfile,
+    intradayBars,
   }
 }
