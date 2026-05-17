@@ -10,7 +10,9 @@ import CalendarTab from './components/Calendar.jsx'
 import Playbook from './components/Playbook.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
 import { getAllEvents, highImpactToday } from './lib/calendar.js'
-import { ORBTab, IVAnalyzerTab, CalculatorTab, ChecklistTab, JournalTab, StatsTab, WatchlistTab, PrepTab } from './components/tabs.jsx'
+import { ORBTab, IVAnalyzerTab, CalculatorTab, ChecklistTab, StatsTab, WatchlistTab, PrepTab } from './components/tabs.jsx'
+import Journal from './components/Journal.jsx'
+import QuickLog from './components/QuickLog.jsx'
 import GlossaryModal from './components/Glossary.jsx'
 import { LIME, RED, YELLOW, MONO, SANS, DARK, BORDER, todayStr, uid, getSession } from './constants.js'
 
@@ -47,6 +49,10 @@ export default function App() {
   const [manualFibs, setManualFibs] = useState(null)
   const [customLevels, setCustomLevels] = useState([])
   const [showGlossary, setShowGlossary] = useState(false)
+  const [quickLogOpen, setQuickLogOpen] = useState(false)
+  const [editingTrade, setEditingTrade] = useState(null)
+  const [_priceTick, setPriceTick] = useState(0)
+  useEffect(() => { const id = setInterval(() => setPriceTick(t => t + 1), 5000); return () => clearInterval(id) }, [])
 
   // Build level map for alert checking
   const levelMapInput = useMemo(() => ({
@@ -103,6 +109,36 @@ export default function App() {
     setActiveTab('journal')
   }
 
+  function openQuickLog(trade = null) {
+    setEditingTrade(trade)
+    setQuickLogOpen(true)
+  }
+
+  function closeQuickLog() {
+    setQuickLogOpen(false)
+    setEditingTrade(null)
+  }
+
+  function handleQuickLogSubmit(data) {
+    if (editingTrade) {
+      setTrades(prev => prev.map(t => t.id === data.id ? data : t))
+    } else {
+      setTrades(prev => [...prev, data])
+    }
+    closeQuickLog()
+  }
+
+  const openTrades = trades.filter(t => t.status === 'open')
+  const headerOpenPnl = openTrades.reduce((s, t) => {
+    if (t.currentPrice == null || t.entry == null) return s
+    return s + (t.currentPrice - t.entry) * (t.contracts || 1) * 100
+  }, 0)
+  const headerOpenAny = openTrades.some(t => t.currentPrice != null)
+  const headerOpenSummary = openTrades.length === 1 && openTrades[0].currentPrice != null
+    ? `${openTrades[0].ticker} ${openTrades[0].strike ? openTrades[0].strike : ''}${openTrades[0].optType ? openTrades[0].optType[0].toUpperCase() : ''}`
+    : openTrades.length > 1 ? `${openTrades.length} OPEN`
+    : null
+
   function handleUpdateTrade(updated) {
     setTrades(prev => prev.map(t => t.id === updated.id ? updated : t))
   }
@@ -141,6 +177,11 @@ export default function App() {
             )}
             {fullLevelMap.setupQuality === 'APPROACHING' && (
               <button onClick={() => setActiveTab('levels')} title="Jump to Levels tab" style={{ fontSize: 9, color: YELLOW, fontFamily: MONO, background: 'transparent', border: `1px solid ${YELLOW}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.1em', cursor: 'pointer' }}>APPROACHING →</button>
+            )}
+            {headerOpenSummary && headerOpenAny && (
+              <button onClick={() => setActiveTab('journal')} title="Jump to Journal" style={{ fontSize: 9, color: headerOpenPnl >= 0 ? LIME : RED, fontFamily: MONO, background: 'transparent', border: `1px solid ${(headerOpenPnl >= 0 ? LIME : RED)}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.06em', cursor: 'pointer', fontWeight: 700 }}>
+                {headerOpenSummary} {headerOpenPnl >= 0 ? '+' : ''}${Math.abs(headerOpenPnl).toFixed(0)}
+              </button>
             )}
             {mtfAlignment.score > 0 && (() => {
               const c = mtfAlignment.score >= 85 ? LIME : mtfAlignment.score >= 70 ? LIME : mtfAlignment.score >= 55 ? YELLOW : mtfAlignment.score >= 40 ? '#F97316' : RED
@@ -347,13 +388,17 @@ export default function App() {
         )}
 
         {activeTab === 'journal' && (
-          <JournalTab
-            trades={trades}
-            onUpdate={handleUpdateTrade}
-            onDelete={handleDeleteTrade}
-            anthropicKey={anthropicKey}
-            prep={prep}
-          />
+          <ErrorBoundary label="Journal tab">
+            <Journal
+              trades={trades}
+              onUpdate={handleUpdateTrade}
+              onDelete={handleDeleteTrade}
+              onEdit={openQuickLog}
+              onOpenQuickLog={openQuickLog}
+              anthropicKey={anthropicKey}
+              prep={prep}
+            />
+          </ErrorBoundary>
         )}
 
         {activeTab === 'stats' && (
@@ -374,6 +419,22 @@ export default function App() {
       </div>
 
       {showGlossary && <GlossaryModal onClose={() => setShowGlossary(false)} />}
+
+      {/* Floating action button — visible on every tab */}
+      <button onClick={() => openQuickLog(null)} title="Log a trade" style={{
+        position: 'fixed', bottom: 22, right: 22, width: 56, height: 56, borderRadius: '50%',
+        background: LIME, color: '#000', border: 'none', fontSize: 26, fontWeight: 900,
+        cursor: 'pointer', boxShadow: '0 6px 20px rgba(209,255,121,0.35), 0 2px 6px rgba(0,0,0,0.5)',
+        zIndex: 150, fontFamily: MONO,
+      }}>+</button>
+
+      <QuickLog
+        open={quickLogOpen}
+        onClose={closeQuickLog}
+        onSubmit={handleQuickLogSubmit}
+        prep={prep}
+        editing={editingTrade}
+      />
     </div>
   )
 }
