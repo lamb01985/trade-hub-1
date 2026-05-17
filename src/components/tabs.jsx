@@ -1,6 +1,6 @@
 // ── ORB Tab ───────────────────────────────────────────────────────────────────
 import { useState, useEffect, useRef } from 'react'
-import { Card, SLabel, Heading, Tile, Fld, Sel, Btn, Pill, CheckRow } from './ui.jsx'
+import { Card, SLabel, Heading, Tile, Fld, Sel, Btn, Pill, CheckRow, Tip } from './ui.jsx'
 import { LIME, RED, YELLOW, BLUE, PURPLE, ORANGE, MONO, SANS, BORDER, DARK, PANEL, SETUP_TYPES, todayStr, tomorrowStr, uid, f2, fmtD, fmtU, rrColor, ivContext, calcOptionRR, bsCalc, getETMins, SESSION_LABELS, SESSION_COLORS, SESSION_TIPS } from '../constants.js'
 import { getOptionChain, getPrevDay, getHistoricalBars, getOptionsPCRatio } from '../lib/massive.js'
 import { useLocalStorage } from '../hooks/useStore.js'
@@ -285,8 +285,8 @@ export function IVAnalyzerTab({ apiKey, instrument }) {
           <Fld label="Strike Price" value={strike} onChange={setStrike} placeholder="714.00" prefix="$" />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12, marginBottom: 14 }}>
-          <Fld label="DTE" value={dte} onChange={setDte} placeholder="1" step="1" suffix="d" />
-          <Fld label="IV% (from chain)" value={iv} onChange={setIv} placeholder="28.5" suffix="%" />
+          <Fld label="DTE" value={dte} onChange={setDte} placeholder="1" step="1" suffix="d" tip="Days to Expiration — how many days until the option expires. 0DTE expires today and has maximum theta decay. Theta burns fastest after 10:30 CT — be precise with timing." />
+          <Fld label="IV% (from chain)" value={iv} onChange={setIv} placeholder="28.5" suffix="%" tip="Implied Volatility — the market's expectation of future price movement, priced into the option. High IV = expensive premium. Buy when IV is relatively low and the expected move is real." />
           <Fld label="Ask Price" value={mp} onChange={setMp} placeholder="2.40" prefix="$" />
           <Fld label="Contracts" value={contracts} onChange={setContracts} placeholder="1" step="1" />
         </div>
@@ -327,7 +327,7 @@ export function IVAnalyzerTab({ apiKey, instrument }) {
             {em && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}><div><div style={{ fontSize: 11, fontFamily: MONO, color: '#555' }}>Expected 1σ move (underlying)</div><div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, marginTop: 2 }}>Market pricing {f2((em / S) * 100)}% move from ${f2(S)}</div></div><div style={{ fontSize: 15, fontFamily: MONO, fontWeight: 700, color: BLUE }}>±${f2(em)}</div></div>}
           </Card>}
           {optRR && <Card style={{ border: `1px solid ${rrColor(optRR.rr)}33` }}>
-            <SLabel>R:R on This Contract</SLabel>
+            <SLabel style={{ display: 'flex', alignItems: 'center' }}>R:R on This Contract<Tip tip="Risk to Reward ratio — how much you make vs. how much you risk per trade. At 2:1 you make $2 for every $1 risked, meaning you only need to be right 34% of the time to be net profitable. Never take a trade below 2:1." /></SLabel>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 14 }}>
               {[{ l: 'Entry', v: '$' + f2(parseFloat(mp)), c: '#e8e8e8' }, { l: 'Stop', v: '$' + f2(parseFloat(stopP)), c: RED }, { l: 'Target', v: '$' + f2(parseFloat(targetP)), c: LIME }, { l: 'R:R', v: '1:' + f2(optRR.rr), c: rrColor(optRR.rr) }].map(row => (
                 <div key={row.l}><div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>{row.l}</div><div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: row.c }}>{row.v}</div></div>
@@ -679,7 +679,12 @@ Grade on PROCESS only. A disciplined loss = B or higher. An undisciplined win = 
       </div>
       {usedSetups.length > 0 && <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}><Pill label="All" active={tf === 'all'} onClick={() => setTf('all')} />{usedSetups.map(s => <Pill key={s} label={s} active={tf === s} onClick={() => setTf(s)} />)}</div>}
       {visible.length === 0
-        ? <div style={{ textAlign: 'center', padding: '60px 0', color: '#222', fontFamily: MONO, fontSize: 12 }}>No trades logged yet.</div>
+        ? <div style={{ padding: '40px 24px', background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 5 }}>
+            <div style={{ fontSize: 11, fontFamily: MONO, color: '#2a2a2a', marginBottom: 8 }}>No trades logged yet.</div>
+            <div style={{ fontSize: 10, fontFamily: MONO, color: '#1e1e1e', lineHeight: 1.8 }}>
+              Log your first trade in the Calculator tab after completing the Checklist. Your trade history, P&L, and EOD coaching grades all appear here.
+            </div>
+          </div>
         : <div style={{ background: '#090909', border: `1px solid ${BORDER}`, borderRadius: 5, overflow: 'hidden' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '55px 40px 55px 55px 1fr 72px 55px', gap: 6, padding: '9px 14px', borderBottom: '1px solid #111' }}>
             {['Ticker', 'Type', 'Strike', 'DTE', 'Notes', 'P&L/RR', 'Status'].map(h => <span key={h} style={{ fontSize: 9, letterSpacing: '0.1em', color: '#222', textTransform: 'uppercase', fontFamily: MONO }}>{h}</span>)}
@@ -743,6 +748,20 @@ export function StatsTab({ trades }) {
   const curve = trades.slice().sort((a, b) => new Date(a.date) - new Date(b.date)).filter(t => t.pnl != null).map(t => { cum += t.pnl; return cum })
   const cH = 90, cW = 520, maxV = Math.max(...curve, 0.01), minV = Math.min(...curve, -0.01), rng = maxV - minV
   const pts = curve.map((v, i) => `${curve.length === 1 ? cW / 2 : (i / (curve.length - 1)) * cW},${cH - ((v - minV) / rng) * cH}`)
+  if (closed.length === 0) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <div><SLabel>Options Performance</SLabel><Heading>Stats</Heading></div>
+        <div style={{ padding: '40px 24px', background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 5 }}>
+          <div style={{ fontSize: 11, fontFamily: MONO, color: '#2a2a2a', marginBottom: 8 }}>No closed trades yet.</div>
+          <div style={{ fontSize: 10, fontFamily: MONO, color: '#1e1e1e', lineHeight: 1.8 }}>
+            Stats build automatically as you log trades in the Calculator tab. After 10+ trades you'll see win rate by session, equity curve, expectancy, and calls vs. puts breakdown.
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <div><SLabel>Options Performance</SLabel><Heading>Stats</Heading></div>
@@ -898,10 +917,10 @@ function buildObservation(pd, score) {
   return `${rangeStr}, ${closeStr}, ${volStr} — ${verdict}`
 }
 
-function DataChip({ label, value, color }) {
+function DataChip({ label, value, color, tip }) {
   return (
     <div>
-      <div style={{ fontSize: 8, color: '#333', fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>{label}</div>
+      <div style={{ fontSize: 8, color: '#333', fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3, display: 'flex', alignItems: 'center' }}>{label}{tip && <Tip tip={tip} />}</div>
       <div style={{ fontSize: 12, fontFamily: MONO, fontWeight: 700, color: color || '#888' }}>{value}</div>
     </div>
   )
@@ -1113,7 +1132,7 @@ export function WatchlistTab({ apiKey, onSendToPrep, savedPreps, onLoadSavedPrep
                   <div style={{ flex: 1, display: 'flex', gap: 18, flexWrap: 'wrap' }}>
                     <DataChip label="Prev Range" value={`$${f2(range)} (${f2(rangePct)}%)`} />
                     <DataChip label="% Move" value={`${movePct > 0 ? '+' : ''}${f2(movePct)}%`} color={movePct > 0.3 ? LIME : movePct < -0.3 ? RED : '#888'} />
-                    <DataChip label="Volume" value={`${volRatio.toFixed(1)}x avg`} color={volColor} />
+                    <DataChip label="RVOL" value={`${volRatio.toFixed(1)}x`} color={volColor} tip="Relative Volume — yesterday's volume vs. the historical daily average. Above 1.5x means the market was actively interested. Below 0.8x means low-conviction session — be cautious on breakouts." />
                     <DataChip label="Structure" value={closeLbl} color={closeLblColor} />
                     <DataChip label="P/C Ratio" value={hasPCR ? pcr.pcRatio.toFixed(2) : '—'} color={pcrColor} />
                   </div>
@@ -1222,10 +1241,12 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
     if (!anthropicKey) return
     setAiLoading(true)
     setAiError('')
-    const { prevDay, pivots, vwapData, price } = liveData || {}
+    const { prevDay, pivots, vwapData, price, rvol, atr } = liveData || {}
     const d = (v, fb = 'unknown') => v != null && !isNaN(v) ? f2(v) : fb
 
     const isStock = (prep.instrument || 'options') === 'stock'
+    const rvolStr = rvol != null ? `${rvol.toFixed(2)}x avg (${rvol >= 1.2 ? 'elevated — moves are real' : rvol >= 0.8 ? 'normal' : 'low — low conviction'})` : 'not available'
+    const atrStr = atr != null ? `$${d(atr)} (daily ATR)` : 'not available'
     const prompt = isStock
       ? `You are a professional day trader assistant. Generate a pre-market game plan for ${prep.ticker || 'SPY'} stock/ETF.
 
@@ -1236,7 +1257,9 @@ Market context:
 - Pivot Point: $${d(pivots?.pp)} | R1: $${d(pivots?.r1)} | R2: $${d(pivots?.r2)} | R3: $${d(pivots?.r3)}
 - S1: $${d(pivots?.s1)} | S2: $${d(pivots?.s2)} | S3: $${d(pivots?.s3)}
 - VWAP: $${d(vwapData?.vwap)} | VWAP +1σ: $${d(vwapData?.band1up)} | -1σ: $${d(vwapData?.band1dn)}
-- Market events tomorrow: ${prep.marketEvents || 'none noted'}
+- RVOL: ${rvolStr}
+- ATR: ${atrStr}
+- Market events: ${prep.marketEvents || 'none noted'}
 
 Write a tight, specific game plan with these exact sections:
 
@@ -1249,8 +1272,14 @@ KEY LEVELS
 ENTRY CONDITIONS
 [Exactly what must happen on the 5-min chart before entering. Candle behavior, volume, level confirmation. Be specific — "wait for a candle CLOSE above $X" not vague.]
 
-IDEAL SETUP
-Entry: $X.XX | Stop: $X.XX (if [level] fails) | Target: $X.XX (at [level]) | R:R: X:1
+PRIMARY SETUP
+[The highest-probability trade today. Specify exact entry trigger, stop (share price), target (share price), and R:R. Use the ATR to size the stop.]
+
+SECONDARY SETUP
+[Backup plan if primary fails. One alternative scenario — what reversal or different direction could play out. One concise setup.]
+
+PROBABILITY ASSESSMENT
+[1-2 honest sentences: is this a high or low probability day? What makes it tradeable or why you'd stand aside? Factor in RVOL and ATR context.]
 
 STAND ASIDE IF
 [3 specific conditions that kill today's setup. Be concrete.]
@@ -1265,9 +1294,11 @@ Market context:
 - Pivot Point: $${d(pivots?.pp)} | R1: $${d(pivots?.r1)} | R2: $${d(pivots?.r2)} | R3: $${d(pivots?.r3)}
 - S1: $${d(pivots?.s1)} | S2: $${d(pivots?.s2)} | S3: $${d(pivots?.s3)}
 - VWAP: $${d(vwapData?.vwap)} | VWAP +1σ: $${d(vwapData?.band1up)} | -1σ: $${d(vwapData?.band1dn)}
+- RVOL: ${rvolStr}
+- ATR: ${atrStr}
 - Planned strike: $${prep.plannedStrike || 'not set'} | DTE: ${prep.plannedDTE || 1}
 - IV note: ${prep.ivNote || 'not recorded'}
-- Market events tomorrow: ${prep.marketEvents || 'none noted'}
+- Market events: ${prep.marketEvents || 'none noted'}
 
 Write a tight, specific game plan with these exact sections:
 
@@ -1280,9 +1311,15 @@ KEY LEVELS
 ENTRY CONDITIONS
 [Exactly what must happen on the 5-min chart before entering. Candle behavior, volume, level confirmation. Be specific — "wait for a candle CLOSE above $X" not vague.]
 
-IDEAL SETUP
+PRIMARY SETUP
 Strike: $${prep.plannedStrike || '[ATM]'} | DTE: ${prep.plannedDTE || 1}
-Entry premium: $X.XX–$X.XX | Stop: $X.XX (if [level] fails) | Target: $X.XX (at [level])
+[The highest-probability 0DTE setup. Specify entry premium range, stop, target, and R:R. Include underlying trigger level.]
+
+SECONDARY SETUP
+[Backup if primary fails — alternative direction or structure play if the primary level doesn't hold. One concise setup.]
+
+PROBABILITY ASSESSMENT
+[1-2 honest sentences: is this a high or low probability day? What makes it tradeable or why you'd stand aside? Factor in RVOL, IV, and ATR context.]
 
 STAND ASIDE IF
 [3 specific conditions that kill today's setup. Be concrete.]

@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Card, SLabel, Heading, Tile, Fld, Sel, Btn } from './ui.jsx'
+import { Card, SLabel, Heading, Tile, Fld, Sel, Btn, Tip } from './ui.jsx'
 import { LIME, RED, YELLOW, MONO, BORDER, SESSION_LABELS, SESSION_COLORS, SESSION_TIPS, getSession, todayStr, f2, fmtD, fmtU } from '../constants.js'
 
-export default function Command({ trades, settings, onSettingsChange, lockedOut, onUnlock, apiKey, onApiKeyChange, anthropicKey, onAnthropicKeyChange, liveData, marketEvents, instrument }) {
+export default function Command({ trades, settings, onSettingsChange, lockedOut, onUnlock, apiKey, onApiKeyChange, anthropicKey, onAnthropicKeyChange, liveData, marketEvents, instrument, ticker = 'QQQ' }) {
   const [time, setTime] = useState(new Date())
   useEffect(() => { const t = setInterval(() => setTime(new Date()), 1000); return () => clearInterval(t) }, [])
 
@@ -47,28 +47,85 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
         </div>
       )}
 
-      {/* Setup CTA — shown when no API key */}
-      {!apiKey && (
-        <div style={{ background: '#0c1408', border: `1px solid ${LIME}33`, borderRadius: 5, padding: '20px 24px' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: LIME, fontFamily: MONO, letterSpacing: '0.08em', marginBottom: 6 }}>STEP 1 — CONNECT LIVE DATA</div>
-          <div style={{ fontSize: 13, color: '#888', fontFamily: MONO, lineHeight: 1.7, marginBottom: 14 }}>
-            Paste your Massive API key below to activate real-time QQQ price, VWAP, pivot levels, and WebSocket streaming. Get your key at <span style={{ color: LIME }}>massive.com</span> → Options Advanced plan → Dashboard.
-          </div>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
-            <div style={{ flex: 1 }}>
-              <Fld label="Massive API Key" value={apiKey || ''} onChange={v => onApiKeyChange(v.trim())} type="text" placeholder="paste your key here — levels activate immediately" mono />
+      {/* Onboarding — shown when no API key */}
+      {!apiKey && (() => {
+        const step1Done = !!apiKey
+        const step2Done = !!anthropicKey
+        const step3Done = settings.dailyLossLimit > 0 && settings.maxTradesPerDay > 0
+        const doneCount = [step1Done, step2Done, step3Done].filter(Boolean).length
+
+        const steps = [
+          { n: 1, title: 'Connect Live Data', subtitle: 'Required', done: step1Done },
+          { n: 2, title: 'Connect AI', subtitle: 'Optional but powerful', done: step2Done },
+          { n: 3, title: 'Set Your Risk Rules', subtitle: 'Required', done: step3Done },
+        ]
+
+        return (
+          <div style={{ background: '#0c1408', border: `1px solid ${LIME}33`, borderRadius: 5, padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <div>
+              <div style={{ fontSize: 9, color: '#5a7a5a', fontFamily: MONO, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 6 }}>Getting Started</div>
+              <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+                {steps.map((s, i) => (
+                  <div key={s.n} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <div style={{ width: 22, height: 22, borderRadius: '50%', background: s.done ? LIME : '#1a2a18', border: `1px solid ${s.done ? LIME : '#2a3a28'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <span style={{ fontSize: 9, fontFamily: MONO, fontWeight: 900, color: s.done ? '#000' : '#3a5a38' }}>{s.done ? '✓' : s.n}</span>
+                    </div>
+                    {i < 2 && <div style={{ width: 32, height: 1, background: '#1e2e1e' }} />}
+                  </div>
+                ))}
+                <span style={{ fontSize: 10, fontFamily: MONO, color: '#4a6a48', marginLeft: 6, alignSelf: 'center' }}>{doneCount}/3 complete</span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: LIME, fontFamily: MONO, letterSpacing: '0.08em', marginBottom: 4 }}>Step 1 of 3 — Connect Data</div>
+                <div style={{ fontSize: 12, color: '#666', fontFamily: MONO, lineHeight: 1.7, marginBottom: 10 }}>Add your Massive API key below. This connects live price, VWAP, pivot levels, and the level map. Everything activates automatically.</div>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+                  <div style={{ flex: 1 }}>
+                    <Fld label="Massive API Key" value={apiKey || ''} onChange={v => onApiKeyChange(v.trim())} type="text" placeholder="paste your key here — levels activate immediately" mono />
+                  </div>
+                </div>
+                <div style={{ fontSize: 9, color: '#333', fontFamily: MONO, marginTop: 6 }}>Key stored in your browser only. Calls go to api.polygon.io.</div>
+              </div>
+
+              <div style={{ borderTop: '1px solid #1a2a18', paddingTop: 16 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: step2Done ? LIME : '#666', fontFamily: MONO, letterSpacing: '0.08em', marginBottom: 4 }}>Step 2 of 3 — Connect AI <span style={{ color: '#3a4a38', fontWeight: 400 }}>(optional)</span></div>
+                <div style={{ fontSize: 12, color: '#555', fontFamily: MONO, lineHeight: 1.7, marginBottom: 10 }}>Add your Claude API key to enable AI morning briefs. Claude reads your market data and writes your full game plan each morning.</div>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+                  <div style={{ flex: 1 }}>
+                    <Fld label="Anthropic API Key" value={anthropicKey || ''} onChange={v => onAnthropicKeyChange(v.trim())} type="text" placeholder="sk-ant-..." mono />
+                  </div>
+                </div>
+                <div style={{ fontSize: 9, color: '#333', fontFamily: MONO, marginTop: 6 }}>Calls go directly to api.anthropic.com. Same account as claude.ai.</div>
+              </div>
+
+              <div style={{ borderTop: '1px solid #1a2a18', paddingTop: 16 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: step3Done ? LIME : '#666', fontFamily: MONO, letterSpacing: '0.08em', marginBottom: 4 }}>Step 3 of 3 — Set Your Risk Rules</div>
+                <div style={{ fontSize: 12, color: '#555', fontFamily: MONO, lineHeight: 1.7, marginBottom: 10 }}>Set your daily loss limit and max trades. The app locks you out automatically when hit. This is non-negotiable.</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <Fld label="Daily Loss Limit" value={settings.dailyLossLimit || ''} onChange={v => onSettingsChange({ ...settings, dailyLossLimit: parseFloat(v) || 0 })} placeholder="500" prefix="$" />
+                  <Fld label="Max Trades Per Day" value={settings.maxTradesPerDay || ''} onChange={v => onSettingsChange({ ...settings, maxTradesPerDay: parseInt(v) || 0 })} placeholder="5" step="1" />
+                </div>
+              </div>
+
+              {doneCount === 3 && (
+                <div style={{ background: '#071208', border: `1px solid ${LIME}44`, borderRadius: 4, padding: '12px 16px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: LIME, fontFamily: MONO, marginBottom: 3 }}>You're ready.</div>
+                  <div style={{ fontSize: 11, color: '#5a7a5a', fontFamily: MONO }}>Start each day in the Prep tab.</div>
+                </div>
+              )}
             </div>
           </div>
-          <div style={{ fontSize: 10, color: '#555', fontFamily: MONO, marginTop: 10 }}>Key stored in your browser only. Never sent to any server except api.polygon.io.</div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* Live price + VWAP */}
       {liveData?.price && (
         <div style={{ background: '#0a1206', border: `1px solid ${LIME}28`, borderRadius: 5, padding: '18px 22px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
-              <SLabel color="#5a7a5a">Live QQQ — {liveData.connected ? 'WebSocket' : 'Polling'}</SLabel>
+              <SLabel color="#5a7a5a">LIVE {ticker} — {liveData.connected ? 'WebSocket' : 'Polling'}</SLabel>
               <div style={{ fontSize: 48, fontWeight: 900, fontFamily: MONO, color: '#e8e8e8', letterSpacing: '-0.03em', lineHeight: 1 }}>${f2(liveData.price)}</div>
               {liveData.bid && liveData.ask && (
                 <div style={{ fontSize: 11, fontFamily: MONO, color: '#777', marginTop: 6 }}>Bid ${f2(liveData.bid)} / Ask ${f2(liveData.ask)}</div>
@@ -78,7 +135,7 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
               {liveData.vwapData && (
                 <>
                   <div>
-                    <div style={{ fontSize: 9, color: '#666', fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.1em' }}>VWAP</div>
+                    <div style={{ fontSize: 9, color: '#666', fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.1em', display: 'flex', alignItems: 'center' }}>VWAP<Tip tip="Volume Weighted Average Price — the average price weighted by volume. Institutions use VWAP as their anchor. Price above = bullish structure, below = bearish. Watch for price to reclaim or reject VWAP as your directional signal." /></div>
                     <div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: '#C084FC' }}>${f2(liveData.vwapData.vwap)}</div>
                   </div>
                   <div>
@@ -88,6 +145,14 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
                     </div>
                   </div>
                 </>
+              )}
+              {liveData.rvol != null && (
+                <div>
+                  <div style={{ fontSize: 9, color: '#666', fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.1em', display: 'flex', alignItems: 'center' }}>RVOL<Tip tip="Relative Volume — how today's volume compares to the average at this time of day. Above 1.5x means institutional activity is elevated and moves are real. Below 0.8x means low conviction — don't chase breakouts." /></div>
+                  <div style={{ fontSize: 14, fontFamily: MONO, fontWeight: 700, color: liveData.rvol >= 1.2 ? LIME : liveData.rvol >= 0.8 ? YELLOW : RED }}>
+                    {liveData.rvol.toFixed(2)}x
+                  </div>
+                </div>
               )}
               {liveData.wsError && <div style={{ fontSize: 9, color: RED, fontFamily: MONO, maxWidth: 140, textAlign: 'right' }}>{liveData.wsError}</div>}
             </div>
@@ -115,6 +180,11 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
         if (gapPct < 25) { context = 'Small gap — likely fills before trending'; ctxColor = YELLOW }
         else if (gapPct <= 50) { context = 'Moderate gap — watch for fill attempt before trend'; ctxColor = YELLOW }
         else { context = `Large gap — gap-and-go likely, OR forms ${isGapUp ? 'above' : 'below'} prior range`; ctxColor = LIME }
+
+        let fillMsg, fillColor
+        if (gapPct < 50) { fillMsg = '~70% historical fill rate — expect the gap to fill before a new trend develops'; fillColor = YELLOW }
+        else if (gapPct <= 100) { fillMsg = '~40% fill rate — watch for a partial fill attempt, then likely continuation'; fillColor = YELLOW }
+        else { fillMsg = 'Exhaustion gap — <20% fill probability — gap-and-go, trade with the gap direction'; fillColor = LIME }
 
         return (
           <div style={{ background: '#0d0d08', border: `1px solid ${YELLOW}33`, borderRadius: 5, padding: '14px 18px' }}>
@@ -148,6 +218,7 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
             </div>
 
             <div style={{ fontSize: 11, fontFamily: MONO, color: ctxColor }}>{context}</div>
+            <div style={{ fontSize: 10, fontFamily: MONO, color: fillColor, marginTop: 6, opacity: 0.7 }}>{fillMsg}</div>
           </div>
         )
       })()}
@@ -169,6 +240,13 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
 
       {/* RIGHT NOW card */}
       {(() => {
+        const isTrendDay = !!(liveData?.atr && liveData?.openPrice && liveData?.price && liveData?.rvol != null
+          && Math.abs(liveData.price - liveData.openPrice) > liveData.atr
+          && liveData.rvol > 1.2)
+        const isRangeDay = !!(liveData?.atr && liveData?.openPrice && liveData?.price && liveData?.rvol != null
+          && Math.abs(liveData.price - liveData.openPrice) < liveData.atr * 0.5
+          && liveData.rvol < 1.0)
+
         const cfg = {
           'pre-market': {
             color: '#888', bg: '#111', border: '#222',
@@ -184,27 +262,45 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
           },
           'open': {
             color: LIME, bg: '#0a1208', border: '#1e3018',
-            action: 'PRIME WINDOW',
+            action: isTrendDay ? 'PRIME WINDOW — TREND DAY' : isRangeDay ? 'PRIME WINDOW — RANGE DAY' : 'PRIME WINDOW',
             steps: [
               'OR formed at 8:45 CT — load ORH/ORL into the ORB tab',
-              'Watch Levels tab — is price touching or approaching a key level?',
+              isTrendDay
+                ? 'TREND DAY: RVOL > 1.2x and price moved > 1 ATR from open — trend entries valid'
+                : isRangeDay
+                ? 'RANGE DAY: low RVOL, price contained — wait for level extremes only'
+                : 'Watch Levels tab — is price touching or approaching a key level?',
               'Wait for a candle CLOSE above/below the level — not just a wick',
               'Calculator tab before entering — confirm 2:1 R:R on premium price',
               'Size one contract until the setup proves out',
             ],
-            note: 'Your window is 8:45–10:30 CT. One good trade beats three mediocre ones.',
+            note: isTrendDay
+              ? 'Trend day — ride the move but use the Levels tab to trail your stops.'
+              : isRangeDay
+              ? 'Range day — play the extremes only. Be more patient than usual.'
+              : 'Your window is 8:45–10:30 CT. One good trade beats three mediocre ones.',
           },
           'chop': {
-            color: YELLOW, bg: '#0e0c04', border: '#2a2010',
-            action: 'AVOID ZONE',
-            steps: [
+            color: isTrendDay ? LIME : YELLOW, bg: '#0e0c04', border: '#2a2010',
+            action: isTrendDay ? 'CHOP — TREND ACTIVE' : isRangeDay ? 'CHOP — RANGING' : 'AVOID ZONE',
+            steps: isTrendDay ? [
+              'Trend day: RVOL elevated and price has moved > 1 ATR from open',
+              'Power-hour entries may be valid — trend-follow only, no reversals',
+              'Use Levels tab — only enter on level touch in trend direction',
+              'Tighter stops — use ATR-based stops from the Setup Badge',
+              'Close all by 2:45 CT — no 0DTE holds into the final 15 min',
+            ] : [
               '10:30–1:30 CT — no new entries, no exceptions',
               'Theta is actively burning your premium right now',
               'If you\'re in a trade: trail your stop or close for the win',
               'Use this time to review your morning trades in Journal tab',
               'Update your AI brief notes — what happened vs your plan?',
             ],
-            note: 'This is the hardest discipline in day trading. Doing nothing IS the trade.',
+            note: isTrendDay
+              ? 'Trend day detected — RVOL and range confirm it. Trend-follow entries at levels are valid, but keep size small.'
+              : isRangeDay
+              ? 'Low-RVOL range day confirmed — midday chop is especially dangerous. Sit tight.'
+              : 'This is the hardest discipline in day trading. Doing nothing IS the trade.',
           },
           'power-hour': {
             color: '#F97316', bg: '#0e0800', border: '#2a1800',
@@ -248,6 +344,7 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
               </div>
             ))}
             <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${c.border}`, fontSize: 10, color: c.color, fontFamily: MONO, opacity: 0.7, fontStyle: 'italic' }}>{c.note}</div>
+            <div style={{ marginTop: 8, fontSize: 9, color: '#1e2e1e', fontFamily: MONO }}>New here? Tap any <span style={{ color: '#2a3a2a' }}>?</span> icon for an explanation.</div>
           </div>
         )
       })()}

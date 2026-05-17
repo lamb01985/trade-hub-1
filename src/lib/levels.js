@@ -113,6 +113,39 @@ export function detectSDZones(dailyBars) {
   return zones.slice(-6).sort((a, b) => b.strength - a.strength).slice(0, 4)
 }
 
+// ── Volume Profile ────────────────────────────────────────────────────────────
+
+export function calcVolumeProfile(histBars) {
+  if (!histBars || histBars.length < 3) return null
+  const bars = histBars.filter(b => b.v > 0 && b.h > b.l)
+  if (bars.length < 3) return null
+  const avgVol = bars.reduce((s, b) => s + b.v, 0) / bars.length
+  if (!avgVol) return null
+  let poc = null, pocVol = 0
+  const hvn = [], lvn = []
+  for (const bar of bars) {
+    const mid = (bar.h + bar.l) / 2
+    if (bar.v > pocVol) { poc = mid; pocVol = bar.v }
+    if (bar.v > avgVol * 1.5) hvn.push({ price: mid, volRatio: bar.v / avgVol })
+    else if (bar.v < avgVol * 0.5) lvn.push({ price: mid, volRatio: bar.v / avgVol })
+  }
+  return { poc, hvn: hvn.slice(-3), lvn: lvn.slice(-3) }
+}
+
+// ── ATR (Average True Range, 14-period) ───────────────────────────────────────
+
+export function calcATR(bars, period = 14) {
+  if (!bars || bars.length < 2) return null
+  const trs = []
+  for (let i = 1; i < bars.length; i++) {
+    const h = bars[i].h, l = bars[i].l, pc = bars[i - 1].c
+    trs.push(Math.max(h - l, Math.abs(h - pc), Math.abs(l - pc)))
+  }
+  if (trs.length === 0) return null
+  const recent = trs.slice(-period)
+  return recent.reduce((s, v) => s + v, 0) / recent.length
+}
+
 // ── Level Map Builder ─────────────────────────────────────────────────────────
 // Assembles all levels into a sorted, annotated array
 
@@ -126,6 +159,7 @@ export function buildLevelMap(currentPrice, {
   orbLow,
   sdZones = [],
   customLevels = [],
+  volProfile = null,
 }) {
   const levels = []
 
@@ -195,6 +229,13 @@ export function buildLevelMap(currentPrice, {
   // Custom user levels
   for (const lvl of customLevels) {
     add(lvl.price, lvl.label, 'custom')
+  }
+
+  // Volume Profile (POC, HVN, LVN from historical daily bars)
+  if (volProfile) {
+    if (volProfile.poc != null) add(volProfile.poc, 'POC', 'poc', 'Point of Control — highest volume area')
+    for (const z of volProfile.hvn) add(z.price, 'HVN', 'hvn', `High Volume Node — ${z.volRatio.toFixed(1)}× avg — expect strong support/resistance`)
+    for (const z of volProfile.lvn) add(z.price, 'LVN', 'lvn', `Low Volume Node — ${z.volRatio.toFixed(1)}× avg — price moves fast through here`)
   }
 
   // Sort by price, high to low

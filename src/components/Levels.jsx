@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Card, SLabel, Heading, Fld, Btn, Pill } from './ui.jsx'
+import { Card, SLabel, Heading, Fld, Btn, Pill, Tip } from './ui.jsx'
 import { buildLevelMap, calcFibs } from '../lib/levels.js'
 import { requestNotificationPermission, Sounds } from '../lib/alerts.js'
 import { LIME, RED, YELLOW, BLUE, PURPLE, ORANGE, MONO, BORDER, LEVEL_COLORS, f2 } from '../constants.js'
@@ -17,6 +17,9 @@ const TYPE_COLORS = {
   'demand': '#60A5FA',
   'weekly': '#FF6600',
   'custom': '#888',
+  'poc': '#FFFFFF',
+  'hvn': '#6699FF',
+  'lvn': '#334',
 }
 
 function LevelRow({ level, currentPrice }) {
@@ -28,6 +31,7 @@ function LevelRow({ level, currentPrice }) {
   const isNear = absDist < 0.75
   const color = TYPE_COLORS[level.type] || '#666'
   const isCurrentLevel = absDist < 0.08
+  const isPOC = level.type === 'poc'
 
   return (
     <div style={{
@@ -36,15 +40,13 @@ function LevelRow({ level, currentPrice }) {
       padding: '8px 16px',
       borderBottom: `1px solid #0f0f0f`,
       background: isCurrentLevel ? '#0d1a0d' : isVeryNear ? '#0f0f0a' : 'transparent',
-      borderLeft: isCurrentLevel ? `3px solid ${LIME}` : isVeryNear ? `3px solid ${color}88` : '3px solid transparent',
+      borderLeft: isCurrentLevel ? `3px solid ${LIME}` : isVeryNear ? `3px solid ${color}88` : isPOC ? '3px solid #444' : '3px solid transparent',
     }}>
-      {/* Level type indicator */}
-      <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0, marginRight: 10, boxShadow: isNear ? `0 0 6px ${color}88` : 'none' }} />
+      <div style={{ width: 8, height: 8, borderRadius: isPOC ? 2 : '50%', background: color, flexShrink: 0, marginRight: 10, boxShadow: isNear ? `0 0 6px ${color}88` : 'none' }} />
 
-      {/* Label */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 12, fontFamily: MONO, color: isNear ? color : '#777', fontWeight: isNear ? 700 : 400 }}>{level.label}</span>
+          <span style={{ fontSize: 12, fontFamily: MONO, color: isNear ? color : isPOC ? '#999' : '#777', fontWeight: isPOC ? 900 : isNear ? 700 : 400 }}>{level.label}</span>
           {level.confluence > 0 && (
             <span style={{ fontSize: 8, background: `${YELLOW}22`, color: YELLOW, border: `1px solid ${YELLOW}44`, borderRadius: 2, padding: '1px 5px', fontFamily: MONO, letterSpacing: '0.08em' }}>
               CONFLUENCE ×{level.confluence + 1}
@@ -54,9 +56,8 @@ function LevelRow({ level, currentPrice }) {
         {level.sublabel && <div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, marginTop: 2 }}>{level.sublabel}</div>}
       </div>
 
-      {/* Price */}
       <div style={{ textAlign: 'right', marginLeft: 12 }}>
-        <div style={{ fontSize: 14, fontFamily: MONO, fontWeight: 700, color: isNear ? color : '#555' }}>${f2(level.price)}</div>
+        <div style={{ fontSize: 14, fontFamily: MONO, fontWeight: isPOC ? 900 : 700, color: isNear ? color : isPOC ? '#aaa' : '#555' }}>${f2(level.price)}</div>
         {dist !== null && (
           <div style={{ fontSize: 9, fontFamily: MONO, color: isAbove ? '#3a5a3a' : '#5a3a3a', marginTop: 1 }}>
             {isAbove ? '+' : ''}{f2(dist)} {isAbove ? '▲' : '▼'}
@@ -79,33 +80,43 @@ function CurrentPriceMarker({ price }) {
   )
 }
 
-function buildSetupMsg(quality, nearestAbove, nearestBelow, price) {
+function buildSetupMsg(quality, nearestAbove, nearestBelow, price, atr, vwapData) {
   const gapAbove = nearestAbove ? nearestAbove.price - price : null
   const gapBelow = nearestBelow ? price - nearestBelow.price : null
   const closestIsAbove = gapAbove !== null && gapBelow !== null ? gapAbove <= gapBelow : gapAbove !== null
+  const stopOff = atr ? atr * 0.5 : 0.25
+  const vwapRel = vwapData
+    ? (price > vwapData.vwap
+      ? ` Above VWAP ($${f2(vwapData.vwap)}) — bullish structure.`
+      : ` Below VWAP ($${f2(vwapData.vwap)}) — bearish structure.`)
+    : ''
 
   if (quality === 'ON LEVEL') {
     const lvl = closestIsAbove ? nearestAbove : nearestBelow
     if (!lvl) return 'On a level. Wait for the candle close to confirm direction.'
-    return `CALLS if price holds above ${lvl.label} and closes a 5-min candle above it. PUTS if price rejects and closes below it. Wait for the candle close — do not front-run.`
+    const callStop = f2(lvl.price - stopOff)
+    const putStop = f2(lvl.price + stopOff)
+    const callTgt = !closestIsAbove && nearestAbove ? ` target $${f2(nearestAbove.price)} (${nearestAbove.label})` : ''
+    const putTgt = closestIsAbove && nearestBelow ? ` target $${f2(nearestBelow.price)} (${nearestBelow.label})` : ''
+    return `${vwapRel} CALLS if price holds above ${lvl.label} ($${f2(lvl.price)}) on 5-min close — stop $${callStop}${callTgt}. PUTS if price rejects and closes below it — stop $${putStop}${putTgt}. Wait for the candle close, not the wick.`
   }
   if (quality === 'APPROACHING') {
     const lvl = closestIsAbove ? nearestAbove : nearestBelow
     if (!lvl) return 'Approaching a level. Get ready.'
-    return `Approaching ${lvl.label} at $${f2(lvl.price)}. Get ready. Watch for rejection or breakout on the next 5-min candle close. Do not enter until the candle confirms direction.`
+    return `${vwapRel} Approaching ${lvl.label} at $${f2(lvl.price)}. Get ready. Watch for rejection or breakout on the next 5-min candle close. Do not enter until the candle confirms direction.`
   }
   if (quality === 'TIGHT RANGE') {
     if (!nearestAbove || !nearestBelow) return 'Tight range between levels. Watch for breakout.'
-    return `Price compressed between ${nearestAbove.label} at $${f2(nearestAbove.price)} and ${nearestBelow.label} at $${f2(nearestBelow.price)}. Wait for a breakout candle close. The tighter the range, the bigger the move — but direction unknown until it breaks.`
+    return `${vwapRel} Price compressed between ${nearestAbove.label} ($${f2(nearestAbove.price)}) and ${nearestBelow.label} ($${f2(nearestBelow.price)}). Wait for a breakout candle close. The tighter the range, the bigger the move — but direction unknown until it breaks.`
   }
   if (quality === 'BETWEEN LEVELS') {
     if (!nearestAbove || !nearestBelow) return 'Between levels. No setup. Wait for a touch.'
-    return `Between ${nearestAbove.label} at $${f2(nearestAbove.price)} ($${f2(gapAbove)} away) and ${nearestBelow.label} at $${f2(nearestBelow.price)} ($${f2(gapBelow)} away). No edge here. Wait for price to reach a level before considering a trade.`
+    return `Between ${nearestAbove.label} ($${f2(nearestAbove.price)}, +$${f2(gapAbove)} away) and ${nearestBelow.label} ($${f2(nearestBelow.price)}, -$${f2(gapBelow)} away). No edge here — wait for price to reach a level.`
   }
   return null
 }
 
-function SetupBadge({ quality, nearestAbove, nearestBelow, price }) {
+function SetupBadge({ quality, nearestAbove, nearestBelow, price, atr, vwapData }) {
   const configs = {
     'ON LEVEL': { color: LIME, bg: '#071208', border: '#1a3010' },
     'APPROACHING': { color: YELLOW, bg: '#0e0c04', border: '#2a2008' },
@@ -115,23 +126,26 @@ function SetupBadge({ quality, nearestAbove, nearestBelow, price }) {
   const c = configs[quality] || configs['BETWEEN LEVELS']
   const gapAbove = nearestAbove ? nearestAbove.price - price : null
   const gapBelow = nearestBelow ? price - nearestBelow.price : null
-  const msg = buildSetupMsg(quality, nearestAbove, nearestBelow, price)
+  const msg = buildSetupMsg(quality, nearestAbove, nearestBelow, price, atr, vwapData)
 
   return (
     <div style={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: 5, padding: '14px 18px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
         <div>
-          <div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 4 }}>Setup Quality</div>
+          <div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 4, display: 'flex', alignItems: 'center' }}>Setup Quality<Tip tip="How close price is to a tradeable level right now. ON LEVEL means a potential entry exists at a known institutional level. APPROACHING means get ready. TIGHT RANGE means price is coiling. BETWEEN LEVELS means no edge — wait for price to reach a level." /></div>
           <div style={{ fontSize: 16, fontWeight: 700, fontFamily: MONO, color: c.color }}>{quality || 'NO DATA'}</div>
         </div>
-        {gapAbove !== null && gapBelow !== null && (
-          <div style={{ textAlign: 'right', fontSize: 10, fontFamily: MONO }}>
-            <div style={{ color: '#4a2a2a' }}>▲ +${f2(gapAbove)} to {nearestAbove?.label}</div>
-            <div style={{ color: '#2a4a2a', marginTop: 3 }}>▼ -${f2(gapBelow)} to {nearestBelow?.label}</div>
-          </div>
-        )}
+        <div style={{ textAlign: 'right' }}>
+          {gapAbove !== null && gapBelow !== null && (
+            <div style={{ fontSize: 10, fontFamily: MONO }}>
+              <div style={{ color: '#4a2a2a' }}>▲ +${f2(gapAbove)} to {nearestAbove?.label}</div>
+              <div style={{ color: '#2a4a2a', marginTop: 3 }}>▼ -${f2(gapBelow)} to {nearestBelow?.label}</div>
+            </div>
+          )}
+          {atr && <div style={{ fontSize: 9, color: '#333', fontFamily: MONO, marginTop: 4, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 2 }}>ATR ${f2(atr)}<Tip tip="Average True Range — average daily price movement over 14 bars. Used to set stops that aren't too tight (noise) or too wide (too much loss). Stop offset = 0.5× ATR from your trigger level." /></div>}
+        </div>
       </div>
-      {msg && <div style={{ fontSize: 11, color: c.color === '#555' ? '#333' : c.color, fontFamily: MONO, opacity: 0.8 }}>{msg}</div>}
+      {msg && <div style={{ fontSize: 11, color: c.color === '#555' ? '#333' : c.color, fontFamily: MONO, opacity: 0.8, lineHeight: 1.6 }}>{msg}</div>}
     </div>
   )
 }
@@ -167,7 +181,8 @@ export default function Levels({ liveData, orbHigh, orbLow, settings, onSettings
     orbLow: parseFloat(orbLow) || null,
     sdZones,
     customLevels,
-  }), [price, pivots, autoFibs, vwapData, prevDay, weeklyData, orbHigh, orbLow, sdZones, customLevels])
+    volProfile: liveData?.volProfile,
+  }), [price, pivots, autoFibs, vwapData, prevDay, weeklyData, orbHigh, orbLow, sdZones, customLevels, liveData?.volProfile])
 
   const { levels, nearestAbove, nearestBelow, setupQuality } = levelMap
 
@@ -178,6 +193,7 @@ export default function Levels({ liveData, orbHigh, orbLow, settings, onSettings
     if (filter === 'structure') return ['structure', 'weekly', 'orb'].includes(l.type)
     if (filter === 'fib') return l.type === 'fib'
     if (filter === 'zone') return ['supply', 'demand'].includes(l.type)
+    if (filter === 'vol') return ['poc', 'hvn', 'lvn'].includes(l.type)
     return true
   })
 
@@ -227,12 +243,18 @@ export default function Levels({ liveData, orbHigh, orbLow, settings, onSettings
           nearestAbove={nearestAbove}
           nearestBelow={nearestBelow}
           price={price}
+          atr={liveData?.atr}
+          vwapData={vwapData}
         />
       )}
 
       {!price && (
-        <div style={{ background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 5, padding: '20px', textAlign: 'center' }}>
-          <div style={{ fontSize: 11, fontFamily: MONO, color: '#2a2a2a' }}>Waiting for live price — add your Massive API key in Command tab</div>
+        <div style={{ background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 5, padding: '28px 24px' }}>
+          <div style={{ fontSize: 11, fontFamily: MONO, color: '#2a2a2a', marginBottom: 10, letterSpacing: '0.04em' }}>Levels load automatically once your Massive API key is connected.</div>
+          <div style={{ fontSize: 10, fontFamily: MONO, color: '#1e1e1e', lineHeight: 1.8 }}>
+            You'll see VWAP, pivot points, PDH/PDL, S/D zones, and Fibonacci drawn from the prior day range — all calculated automatically from live market data.
+          </div>
+          <div style={{ marginTop: 14, fontSize: 9, fontFamily: MONO, color: '#1a1a1a', letterSpacing: '0.08em' }}>→ Add your key in the Command tab to activate.</div>
         </div>
       )}
 
@@ -241,12 +263,12 @@ export default function Levels({ liveData, orbHigh, orbLow, settings, onSettings
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
           {[
             { label: 'Live Price', value: `$${f2(price)}`, color: LIME },
-            { label: 'VWAP', value: vwapData ? `$${f2(vwapData.vwap)}` : '—', color: PURPLE },
+            { label: 'VWAP', value: vwapData ? `$${f2(vwapData.vwap)}` : '—', color: PURPLE, tip: "Volume Weighted Average Price — the average price weighted by volume. Institutions use VWAP as their primary anchor. Price above VWAP favors longs, below favors shorts." },
             { label: 'vs VWAP', value: vwapData ? `${price > vwapData.vwap ? '+' : ''}$${f2(price - vwapData.vwap)}` : '—', color: vwapData ? (price > vwapData.vwap ? LIME : RED) : '#444' },
             { label: 'Active Levels', value: levels.length, color: '#777' },
-          ].map(({ label, value, color }) => (
+          ].map(({ label, value, color, tip }) => (
             <Card key={label} style={{ padding: '12px 14px' }}>
-              <div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 4 }}>{label}</div>
+              <div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 4, display: 'flex', alignItems: 'center' }}>{label}{tip && <Tip tip={tip} />}</div>
               <div style={{ fontSize: 18, fontWeight: 700, fontFamily: MONO, color }}>{value}</div>
             </Card>
           ))}
@@ -262,6 +284,7 @@ export default function Levels({ liveData, orbHigh, orbLow, settings, onSettings
           { id: 'vwap', label: 'VWAP' },
           { id: 'fib', label: 'Fibonacci' },
           { id: 'zone', label: 'S/D Zones' },
+          { id: 'vol', label: 'Vol Profile' },
         ].map(f => (
           <Pill key={f.id} label={f.label} active={filter === f.id} onClick={() => setFilter(f.id)} />
         ))}
@@ -332,6 +355,9 @@ export default function Levels({ liveData, orbHigh, orbLow, settings, onSettings
             { type: 'fib', label: 'Fibonacci' },
             { type: 'supply', label: 'Supply Zone' },
             { type: 'demand', label: 'Demand Zone' },
+            { type: 'poc', label: 'Point of Control (POC)' },
+            { type: 'hvn', label: 'High Volume Node (HVN)' },
+            { type: 'lvn', label: 'Low Volume Node (LVN)' },
           ].map(({ type, label }) => (
             <div key={type} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{ width: 8, height: 8, borderRadius: '50%', background: TYPE_COLORS[type], flexShrink: 0 }} />

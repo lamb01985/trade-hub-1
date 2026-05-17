@@ -5,6 +5,7 @@ import { buildLevelMap } from './lib/levels.js'
 import Command from './components/Command.jsx'
 import Levels from './components/Levels.jsx'
 import { ORBTab, IVAnalyzerTab, CalculatorTab, ChecklistTab, JournalTab, StatsTab, WatchlistTab, PrepTab } from './components/tabs.jsx'
+import GlossaryModal from './components/Glossary.jsx'
 import { LIME, RED, YELLOW, MONO, SANS, DARK, BORDER, todayStr, uid, getSession } from './constants.js'
 
 const TABS = [
@@ -36,6 +37,7 @@ export default function App() {
   const [checklistPassed, setChecklistPassed] = useState(false)
   const [manualFibs, setManualFibs] = useState(null)
   const [customLevels, setCustomLevels] = useState([])
+  const [showGlossary, setShowGlossary] = useState(false)
 
   // Build level map for alert checking
   const levelMapInput = useMemo(() => ({
@@ -56,6 +58,7 @@ export default function App() {
     orbLow: levelMapInput.orbLow,
     sdZones: liveData.sdZones,
     customLevels,
+    volProfile: liveData.volProfile,
   }), [liveData, manualFibs, levelMapInput, customLevels])
 
   // Loss limit lockout
@@ -218,6 +221,7 @@ export default function App() {
             liveData={liveData}
             marketEvents={prep.marketEvents}
             instrument={prep.instrument || 'options'}
+            ticker={prep.ticker || 'QQQ'}
           />
         )}
 
@@ -274,6 +278,20 @@ export default function App() {
           <StatsTab trades={trades} />
         )}
       </div>
+
+      {/* Footer */}
+      <div style={{ borderTop: `1px solid #111`, padding: '16px 20px', textAlign: 'center' }}>
+        <button
+          onClick={() => setShowGlossary(true)}
+          style={{ background: 'none', border: 'none', color: '#2a2a2a', fontFamily: MONO, fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer', textDecoration: 'underline', textDecorationColor: '#222' }}
+        >
+          Glossary
+        </button>
+        <span style={{ color: '#1a1a1a', fontSize: 9, fontFamily: MONO, margin: '0 10px' }}>·</span>
+        <span style={{ color: '#1a1a1a', fontSize: 9, fontFamily: MONO, letterSpacing: '0.1em' }}>Trade Hub — personal use only</span>
+      </div>
+
+      {showGlossary && <GlossaryModal onClose={() => setShowGlossary(false)} />}
     </div>
   )
 }

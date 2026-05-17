@@ -1,7 +1,58 @@
+import { useState, useRef, useEffect } from 'react'
 import { DARK, PANEL, BORDER, LIME, RED, YELLOW, BLUE, PURPLE, MONO, SANS } from '../constants.js'
 
 const s = {
   fontFamily: MONO,
+}
+
+export function Tip({ tip }) {
+  const [open, setOpen] = useState(false)
+  const [rect, setRect] = useState(null)
+  const btnRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    function closeOutside(e) {
+      if (!btnRef.current?.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', closeOutside)
+    return () => document.removeEventListener('mousedown', closeOutside)
+  }, [open])
+
+  function toggle(e) {
+    e.stopPropagation()
+    const r = btnRef.current?.getBoundingClientRect()
+    if (r) setRect(r)
+    setOpen(v => !v)
+  }
+
+  const left = rect ? Math.min(rect.left, window.innerWidth - 268) : 0
+  const top = rect ? rect.bottom + 6 : 0
+
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', verticalAlign: 'middle' }}>
+      <button
+        ref={btnRef}
+        onClick={toggle}
+        style={{
+          width: 14, height: 14, borderRadius: '50%', background: 'transparent',
+          border: `1px solid ${open ? '#555' : '#252525'}`, color: open ? '#888' : '#3a3a3a',
+          fontFamily: MONO, fontSize: 8, lineHeight: '12px', cursor: 'pointer',
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          marginLeft: 5, padding: 0, flexShrink: 0,
+        }}
+      >?</button>
+      {open && rect && (
+        <div style={{
+          position: 'fixed', top, left, zIndex: 9999,
+          background: '#1c1c1c', border: '1px solid #2e2e2e', borderRadius: 5,
+          padding: '12px 16px', width: 252, boxShadow: '0 8px 32px rgba(0,0,0,0.85)',
+        }}>
+          <div style={{ fontSize: 11, fontFamily: MONO, color: '#aaa', lineHeight: 1.75 }}>{tip}</div>
+        </div>
+      )}
+    </span>
+  )
 }
 
 export function Card({ children, style = {} }) {
@@ -38,10 +89,10 @@ export function Tile({ label, value, sub, color, compact }) {
   )
 }
 
-export function Fld({ label, value, onChange, type = 'number', placeholder, step = '0.01', prefix, suffix, disabled, mono, accent }) {
+export function Fld({ label, value, onChange, type = 'number', placeholder, step = '0.01', prefix, suffix, disabled, mono, accent, tip }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-      {label && <label style={{ fontSize: 9, letterSpacing: '0.14em', color: accent ? '#6a7a5a' : '#666', textTransform: 'uppercase', fontFamily: MONO }}>{label}</label>}
+      {label && <label style={{ fontSize: 9, letterSpacing: '0.14em', color: accent ? '#6a7a5a' : '#666', textTransform: 'uppercase', fontFamily: MONO, display: 'flex', alignItems: 'center' }}>{label}{tip && <Tip tip={tip} />}</label>}
       <div style={{ position: 'relative' }}>
         {prefix && <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#666', fontFamily: MONO, fontSize: 13, pointerEvents: 'none' }}>{prefix}</span>}
         <input

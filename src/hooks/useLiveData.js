@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { MassiveStream, getLastTrade, getPrevDay, getIntradayBars, getWeeklyData, getHistoricalBars } from '../lib/massive.js'
-import { calcVWAP, calcPivots, detectSDZones } from '../lib/levels.js'
+import { calcVWAP, calcPivots, detectSDZones, calcVolumeProfile, calcATR } from '../lib/levels.js'
 import { checkLevelAlerts } from '../lib/alerts.js'
-import { todayStr } from '../constants.js'
+import { todayStr, getETMins } from '../constants.js'
 
 export function useLiveData(apiKey, ticker = 'QQQ', levelMap = null, settings = {}) {
   const [price, setPrice] = useState(null)
@@ -20,6 +20,10 @@ export function useLiveData(apiKey, ticker = 'QQQ', levelMap = null, settings = 
   const [loadingContext, setLoadingContext] = useState(false)
   const [contextError, setContextError] = useState(null)
   const [lastAlerts, setLastAlerts] = useState([])
+  const [rvol, setRvol] = useState(null)
+  const [atr, setAtr] = useState(null)
+  const [openPrice, setOpenPrice] = useState(null)
+  const [volProfile, setVolProfile] = useState(null)
 
   const streamRef = useRef(null)
   const vwapBarsRef = useRef([]) // Accumulate bars for VWAP
@@ -93,6 +97,21 @@ export function useLiveData(apiKey, ticker = 'QQQ', levelMap = null, settings = 
 
       const zones = detectSDZones(histBars)
       setSdZones(zones)
+
+      // Open price (first intraday bar)
+      setOpenPrice(intradayBars.length > 0 ? intradayBars[0].o : null)
+
+      // ATR from daily bars
+      setAtr(calcATR(histBars))
+
+      // Volume Profile from daily bars
+      setVolProfile(calcVolumeProfile(histBars))
+
+      // RVOL: session volume vs projected daily average
+      const sessionVol = intradayBars.reduce((s, b) => s + (b.v || 0), 0)
+      const avgDayVol = histBars.length > 0 ? histBars.reduce((s, b) => s + (b.v || 0), 0) / histBars.length : 0
+      const minsElapsed = Math.max(1, getETMins() - 570) // 9:30 ET = 570 mins from midnight
+      setRvol(avgDayVol > 0 ? sessionVol / (avgDayVol * minsElapsed / 390) : null)
     } catch (e) {
       setContextError(e.message)
     } finally {
@@ -137,5 +156,9 @@ export function useLiveData(apiKey, ticker = 'QQQ', levelMap = null, settings = 
     contextError,
     lastAlerts,
     refreshContext: loadContext,
+    rvol,
+    atr,
+    openPrice,
+    volProfile,
   }
 }
