@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useLocalStorage } from './hooks/useStore.js'
 import { useLiveData } from './hooks/useLiveData.js'
 import { buildLevelMap } from './lib/levels.js'
+import { computeMTF, alignmentScore } from './lib/structure.js'
 import Command from './components/Command.jsx'
 import Levels from './components/Levels.jsx'
 import ChartTab from './components/Chart.jsx'
@@ -53,6 +54,17 @@ export default function App() {
 
   const liveData = useLiveData(apiKey, prep.ticker || 'QQQ', null, settings)
 
+  // Merge pre-market H/L into custom levels so they show in the level map
+  const enrichedCustomLevels = useMemo(() => {
+    const base = customLevels || []
+    const pm = liveData.preMarket
+    if (!pm?.active) return base
+    const extras = []
+    if (pm.high != null) extras.push({ label: 'PMH', price: pm.high, type: 'premarket-high' })
+    if (pm.low != null) extras.push({ label: 'PML', price: pm.low, type: 'premarket-low' })
+    return [...extras, ...base]
+  }, [customLevels, liveData.preMarket])
+
   // Merge liveData into a full level map for the Levels tab
   const fullLevelMap = useMemo(() => buildLevelMap(liveData.price, {
     pivots: liveData.pivots,
@@ -63,9 +75,16 @@ export default function App() {
     orbHigh: levelMapInput.orbHigh,
     orbLow: levelMapInput.orbLow,
     sdZones: liveData.sdZones,
-    customLevels,
+    customLevels: enrichedCustomLevels,
     volProfile: liveData.volProfile,
-  }), [liveData, manualFibs, levelMapInput, customLevels])
+  }), [liveData, manualFibs, levelMapInput, enrichedCustomLevels])
+
+  // Multi-timeframe alignment — computed once, fanned out to header / Levels / Chart / Checklist / AI brief
+  const mtfAlignment = useMemo(() => {
+    const mtf = computeMTF(liveData.intradayBars)
+    if (!mtf) return { mtf: null, score: 0, direction: 'NO DATA', confidence: 'NONE', label: 'NO DATA', recommendation: 'Waiting for bars.' }
+    return { mtf, ...alignmentScore(mtf, liveData.rvol) }
+  }, [liveData.intradayBars, liveData.rvol])
 
   // Calendar events for next 14 days, recomputed once per session
   const calendarEvents = useMemo(() => getAllEvents(new Date(), 14), [])
@@ -121,6 +140,12 @@ export default function App() {
             {fullLevelMap.setupQuality === 'APPROACHING' && (
               <button onClick={() => setActiveTab('levels')} title="Jump to Levels tab" style={{ fontSize: 9, color: YELLOW, fontFamily: MONO, background: 'transparent', border: `1px solid ${YELLOW}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.1em', cursor: 'pointer' }}>APPROACHING →</button>
             )}
+            {mtfAlignment.score > 0 && (() => {
+              const c = mtfAlignment.score >= 85 ? LIME : mtfAlignment.score >= 70 ? LIME : mtfAlignment.score >= 55 ? YELLOW : mtfAlignment.score >= 40 ? '#F97316' : RED
+              return (
+                <button onClick={() => setActiveTab('chart')} title={`${mtfAlignment.label} — jump to Chart`} style={{ fontSize: 9, color: c, fontFamily: MONO, background: 'transparent', border: `1px solid ${c}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.1em', cursor: 'pointer' }}>ALIGN: {mtfAlignment.score} →</button>
+              )
+            })()}
           </div>
         </div>
 
@@ -229,6 +254,7 @@ export default function App() {
             savedPreps={savedPreps}
             onSavedPrepsChange={setSavedPreps}
             levelMap={fullLevelMap}
+            mtfAlignment={mtfAlignment}
           />
         )}
 
@@ -265,6 +291,7 @@ export default function App() {
             orbLow={orbPrefill?.orbLow || prep.orbLow}
             settings={settings}
             onSettingsChange={setSettings}
+            mtfAlignment={mtfAlignment}
           />
         )}
 
@@ -277,6 +304,7 @@ export default function App() {
               ticker={prep.ticker || 'QQQ'}
               customLevels={customLevels}
               onCustomLevelsChange={setCustomLevels}
+              mtfAlignment={mtfAlignment}
             />
           </ErrorBoundary>
         )}
@@ -295,7 +323,7 @@ export default function App() {
         )}
 
         {activeTab === 'checklist' && (
-          <ChecklistTab onPass={() => { setChecklistPassed(true); setActiveTab('calc') }} instrument={prep.instrument || 'options'} setupQuality={fullLevelMap.setupQuality} />
+          <ChecklistTab onPass={() => { setChecklistPassed(true); setActiveTab('calc') }} instrument={prep.instrument || 'options'} setupQuality={fullLevelMap.setupQuality} alignmentScore={mtfAlignment.score} />
         )}
 
         {activeTab === 'calc' && (

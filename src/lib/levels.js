@@ -113,7 +113,67 @@ export function detectSDZones(dailyBars) {
   return zones.slice(-6).sort((a, b) => b.strength - a.strength).slice(0, 4)
 }
 
-// ── Volume Profile ────────────────────────────────────────────────────────────
+// ── Intraday Volume Profile with VAH/VAL ─────────────────────────────────────
+// Bucketizes price levels at the given tick size, distributes each bar's volume
+// uniformly across the buckets it touched, then derives POC + 70% value area.
+
+export function tickSizeFor(price) {
+  if (price == null || isNaN(price)) return 0.25
+  return price >= 200 ? 0.5 : 0.25
+}
+
+export function calcIntradayVolumeProfile(bars, tickSize = 0.25) {
+  if (!bars || bars.length < 15) return null
+  const valid = bars.filter(b => b.v > 0 && b.h >= b.l)
+  if (valid.length < 15) return null
+
+  const byLevel = new Map()
+  for (const bar of valid) {
+    const lo = Math.round(bar.l / tickSize) * tickSize
+    const hi = Math.round(bar.h / tickSize) * tickSize
+    const numBuckets = Math.max(1, Math.round((hi - lo) / tickSize) + 1)
+    const perBucket = bar.v / numBuckets
+    for (let i = 0; i < numBuckets; i++) {
+      const price = Number((lo + i * tickSize).toFixed(4))
+      byLevel.set(price, (byLevel.get(price) || 0) + perBucket)
+    }
+  }
+
+  if (byLevel.size === 0) return null
+
+  const sortedByPrice = [...byLevel.entries()].sort((a, b) => a[0] - b[0])
+  const totalVol = sortedByPrice.reduce((s, [, v]) => s + v, 0)
+  if (totalVol === 0) return null
+
+  // POC = highest-volume bucket
+  let pocIdx = 0, pocVol = sortedByPrice[0][1]
+  for (let i = 1; i < sortedByPrice.length; i++) {
+    if (sortedByPrice[i][1] > pocVol) { pocIdx = i; pocVol = sortedByPrice[i][1] }
+  }
+  const poc = sortedByPrice[pocIdx][0]
+
+  // Expand from POC outward until 70% of volume is captured
+  let lo = pocIdx, hi = pocIdx
+  let captured = pocVol
+  const threshold = totalVol * 0.70
+  while (captured < threshold && (lo > 0 || hi < sortedByPrice.length - 1)) {
+    const above = hi + 1 < sortedByPrice.length ? sortedByPrice[hi + 1][1] : -1
+    const below = lo - 1 >= 0 ? sortedByPrice[lo - 1][1] : -1
+    if (above < 0 && below < 0) break
+    if (above >= below) { hi++; captured += sortedByPrice[hi][1] }
+    else { lo--; captured += sortedByPrice[lo][1] }
+  }
+  const vah = sortedByPrice[hi][0]
+  const val = sortedByPrice[lo][0]
+
+  const avgPerLevel = totalVol / sortedByPrice.length
+  const hvn = sortedByPrice.filter(([, v]) => v > avgPerLevel * 1.5).map(([p, v]) => ({ price: p, volRatio: v / avgPerLevel }))
+  const lvn = sortedByPrice.filter(([, v]) => v < avgPerLevel * 0.4).map(([p, v]) => ({ price: p, volRatio: v / avgPerLevel }))
+
+  return { poc, vah, val, hvn: hvn.slice(0, 5), lvn: lvn.slice(0, 5), byLevel: sortedByPrice, totalVol, tickSize }
+}
+
+// ── Volume Profile (legacy, from daily bars) ─────────────────────────────────
 
 export function calcVolumeProfile(histBars) {
   if (!histBars || histBars.length < 3) return null
@@ -231,10 +291,12 @@ export function buildLevelMap(currentPrice, {
     add(lvl.price, lvl.label, 'custom')
   }
 
-  // Volume Profile (POC, HVN, LVN from historical daily bars)
+  // Volume Profile (POC, VAH, VAL, HVN, LVN)
   if (volProfile) {
-    if (volProfile.poc != null) add(volProfile.poc, 'POC', 'poc', 'Point of Control — highest volume area')
-    for (const z of volProfile.hvn) add(z.price, 'HVN', 'hvn', `High Volume Node — ${z.volRatio.toFixed(1)}× avg — expect strong support/resistance`)
+    if (volProfile.poc != null) add(volProfile.poc, 'POC', 'poc', 'Point of Control — highest volume node, strongest S/R')
+    if (volProfile.vah != null) add(volProfile.vah, 'VAH', 'vah', 'Value Area High — top 70% of volume')
+    if (volProfile.val != null) add(volProfile.val, 'VAL', 'val', 'Value Area Low — bottom 70% of volume')
+    for (const z of volProfile.hvn) add(z.price, 'HVN', 'hvn', `High Volume Node — ${z.volRatio.toFixed(1)}× avg — strong support/resistance`)
     for (const z of volProfile.lvn) add(z.price, 'LVN', 'lvn', `Low Volume Node — ${z.volRatio.toFixed(1)}× avg — price moves fast through here`)
   }
 

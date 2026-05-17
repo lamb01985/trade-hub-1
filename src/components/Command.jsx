@@ -130,6 +130,18 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
               {liveData.bid && liveData.ask && (
                 <div style={{ fontSize: 11, fontFamily: MONO, color: '#777', marginTop: 6 }}>Bid ${f2(liveData.bid)} / Ask ${f2(liveData.ask)}</div>
               )}
+              {liveData.volProfile?.poc != null && (() => {
+                const poc = liveData.volProfile.poc
+                const diff = liveData.price - poc
+                const rel = Math.abs(diff) < 0.10 ? 'at' : diff > 0 ? 'above' : 'below'
+                const c = rel === 'above' ? LIME : rel === 'below' ? RED : YELLOW
+                return (
+                  <div style={{ fontSize: 11, fontFamily: MONO, color: '#888', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    POC: <strong style={{ color: '#FFFFFF' }}>${f2(poc)}</strong>
+                    <span style={{ color: c, fontWeight: 700 }}>({rel}{rel !== 'at' ? ` by $${f2(Math.abs(diff))}` : ''})</span>
+                  </div>
+                )
+              })()}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, textAlign: 'right' }}>
               {liveData.vwapData && (
@@ -294,6 +306,35 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
 
             <div style={{ fontSize: 11, fontFamily: MONO, color: ctxColor }}>{context}</div>
             <div style={{ fontSize: 10, fontFamily: MONO, color: fillColor, marginTop: 6, opacity: 0.7 }}>{fillMsg}</div>
+
+            {/* Pre-market action: PMH/PML/trend/volume from actual pre-market bars */}
+            {liveData?.preMarket?.active && (() => {
+              const pm = liveData.preMarket
+              const pmVolRatio = liveData.avgDayVol ? pm.vol / (liveData.avgDayVol * 0.15) : null  // ~15% of daily avg is typical pre-mkt
+              const trendColor = pm.trend === 'trending up' ? LIME : pm.trend === 'trending down' ? RED : YELLOW
+              return (
+                <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${YELLOW}22`, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10 }}>
+                  <div>
+                    <div style={{ fontSize: 8, fontFamily: MONO, color: '#444', letterSpacing: '0.12em', textTransform: 'uppercase' }}>PMH</div>
+                    <div style={{ fontSize: 13, fontFamily: MONO, fontWeight: 700, color: LIME }}>${f2(pm.high)}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 8, fontFamily: MONO, color: '#444', letterSpacing: '0.12em', textTransform: 'uppercase' }}>PML</div>
+                    <div style={{ fontSize: 13, fontFamily: MONO, fontWeight: 700, color: RED }}>${f2(pm.low)}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 8, fontFamily: MONO, color: '#444', letterSpacing: '0.12em', textTransform: 'uppercase' }}>Trend</div>
+                    <div style={{ fontSize: 11, fontFamily: MONO, fontWeight: 700, color: trendColor }}>{pm.trend}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 8, fontFamily: MONO, color: '#444', letterSpacing: '0.12em', textTransform: 'uppercase' }}>PM Vol</div>
+                    <div style={{ fontSize: 11, fontFamily: MONO, fontWeight: 700, color: pmVolRatio && pmVolRatio > 1.5 ? LIME : pmVolRatio && pmVolRatio > 1.0 ? YELLOW : '#888' }}>
+                      {pmVolRatio ? `${pmVolRatio.toFixed(1)}x avg` : `${(pm.vol / 1e6).toFixed(1)}M`}
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
           </div>
         )
       })()}

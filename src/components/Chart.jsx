@@ -3,6 +3,7 @@ import { createChart, CandlestickSeries, HistogramSeries, LineSeries, LineStyle,
 import { Pill } from './ui.jsx'
 import { LIME, RED, YELLOW, BLUE, PURPLE, ORANGE, MONO, BORDER, PANEL, f2 } from '../constants.js'
 import { fullAnalysis } from '../lib/structure.js'
+import { isPreMarketBar, isRegularSessionBar } from '../lib/premarket.js'
 
 const TIMEFRAMES = [
   { id: '1m', mins: 1, label: '1m' },
@@ -16,7 +17,8 @@ const LAYER_GROUPS = [
   { id: 'pivots', label: 'Pivots', types: ['pivot', 'pivot-r', 'pivot-s', 'structure', 'weekly', 'orb', 'custom'] },
   { id: 'vwap', label: 'VWAP', types: ['vwap', 'vwap-band'] },
   { id: 'fibs', label: 'Fibs', types: ['fib'] },
-  { id: 'zones', label: 'Zones', types: ['supply', 'demand', 'poc', 'hvn', 'lvn'] },
+  { id: 'zones', label: 'Zones', types: ['supply', 'demand', 'poc', 'vah', 'val', 'hvn', 'lvn'] },
+  { id: 'premarket', label: 'Pre-Mkt', types: ['premarket-high', 'premarket-low'] },
   { id: 'signals', label: 'Signals', types: [] },
   { id: 'structure', label: 'Structure', types: [] },
 ]
@@ -38,9 +40,13 @@ function colorFor(type, label = '') {
     case 'supply': return RED
     case 'demand': return BLUE
     case 'poc': return '#FFFFFF'
+    case 'vah': return '#FFFFFF'
+    case 'val': return '#FFFFFF'
     case 'hvn': return '#6699FF'
     case 'lvn': return '#445'
     case 'custom': return '#FFFFFF'
+    case 'premarket-high': return LIME
+    case 'premarket-low': return RED
     default: return '#666'
   }
 }
@@ -49,6 +55,8 @@ function styleFor(type, label = '') {
   if (label.includes('Prev Day Close')) return LineStyle.Dashed
   if (type === 'custom') return LineStyle.Dashed
   if (type === 'vwap-band' || type === 'weekly') return LineStyle.Dashed
+  if (type === 'vah' || type === 'val') return LineStyle.Dashed
+  if (type === 'premarket-high' || type === 'premarket-low') return LineStyle.Dashed
   if (type === 'fib' && !label.includes('61.8')) return LineStyle.Dotted
   if (type === 'supply' || type === 'demand') return LineStyle.Dotted
   return LineStyle.Solid
@@ -121,7 +129,7 @@ function detectConfluences(levels, threshold = 0.30) {
   })
 }
 
-export default function ChartTab({ liveData, levelMap, trades, ticker, customLevels = [], onCustomLevelsChange }) {
+export default function ChartTab({ liveData, levelMap, trades, ticker, customLevels = [], onCustomLevelsChange, mtfAlignment }) {
   const wrapRef = useRef(null)
   const chartRef = useRef(null)
   const candleRef = useRef(null)
@@ -134,32 +142,24 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
   const swingHighLineRef = useRef(null)
   const swingLowLineRef = useRef(null)
   const bosLineRef = useRef(null)
+  const profileOverlayRef = useRef(null)
 
   const [timeframe, setTimeframe] = useState('5m')
-  const [layers, setLayers] = useState({ pivots: true, vwap: true, fibs: true, zones: true, signals: true, structure: true })
+  const [layers, setLayers] = useState({ pivots: true, vwap: true, fibs: true, zones: true, signals: true, structure: true, premarket: true, volprofile: true })
   const [addOpen, setAddOpen] = useState(false)
   const [newLabel, setNewLabel] = useState('')
   const [newPrice, setNewPrice] = useState('')
 
-  // ── Structure analysis (current timeframe + multi-TF) ──────────────────────
-  // MUST be declared before any useEffect that depends on it — TDZ otherwise.
+  // ── Structure analysis (current timeframe) ─────────────────────────────────
+  // Multi-TF comes from App via the mtfAlignment prop so the score stays
+  // consistent across header / Levels / Checklist / AI brief.
   const currentAnalysis = useMemo(() => {
     const mins = TIMEFRAMES.find(t => t.id === timeframe)?.mins || 5
     const agg = aggregateBars(liveData?.intradayBars || [], mins)
     return fullAnalysis(agg)
   }, [liveData?.intradayBars, timeframe])
 
-  const mtfAnalysis = useMemo(() => {
-    const bars = liveData?.intradayBars || []
-    if (!bars.length) return null
-    const r = {}
-    for (const tf of ['1m', '5m', '15m']) {
-      const m = TIMEFRAMES.find(t => t.id === tf)?.mins
-      if (!m) continue
-      r[tf] = fullAnalysis(aggregateBars(bars, m))
-    }
-    return r
-  }, [liveData?.intradayBars])
+  const mtfAnalysis = mtfAlignment?.mtf || null
 
   // ── Initialize chart ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -261,17 +261,31 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
     const mins = TIMEFRAMES.find(t => t.id === timeframe)?.mins || 5
     const aggregated = aggregateBars(liveData?.intradayBars || [], mins)
 
-    const candleData = aggregated.map(b => ({
-      time: Math.floor(b.t / 1000),
-      open: b.o, high: b.h, low: b.l, close: b.c,
-    }))
+    const candleData = aggregated.map(b => {
+      const isPm = isPreMarketBar(b)
+      const up = b.c >= b.o
+      const baseUp = LIME, baseDown = RED
+      const pmUp = '#7a8a6a', pmDown = '#8a5a5a'
+      const color = isPm ? (up ? pmUp : pmDown) : (up ? baseUp : baseDown)
+      return {
+        time: Math.floor(b.t / 1000),
+        open: b.o, high: b.h, low: b.l, close: b.c,
+        color, borderColor: color, wickColor: color,
+      }
+    })
     candleRef.current.setData(candleData)
 
-    volumeRef.current.setData(aggregated.map(b => ({
-      time: Math.floor(b.t / 1000),
-      value: b.v,
-      color: b.c >= b.o ? `${LIME}55` : `${RED}55`,
-    })))
+    volumeRef.current.setData(aggregated.map(b => {
+      const isPm = isPreMarketBar(b)
+      const up = b.c >= b.o
+      const baseColor = up ? LIME : RED
+      const alpha = isPm ? '33' : '55'
+      return {
+        time: Math.floor(b.t / 1000),
+        value: b.v,
+        color: `${baseColor}${alpha}`,
+      }
+    }))
 
     // 20-day average volume line — scaled down to per-bar (avg daily vol / bars per day)
     const avg = liveData?.avgDayVol
@@ -396,6 +410,20 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
       }
     }
 
+    // Market Open separator marker on the first regular-session bar
+    if (layers.premarket && liveData?.intradayBars?.length) {
+      const firstReg = liveData.intradayBars.find(isRegularSessionBar)
+      if (firstReg) {
+        markers.push({
+          time: Math.floor(firstReg.t / 1000),
+          position: 'aboveBar',
+          color: '#888',
+          shape: 'square',
+          text: '◐ Open 8:30 CT',
+        })
+      }
+    }
+
     if (layers.structure && currentAnalysis?.swings?.length) {
       for (const s of currentAnalysis.swings) {
         markers.push({
@@ -427,7 +455,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
     } else {
       markersRef.current = createSeriesMarkers(candleRef.current, finalMarkers)
     }
-  }, [trades, layers.signals, layers.structure, levelMap?.setupQuality, currentAnalysis])
+  }, [trades, layers.signals, layers.structure, layers.premarket, levelMap?.setupQuality, currentAnalysis, liveData?.intradayBars])
 
   // ── Stop / target lines for open trades ─────────────────────────────────────
   useEffect(() => {
@@ -498,6 +526,51 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
       })
     }
   }, [currentAnalysis, layers.structure])
+
+  // ── Volume profile sidebar (SVG overlay on right side of chart) ────────────
+  useEffect(() => {
+    if (!chartRef.current || !candleRef.current || !profileOverlayRef.current) return
+    const overlay = profileOverlayRef.current
+    const vp = liveData?.volProfile
+
+    const render = () => {
+      if (!candleRef.current || !overlay) return
+      if (!layers.volprofile || !vp?.byLevel?.length) { overlay.innerHTML = ''; return }
+      const maxVol = Math.max(...vp.byLevel.map(([, v]) => v))
+      if (!maxVol) { overlay.innerHTML = ''; return }
+      const width = 60
+      const innerW = width - 6
+      const parts = [`<svg width="${width}" height="100%" style="position:absolute;top:0;right:0;pointer-events:none;">`]
+
+      for (const [price, vol] of vp.byLevel) {
+        const y = candleRef.current.priceToCoordinate(price)
+        if (y == null) continue
+        const w = Math.max(1, (vol / maxVol) * innerW)
+        const isPoc = Math.abs(price - vp.poc) < 1e-9
+        const fill = isPoc ? '#FFFFFF' : '#FFFFFF55'
+        parts.push(`<rect x="${width - w - 3}" y="${y - 1.5}" width="${w}" height="3" fill="${fill}" />`)
+      }
+
+      if (vp.vah != null) {
+        const y = candleRef.current.priceToCoordinate(vp.vah)
+        if (y != null) parts.push(`<line x1="0" y1="${y}" x2="${width}" y2="${y}" stroke="#FFFFFF" stroke-opacity="0.55" stroke-dasharray="3,3" />`)
+      }
+      if (vp.val != null) {
+        const y = candleRef.current.priceToCoordinate(vp.val)
+        if (y != null) parts.push(`<line x1="0" y1="${y}" x2="${width}" y2="${y}" stroke="#FFFFFF" stroke-opacity="0.55" stroke-dasharray="3,3" />`)
+      }
+      parts.push('</svg>')
+      overlay.innerHTML = parts.join('')
+    }
+
+    render()
+    const ts = chartRef.current.timeScale()
+    const onRange = () => render()
+    ts.subscribeVisibleLogicalRangeChange(onRange)
+    return () => {
+      try { ts.unsubscribeVisibleLogicalRangeChange(onRange) } catch {}
+    }
+  }, [liveData?.volProfile, layers.volprofile, timeframe])
 
   function autoFit() {
     chartRef.current?.timeScale().fitContent()
@@ -585,6 +658,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
 
       <div style={{ position: 'relative', width: '100%', height: '70vh', minHeight: 480, background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 5 }}>
         <div ref={wrapRef} style={{ width: '100%', height: '100%' }} />
+        <div ref={profileOverlayRef} style={{ position: 'absolute', top: 0, right: 60, width: 60, height: '100%', pointerEvents: 'none' }} />
         {noData && (
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 8, pointerEvents: 'none' }}>
             <div style={{ fontSize: 12, fontFamily: MONO, color: '#444' }}>Waiting for bars...</div>
@@ -592,6 +666,50 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
           </div>
         )}
       </div>
+
+      {/* Multi-Timeframe Alignment Score card */}
+      {mtfAlignment && mtfAlignment.score > 0 && (() => {
+        const a = mtfAlignment
+        const c = a.score >= 85 ? LIME : a.score >= 70 ? LIME : a.score >= 55 ? YELLOW : a.score >= 40 ? ORANGE : RED
+        const states = a.mtf ? ['1m', '5m', '15m'].map(tf => ({ tf, state: a.mtf[tf]?.state })) : []
+        return (
+          <div style={{ background: PANEL, border: `1px solid ${c}55`, borderRadius: 5, padding: '16px 20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <span style={{ fontSize: 9, fontFamily: MONO, color: '#666', letterSpacing: '0.16em', textTransform: 'uppercase' }}>Timeframe Alignment</span>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {states.map(({ tf, state }) => {
+                  const sc = state === 'BULLISH' ? LIME : state === 'BEARISH' ? RED : state === 'TRANSITION' ? ORANGE : YELLOW
+                  const arrow = state === 'BULLISH' ? '▲' : state === 'BEARISH' ? '▼' : '◆'
+                  return (
+                    <span key={tf} style={{ fontSize: 9, fontFamily: MONO, color: sc, border: `1px solid ${sc}33`, borderRadius: 3, padding: '2px 7px', letterSpacing: '0.06em' }}>
+                      {tf.toUpperCase()} {arrow} {state || '—'}
+                    </span>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 10 }}>
+              <span style={{ fontSize: 42, fontWeight: 900, fontFamily: MONO, color: c, lineHeight: 1, letterSpacing: '-0.02em' }}>{a.score}</span>
+              <span style={{ fontSize: 12, fontFamily: MONO, color: '#666' }}>/ 100</span>
+              <span style={{ fontSize: 12, fontFamily: MONO, color: c, fontWeight: 700, marginLeft: 12, letterSpacing: '0.06em' }}>{a.label}</span>
+            </div>
+
+            <div style={{ height: 6, background: '#1a1a1a', borderRadius: 3, overflow: 'hidden', marginBottom: 12 }}>
+              <div style={{ height: '100%', width: `${a.score}%`, background: c, transition: 'width 0.4s' }} />
+            </div>
+
+            <div style={{ display: 'flex', gap: 18, fontSize: 10, fontFamily: MONO, color: '#888' }}>
+              <span><span style={{ color: '#555' }}>Direction:</span> <strong style={{ color: c }}>{a.direction}</strong></span>
+              <span><span style={{ color: '#555' }}>Confidence:</span> <strong style={{ color: c }}>{a.confidence}</strong></span>
+            </div>
+
+            <div style={{ marginTop: 10, fontSize: 11, fontFamily: MONO, color: '#aaa', lineHeight: 1.55, fontStyle: 'italic' }}>
+              "{a.recommendation}"
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Market Structure Panel */}
       {(() => {

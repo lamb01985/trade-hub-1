@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { MassiveStream, getLastTrade, getPrevDay, getIntradayBars, getIntradayBarsForDate, priorTradingDayStr, getWeeklyData, getHistoricalBars } from '../lib/massive.js'
-import { calcVWAP, calcPivots, detectSDZones, calcVolumeProfile, calcATR } from '../lib/levels.js'
+import { calcVWAP, calcPivots, detectSDZones, calcIntradayVolumeProfile, calcATR, tickSizeFor } from '../lib/levels.js'
+import { computePreMarketStats } from '../lib/premarket.js'
 import { checkLevelAlerts } from '../lib/alerts.js'
 import { todayStr, getETMins } from '../constants.js'
 
@@ -27,6 +28,7 @@ export function useLiveData(apiKey, ticker = 'QQQ', levelMap = null, settings = 
   const [intradayBars, setIntradayBars] = useState([])
   const [isHistoricalFallback, setIsHistoricalFallback] = useState(false)
   const [avgDayVol, setAvgDayVol] = useState(null)
+  const [preMarket, setPreMarket] = useState(null)
 
   const streamRef = useRef(null)
   const vwapBarsRef = useRef([]) // Accumulate bars for VWAP
@@ -117,8 +119,13 @@ export function useLiveData(apiKey, ticker = 'QQQ', levelMap = null, settings = 
       // ATR from daily bars
       setAtr(calcATR(histBars))
 
-      // Volume Profile from daily bars
-      setVolProfile(calcVolumeProfile(histBars))
+      // Intraday Volume Profile with proper bucketing + VAH/VAL
+      const refPrice = intradayBars[0]?.c || pd?.close
+      const tick = tickSizeFor(refPrice)
+      setVolProfile(calcIntradayVolumeProfile(intradayBars, tick))
+
+      // Pre-market stats
+      setPreMarket(computePreMarketStats(intradayBars, pd?.close))
 
       // RVOL: session volume vs projected daily average
       const sessionVol = intradayBars.reduce((s, b) => s + (b.v || 0), 0)
@@ -177,5 +184,6 @@ export function useLiveData(apiKey, ticker = 'QQQ', levelMap = null, settings = 
     intradayBars,
     isHistoricalFallback,
     avgDayVol,
+    preMarket,
   }
 }

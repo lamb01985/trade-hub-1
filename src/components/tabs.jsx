@@ -519,17 +519,20 @@ export function CalculatorTab({ prefill, onLogTrade, checklistPassed, lockedOut,
 }
 
 // ── Checklist Tab ─────────────────────────────────────────────────────────────
-export function ChecklistTab({ onPass, instrument, setupQuality }) {
+export function ChecklistTab({ onPass, instrument, setupQuality, alignmentScore }) {
   const [checked, setChecked] = useState({})
   const isStock = instrument === 'stock'
-  const sqOk = setupQuality === 'ON LEVEL' || setupQuality === 'APPROACHING'
-  const sqColor = setupQuality === 'ON LEVEL' ? LIME : setupQuality === 'APPROACHING' ? YELLOW : setupQuality === 'TIGHT RANGE' ? '#C084FC' : RED
   const sqItem = {
     id: 'c0',
     text: `Setup quality is ON LEVEL or APPROACHING — not BETWEEN LEVELS (currently: ${setupQuality || 'NO DATA'})`,
     required: true,
   }
-  const items = [sqItem, ...(isStock ? CL_ITEMS_STOCK : CL_ITEMS)]
+  const alignItem = {
+    id: 'ca',
+    text: `Alignment score is above 55 — timeframes not fully conflicted (currently: ${alignmentScore || 0}/100${alignmentScore >= 70 ? ' — ideal' : alignmentScore >= 55 ? ' — acceptable' : ' — too low, stand aside'})`,
+    required: true,
+  }
+  const items = [sqItem, alignItem, ...(isStock ? CL_ITEMS_STOCK : CL_ITEMS)]
   const req = items.filter(i => i.required), allReq = req.every(i => checked[i.id])
   const done = items.filter(i => checked[i.id]).length, pct = Math.round((done / items.length) * 100)
   return (
@@ -1354,7 +1357,7 @@ const ROUTINE = [
   { time: '10:30 CT', label: 'Chop starts. No new entries. Trailing winner? Decide now: trail stop or close. Do not hold through chop.' },
 ]
 
-export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, anthropicKey, savedPreps, onSavedPrepsChange, levelMap }) {
+export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, anthropicKey, savedPreps, onSavedPrepsChange, levelMap, mtfAlignment }) {
   const [rc, setRc] = useState({})
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState('')
@@ -1406,12 +1409,21 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
     if (!anthropicKey) return
     setAiLoading(true)
     setAiError('')
-    const { prevDay, pivots, vwapData, price, rvol, atr } = liveData || {}
+    const { prevDay, pivots, vwapData, price, rvol, atr, preMarket, volProfile } = liveData || {}
     const d = (v, fb = 'unknown') => v != null && !isNaN(v) ? f2(v) : fb
 
     const isStock = (prep.instrument || 'options') === 'stock'
     const rvolStr = rvol != null ? `${rvol.toFixed(2)}x avg (${rvol >= 1.2 ? 'elevated — moves are real' : rvol >= 0.8 ? 'normal' : 'low — low conviction'})` : 'not available'
     const atrStr = atr != null ? `$${d(atr)} (daily ATR)` : 'not available'
+    const pmStr = preMarket?.active
+      ? `Price $${d(preMarket.last)}, gap ${preMarket.gap >= 0 ? 'up' : 'down'} $${d(Math.abs(preMarket.gap))} vs PDC. PMH $${d(preMarket.high)}, PML $${d(preMarket.low)}. Trend: ${preMarket.trend}.`
+      : 'no pre-market data yet'
+    const vpStr = volProfile?.poc != null
+      ? `POC $${d(volProfile.poc)}, VAH $${d(volProfile.vah)}, VAL $${d(volProfile.val)}`
+      : 'not computed yet'
+    const alignStr = mtfAlignment?.score > 0
+      ? `1m ${mtfAlignment.mtf?.['1m']?.state}, 5m ${mtfAlignment.mtf?.['5m']?.state}, 15m ${mtfAlignment.mtf?.['15m']?.state}. Score: ${mtfAlignment.score}/100. ${mtfAlignment.label}.`
+      : 'not yet calculated'
     const prompt = isStock
       ? `You are a professional day trader assistant. Generate a pre-market game plan for ${prep.ticker || 'SPY'} stock/ETF.
 
@@ -1424,6 +1436,9 @@ Market context:
 - VWAP: $${d(vwapData?.vwap)} | VWAP +1σ: $${d(vwapData?.band1up)} | -1σ: $${d(vwapData?.band1dn)}
 - RVOL: ${rvolStr}
 - ATR: ${atrStr}
+- Volume Profile: ${vpStr}
+- Pre-Market: ${pmStr}
+- MTF Alignment: ${alignStr}
 - Market events: ${prep.marketEvents || 'none noted'}
 
 Write a tight, specific game plan with these exact sections:
@@ -1461,6 +1476,9 @@ Market context:
 - VWAP: $${d(vwapData?.vwap)} | VWAP +1σ: $${d(vwapData?.band1up)} | -1σ: $${d(vwapData?.band1dn)}
 - RVOL: ${rvolStr}
 - ATR: ${atrStr}
+- Volume Profile: ${vpStr}
+- Pre-Market: ${pmStr}
+- MTF Alignment: ${alignStr}
 - Planned strike: $${prep.plannedStrike || 'not set'} | DTE: ${prep.plannedDTE || 1}
 - IV note: ${prep.ivNote || 'not recorded'}
 - Market events: ${prep.marketEvents || 'none noted'}

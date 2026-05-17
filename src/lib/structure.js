@@ -114,3 +114,77 @@ export function fullAnalysis(bars) {
   const bos = detectBOS(raw, bars)
   return { swings: labeled, ...analysis, bos }
 }
+
+// Aggregate 1-min bars into N-min bars (OHLCV)
+export function aggregateBars(bars, mins) {
+  if (!bars?.length) return []
+  if (mins === 1) return bars
+  const bucketMs = mins * 60000
+  const groups = new Map()
+  for (const b of bars) {
+    const bucket = Math.floor(b.t / bucketMs) * bucketMs
+    const existing = groups.get(bucket)
+    if (!existing) {
+      groups.set(bucket, { t: bucket, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v })
+    } else {
+      existing.h = Math.max(existing.h, b.h)
+      existing.l = Math.min(existing.l, b.l)
+      existing.c = b.c
+      existing.v += b.v
+    }
+  }
+  return [...groups.values()].sort((a, b) => a.t - b.t)
+}
+
+// Multi-timeframe alignment score. mtf is { '1m': analysis, '5m': analysis, '15m': analysis }.
+// Returns { score, direction, confidence, label, recommendation }.
+export function alignmentScore(mtf, rvol) {
+  if (!mtf || !mtf['1m'] || !mtf['5m'] || !mtf['15m']) {
+    return { score: 0, direction: 'NO DATA', confidence: 'NONE', label: 'NO DATA', recommendation: 'Waiting for bars to populate timeframes.' }
+  }
+  const s1 = mtf['1m'].state, s5 = mtf['5m'].state, s15 = mtf['15m'].state
+  const isBull = s => s === 'BULLISH'
+  const isBear = s => s === 'BEARISH'
+
+  let baseScore = 0
+  let direction = 'NO BIAS'
+
+  if (isBull(s15) && isBull(s5) && isBull(s1)) { baseScore = 90; direction = 'BULLISH' }
+  else if (isBull(s15) && isBull(s5) && !isBear(s1)) { baseScore = 76; direction = 'BULLISH' }
+  else if (isBull(s15) && isBull(s5) && isBear(s1)) { baseScore = 62; direction = 'BULLISH' }
+  else if (isBull(s15) && isBear(s5)) { baseScore = 42; direction = 'BULLISH' }
+  else if (isBear(s15) && isBear(s5) && isBear(s1)) { baseScore = 90; direction = 'BEARISH' }
+  else if (isBear(s15) && isBear(s5) && !isBull(s1)) { baseScore = 76; direction = 'BEARISH' }
+  else if (isBear(s15) && isBear(s5) && isBull(s1)) { baseScore = 62; direction = 'BEARISH' }
+  else if (isBear(s15) && isBull(s5)) { baseScore = 42; direction = 'BEARISH' }
+  else if (s15 === 'RANGING' || s15 === 'TRANSITION') { baseScore = 50; direction = 'NO BIAS' }
+  else { baseScore = 50; direction = 'MIXED' }
+
+  const rvolMult = rvol == null ? 1 : rvol > 1.5 ? 1.15 : rvol >= 1.0 ? 1.0 : 0.85
+  const score = Math.min(100, Math.round(baseScore * rvolMult))
+
+  let label, confidence, recommendation
+  if (score >= 85) { label = direction === 'BEARISH' ? 'STRONG BEAR' : 'STRONG BULL'; confidence = 'HIGH' }
+  else if (score >= 70) { label = direction === 'BEARISH' ? 'BEAR BIAS' : 'BULL BIAS'; confidence = 'MODERATE' }
+  else if (score >= 55) { label = 'MIXED — WAIT'; confidence = 'LOW' }
+  else if (score >= 40) { label = 'CONFLICTED'; confidence = 'LOW' }
+  else { label = 'NO SETUP'; confidence = 'NONE' }
+
+  if (score >= 85) recommendation = 'HIGH CONVICTION — all timeframes aligned. Full size on confirmation.'
+  else if (score >= 70) recommendation = `${direction === 'BEARISH' ? '15m and 5m aligned bearish' : '15m and 5m aligned bullish'}. ${isBear(s1) && direction === 'BULLISH' ? '1m pulling back — potential entry on 1m structure flip.' : isBull(s1) && direction === 'BEARISH' ? '1m bouncing — potential short entry on 1m flip.' : 'Wait for 1m confirmation.'}`
+  else if (score >= 55) recommendation = 'MIXED SIGNALS — reduce size 50%. Only take A+ level confluences.'
+  else if (score >= 40) recommendation = 'CONFLICTED — stand aside. Wait for higher timeframes to agree.'
+  else recommendation = 'LOW CONVICTION — no clean setup. Watch only.'
+
+  return { score, direction, confidence, label, recommendation }
+}
+
+export function computeMTF(intradayBars) {
+  const bars = intradayBars || []
+  if (bars.length < 15) return null
+  const out = {}
+  for (const tf of [{ id: '1m', mins: 1 }, { id: '5m', mins: 5 }, { id: '15m', mins: 15 }]) {
+    out[tf.id] = fullAnalysis(aggregateBars(bars, tf.mins))
+  }
+  return out
+}

@@ -18,8 +18,12 @@ const TYPE_COLORS = {
   'weekly': '#FF6600',
   'custom': '#888',
   'poc': '#FFFFFF',
+  'vah': '#FFFFFF',
+  'val': '#FFFFFF',
   'hvn': '#6699FF',
   'lvn': '#334',
+  'premarket-high': LIME,
+  'premarket-low': RED,
 }
 
 function LevelRow({ level, currentPrice }) {
@@ -80,7 +84,7 @@ function CurrentPriceMarker({ price }) {
   )
 }
 
-function buildSetupMsg(quality, nearestAbove, nearestBelow, price, atr, vwapData) {
+function buildSetupMsg(quality, nearestAbove, nearestBelow, price, atr, vwapData, volProfile, alignment) {
   const gapAbove = nearestAbove ? nearestAbove.price - price : null
   const gapBelow = nearestBelow ? price - nearestBelow.price : null
   const closestIsAbove = gapAbove !== null && gapBelow !== null ? gapAbove <= gapBelow : gapAbove !== null
@@ -90,6 +94,18 @@ function buildSetupMsg(quality, nearestAbove, nearestBelow, price, atr, vwapData
       ? ` Above VWAP ($${f2(vwapData.vwap)}) — bullish structure.`
       : ` Below VWAP ($${f2(vwapData.vwap)}) — bearish structure.`)
     : ''
+  const pocRel = volProfile?.poc != null
+    ? (Math.abs(price - volProfile.poc) < 0.10
+      ? ` At POC ($${f2(volProfile.poc)}) — contested, wait for direction.`
+      : price > volProfile.poc
+      ? ` Above POC ($${f2(volProfile.poc)}) — buyers in control.`
+      : ` Below POC ($${f2(volProfile.poc)}) — sellers in control.`)
+    : ''
+  const alignRel = alignment?.score >= 85 ? ` HIGH CONVICTION — all timeframes aligned.`
+    : alignment?.score >= 70 ? ` ${alignment.label} (${alignment.score}/100) — normal size.`
+    : alignment?.score >= 55 ? ` MIXED SIGNALS — reduce size 50%.`
+    : alignment?.score > 0 ? ` LOW CONVICTION (${alignment.score}/100) — stand aside.`
+    : ''
 
   if (quality === 'ON LEVEL') {
     const lvl = closestIsAbove ? nearestAbove : nearestBelow
@@ -98,12 +114,12 @@ function buildSetupMsg(quality, nearestAbove, nearestBelow, price, atr, vwapData
     const putStop = f2(lvl.price + stopOff)
     const callTgt = !closestIsAbove && nearestAbove ? ` target $${f2(nearestAbove.price)} (${nearestAbove.label})` : ''
     const putTgt = closestIsAbove && nearestBelow ? ` target $${f2(nearestBelow.price)} (${nearestBelow.label})` : ''
-    return `${vwapRel} CALLS if price holds above ${lvl.label} ($${f2(lvl.price)}) on 5-min close — stop $${callStop}${callTgt}. PUTS if price rejects and closes below it — stop $${putStop}${putTgt}. Wait for the candle close, not the wick.`
+    return `${vwapRel}${pocRel}${alignRel} CALLS if price holds above ${lvl.label} ($${f2(lvl.price)}) on 5-min close — stop $${callStop}${callTgt}. PUTS if price rejects and closes below it — stop $${putStop}${putTgt}. Wait for the candle close, not the wick.`
   }
   if (quality === 'APPROACHING') {
     const lvl = closestIsAbove ? nearestAbove : nearestBelow
     if (!lvl) return 'Approaching a level. Get ready.'
-    return `${vwapRel} Approaching ${lvl.label} at $${f2(lvl.price)}. Get ready. Watch for rejection or breakout on the next 5-min candle close. Do not enter until the candle confirms direction.`
+    return `${vwapRel}${pocRel}${alignRel} Approaching ${lvl.label} at $${f2(lvl.price)}. Get ready. Watch for rejection or breakout on the next 5-min candle close. Do not enter until the candle confirms direction.`
   }
   if (quality === 'TIGHT RANGE') {
     if (!nearestAbove || !nearestBelow) return 'Tight range between levels. Watch for breakout.'
@@ -116,7 +132,7 @@ function buildSetupMsg(quality, nearestAbove, nearestBelow, price, atr, vwapData
   return null
 }
 
-function SetupBadge({ quality, nearestAbove, nearestBelow, price, atr, vwapData }) {
+function SetupBadge({ quality, nearestAbove, nearestBelow, price, atr, vwapData, volProfile, alignment }) {
   const configs = {
     'ON LEVEL': { color: LIME, bg: '#071208', border: '#1a3010' },
     'APPROACHING': { color: YELLOW, bg: '#0e0c04', border: '#2a2008' },
@@ -126,7 +142,7 @@ function SetupBadge({ quality, nearestAbove, nearestBelow, price, atr, vwapData 
   const c = configs[quality] || configs['BETWEEN LEVELS']
   const gapAbove = nearestAbove ? nearestAbove.price - price : null
   const gapBelow = nearestBelow ? price - nearestBelow.price : null
-  const msg = buildSetupMsg(quality, nearestAbove, nearestBelow, price, atr, vwapData)
+  const msg = buildSetupMsg(quality, nearestAbove, nearestBelow, price, atr, vwapData, volProfile, alignment)
 
   return (
     <div style={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: 5, padding: '14px 18px' }}>
@@ -150,7 +166,7 @@ function SetupBadge({ quality, nearestAbove, nearestBelow, price, atr, vwapData 
   )
 }
 
-export default function Levels({ liveData, orbHigh, orbLow, settings, onSettingsChange }) {
+export default function Levels({ liveData, orbHigh, orbLow, settings, onSettingsChange, mtfAlignment }) {
   const [customLabel, setCustomLabel] = useState('')
   const [customPrice, setCustomPrice] = useState('')
   const [customLevels, setCustomLevels] = useState([])
@@ -193,7 +209,7 @@ export default function Levels({ liveData, orbHigh, orbLow, settings, onSettings
     if (filter === 'structure') return ['structure', 'weekly', 'orb'].includes(l.type)
     if (filter === 'fib') return l.type === 'fib'
     if (filter === 'zone') return ['supply', 'demand'].includes(l.type)
-    if (filter === 'vol') return ['poc', 'hvn', 'lvn'].includes(l.type)
+    if (filter === 'vol') return ['poc', 'vah', 'val', 'hvn', 'lvn'].includes(l.type)
     return true
   })
 
@@ -245,8 +261,65 @@ export default function Levels({ liveData, orbHigh, orbLow, settings, onSettings
           price={price}
           atr={liveData?.atr}
           vwapData={vwapData}
+          volProfile={liveData?.volProfile}
+          alignment={mtfAlignment}
         />
       )}
+
+      {/* MTF Alignment badges */}
+      {mtfAlignment?.score > 0 && (() => {
+        const a = mtfAlignment
+        const c = a.score >= 70 ? LIME : a.score >= 55 ? YELLOW : a.score >= 40 ? ORANGE : RED
+        const stateColor = s => s === 'BULLISH' ? LIME : s === 'BEARISH' ? RED : s === 'TRANSITION' ? ORANGE : YELLOW
+        const arrow = s => s === 'BULLISH' ? '▲' : s === 'BEARISH' ? '▼' : '◆'
+        return (
+          <div style={{ background: '#0c0c0c', border: `1px solid ${c}33`, borderRadius: 4, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {['1m', '5m', '15m'].map(tf => {
+                const s = a.mtf?.[tf]?.state
+                const sc = stateColor(s)
+                return (
+                  <span key={tf} style={{ fontSize: 9, fontFamily: MONO, color: sc, border: `1px solid ${sc}33`, borderRadius: 3, padding: '2px 7px', letterSpacing: '0.06em' }}>
+                    {tf.toUpperCase()} {arrow(s)} {s || '—'}
+                  </span>
+                )
+              })}
+            </div>
+            <span style={{ fontSize: 11, fontFamily: MONO, fontWeight: 700, color: c, letterSpacing: '0.06em' }}>
+              Alignment: {a.score} — {a.label}
+            </span>
+          </div>
+        )
+      })()}
+
+      {/* Value Area auction context */}
+      {price && liveData?.volProfile?.vah != null && liveData?.volProfile?.val != null && (() => {
+        const { vah, val, poc } = liveData.volProfile
+        const above = price > vah
+        const below = price < val
+        const inside = !above && !below
+        const aboveColor = above ? LIME : below ? RED : YELLOW
+        const auctionMsg = above ? 'Bullish auction — buyers in control, expect continuation higher.'
+          : below ? 'Bearish auction — sellers in control, expect continuation lower.'
+          : 'Balanced market — price inside value area, expect rotation between VAH and VAL.'
+        const pocRel = price > poc + 0.05 ? 'above POC' : price < poc - 0.05 ? 'below POC' : 'at POC'
+        return (
+          <div style={{ background: '#0a0a0a', border: `1px solid ${aboveColor}33`, borderRadius: 4, padding: '11px 14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+              <span style={{ fontSize: 9, fontFamily: MONO, color: '#555', letterSpacing: '0.14em', textTransform: 'uppercase' }}>Value Area</span>
+              <span style={{ fontSize: 10, fontFamily: MONO, color: aboveColor, fontWeight: 700, letterSpacing: '0.06em' }}>
+                {above ? 'ABOVE VAH' : below ? 'BELOW VAL' : 'INSIDE VA'} · {pocRel.toUpperCase()}
+              </span>
+            </div>
+            <div style={{ fontSize: 11, fontFamily: MONO, color: '#aaa', lineHeight: 1.55 }}>
+              POC <strong style={{ color: '#FFFFFF' }}>${f2(poc)}</strong> · VAH <strong style={{ color: '#FFFFFF' }}>${f2(vah)}</strong> · VAL <strong style={{ color: '#FFFFFF' }}>${f2(val)}</strong>
+            </div>
+            <div style={{ fontSize: 10, fontFamily: MONO, color: aboveColor, lineHeight: 1.55, marginTop: 4, opacity: 0.85 }}>
+              {auctionMsg}
+            </div>
+          </div>
+        )
+      })()}
 
       {!price && (
         <div style={{ background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 5, padding: '28px 24px' }}>
