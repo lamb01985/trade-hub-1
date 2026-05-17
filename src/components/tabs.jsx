@@ -519,10 +519,17 @@ export function CalculatorTab({ prefill, onLogTrade, checklistPassed, lockedOut,
 }
 
 // ── Checklist Tab ─────────────────────────────────────────────────────────────
-export function ChecklistTab({ onPass, instrument }) {
+export function ChecklistTab({ onPass, instrument, setupQuality }) {
   const [checked, setChecked] = useState({})
   const isStock = instrument === 'stock'
-  const items = isStock ? CL_ITEMS_STOCK : CL_ITEMS
+  const sqOk = setupQuality === 'ON LEVEL' || setupQuality === 'APPROACHING'
+  const sqColor = setupQuality === 'ON LEVEL' ? LIME : setupQuality === 'APPROACHING' ? YELLOW : setupQuality === 'TIGHT RANGE' ? '#C084FC' : RED
+  const sqItem = {
+    id: 'c0',
+    text: `Setup quality is ON LEVEL or APPROACHING — not BETWEEN LEVELS (currently: ${setupQuality || 'NO DATA'})`,
+    required: true,
+  }
+  const items = [sqItem, ...(isStock ? CL_ITEMS_STOCK : CL_ITEMS)]
   const req = items.filter(i => i.required), allReq = req.every(i => checked[i.id])
   const done = items.filter(i => checked[i.id]).length, pct = Math.round((done / items.length) * 100)
   return (

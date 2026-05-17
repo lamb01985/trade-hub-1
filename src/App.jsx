@@ -109,10 +109,10 @@ export default function App() {
               <span style={{ fontSize: 9, color: RED, fontFamily: MONO, border: `1px solid ${RED}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.1em' }}>LOCKED</span>
             )}
             {fullLevelMap.setupQuality === 'ON LEVEL' && (
-              <span style={{ fontSize: 9, color: LIME, fontFamily: MONO, border: `1px solid ${LIME}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.1em', animation: 'hdrpulse 1.5s infinite' }}>ON LEVEL</span>
+              <button onClick={() => setActiveTab('levels')} title="Jump to Levels tab" style={{ fontSize: 9, color: LIME, fontFamily: MONO, background: 'transparent', border: `1px solid ${LIME}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.1em', animation: 'hdrpulse 1.5s infinite', cursor: 'pointer' }}>ON LEVEL →</button>
             )}
             {fullLevelMap.setupQuality === 'APPROACHING' && (
-              <span style={{ fontSize: 9, color: YELLOW, fontFamily: MONO, border: `1px solid ${YELLOW}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.1em' }}>APPROACHING</span>
+              <button onClick={() => setActiveTab('levels')} title="Jump to Levels tab" style={{ fontSize: 9, color: YELLOW, fontFamily: MONO, background: 'transparent', border: `1px solid ${YELLOW}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.1em', cursor: 'pointer' }}>APPROACHING →</button>
             )}
           </div>
         </div>
@@ -226,6 +226,7 @@ export default function App() {
             marketEvents={prep.marketEvents}
             instrument={prep.instrument || 'options'}
             ticker={prep.ticker || 'QQQ'}
+            levelMap={fullLevelMap}
           />
         )}
 
@@ -266,7 +267,7 @@ export default function App() {
         )}
 
         {activeTab === 'checklist' && (
-          <ChecklistTab onPass={() => { setChecklistPassed(true); setActiveTab('calc') }} instrument={prep.instrument || 'options'} />
+          <ChecklistTab onPass={() => { setChecklistPassed(true); setActiveTab('calc') }} instrument={prep.instrument || 'options'} setupQuality={fullLevelMap.setupQuality} />
         )}
 
         {activeTab === 'calc' && (

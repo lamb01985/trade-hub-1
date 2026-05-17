@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Card, SLabel, Heading, Tile, Fld, Sel, Btn, Tip } from './ui.jsx'
 import { LIME, RED, YELLOW, MONO, BORDER, SESSION_LABELS, SESSION_COLORS, SESSION_TIPS, getSession, todayStr, f2, fmtD, fmtU } from '../constants.js'
 
-export default function Command({ trades, settings, onSettingsChange, lockedOut, onUnlock, apiKey, onApiKeyChange, anthropicKey, onAnthropicKeyChange, liveData, marketEvents, instrument, ticker = 'QQQ' }) {
+export default function Command({ trades, settings, onSettingsChange, lockedOut, onUnlock, apiKey, onApiKeyChange, anthropicKey, onAnthropicKeyChange, liveData, marketEvents, instrument, ticker = 'QQQ', levelMap }) {
   const [time, setTime] = useState(new Date())
   useEffect(() => { const t = setInterval(() => setTime(new Date()), 1000); return () => clearInterval(t) }, [])
 
@@ -159,6 +159,81 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
           </div>
         </div>
       )}
+
+      {/* Setup Quality — the most important card during market hours */}
+      {liveData?.price && (() => {
+        const sq = levelMap?.setupQuality
+        const above = levelMap?.nearestAbove
+        const below = levelMap?.nearestBelow
+        const price = liveData.price
+        const vwap = liveData.vwapData?.vwap
+        const vwapDelta = price != null && vwap != null ? price - vwap : null
+
+        const qColor = sq === 'ON LEVEL' ? LIME : sq === 'APPROACHING' ? YELLOW : sq === 'TIGHT RANGE' ? '#C084FC' : '#888'
+        const qBg = sq === 'ON LEVEL' ? '#0a1208' : sq === 'APPROACHING' ? '#100d04' : sq === 'TIGHT RANGE' ? '#0d0820' : '#0c0c0c'
+        const qHint = sq === 'ON LEVEL' ? 'Price is touching a key level — wait for the candle to CLOSE before entering.'
+          : sq === 'APPROACHING' ? 'Price is closing in on a level — prepare your entry, do not chase.'
+          : sq === 'TIGHT RANGE' ? 'Price compressed between two close levels — breakout setup forming.'
+          : sq === 'BETWEEN LEVELS' ? 'No level nearby — stand aside until price reaches one.'
+          : 'Waiting for level map to load.'
+
+        const orPeriod = settings.orPeriod || '15'
+        const orMins = orPeriod === '5' ? '5-min' : orPeriod === '30' ? '30-min' : '5-min'
+
+        return (
+          <div style={{ background: qBg, border: `1px solid ${qColor}44`, borderRadius: 5, padding: '22px 26px', boxShadow: sq === 'ON LEVEL' ? `0 0 24px ${LIME}1a` : 'none' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 }}>
+              <div>
+                <SLabel color="#555">Setup Quality</SLabel>
+                <div style={{ fontSize: 38, fontWeight: 900, fontFamily: MONO, color: qColor, letterSpacing: '0.02em', lineHeight: 1, marginTop: 2 }}>
+                  {sq || 'NO DATA'}
+                </div>
+                <div style={{ fontSize: 12, color: '#888', fontFamily: MONO, marginTop: 8, lineHeight: 1.5, maxWidth: 540 }}>{qHint}</div>
+              </div>
+              <div style={{ width: 12, height: 12, borderRadius: '50%', background: qColor, boxShadow: sq === 'ON LEVEL' ? `0 0 12px ${LIME}` : 'none', flexShrink: 0, marginTop: 6, animation: sq === 'ON LEVEL' ? 'hdrpulse 1.5s infinite' : 'none' }} />
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 16, borderTop: `1px solid ${qColor}22` }}>
+              <div style={{ fontSize: 9, color: '#555', letterSpacing: '0.16em', textTransform: 'uppercase', fontFamily: MONO, marginBottom: 4 }}>Entry Conditions</div>
+
+              {above ? (
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, fontFamily: MONO }}>
+                  <span style={{ color: LIME, fontSize: 14, fontWeight: 900, letterSpacing: '0.06em', minWidth: 70 }}>▲ CALLS</span>
+                  <span style={{ color: '#aaa', fontSize: 12 }}>
+                    if {orMins} candle closes above <strong style={{ color: '#e8e8e8' }}>{above.label} ${f2(above.price)}</strong>
+                  </span>
+                  <span style={{ color: '#555', fontSize: 11, marginLeft: 'auto' }}>${f2(above.price - price)} above</span>
+                </div>
+              ) : (
+                <div style={{ fontFamily: MONO, fontSize: 12, color: '#444' }}>▲ CALLS — no level above current price</div>
+              )}
+
+              {below ? (
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, fontFamily: MONO }}>
+                  <span style={{ color: RED, fontSize: 14, fontWeight: 900, letterSpacing: '0.06em', minWidth: 70 }}>▼ PUTS</span>
+                  <span style={{ color: '#aaa', fontSize: 12 }}>
+                    if {orMins} candle closes below <strong style={{ color: '#e8e8e8' }}>{below.label} ${f2(below.price)}</strong>
+                  </span>
+                  <span style={{ color: '#555', fontSize: 11, marginLeft: 'auto' }}>${f2(price - below.price)} below</span>
+                </div>
+              ) : (
+                <div style={{ fontFamily: MONO, fontSize: 12, color: '#444' }}>▼ PUTS — no level below current price</div>
+              )}
+
+              {vwapDelta != null && (
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, fontFamily: MONO, marginTop: 4 }}>
+                  <span style={{ color: '#C084FC', fontSize: 11, fontWeight: 700, minWidth: 70, letterSpacing: '0.06em' }}>vs VWAP</span>
+                  <span style={{ color: '#888', fontSize: 11 }}>
+                    VWAP ${f2(vwap)} — <strong style={{ color: vwapDelta >= 0 ? LIME : RED }}>
+                      {vwapDelta >= 0 ? `Above by $${f2(vwapDelta)}` : `Below by $${f2(Math.abs(vwapDelta))}`}
+                    </strong>
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Pre-market gap analysis */}
       {session === 'pre-market' && liveData?.price && liveData?.prevDay && (() => {
