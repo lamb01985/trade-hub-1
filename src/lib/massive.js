@@ -37,6 +37,18 @@ export async function getIntradayBars(apiKey, ticker, multiplier = 1, span = 'mi
   return d.results || []
 }
 
+export async function getIntradayBarsForDate(apiKey, ticker, dateStr, multiplier = 1, span = 'minute') {
+  const d = await get(apiKey, `/v2/aggs/ticker/${ticker}/range/${multiplier}/${span}/${dateStr}/${dateStr}`, { adjusted: 'true', sort: 'asc', limit: '500' })
+  return d.results || []
+}
+
+export function priorTradingDayStr(refDate = new Date()) {
+  const d = new Date(refDate)
+  d.setDate(d.getDate() - 1)
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1)
+  return d.toISOString().slice(0, 10)
+}
+
 export async function getPremarketBars(apiKey, ticker) {
   // Last trade and premarket high/low via snapshot
   const d = await get(apiKey, `/v2/snapshot/locale/us/markets/stocks/tickers/${ticker}`)

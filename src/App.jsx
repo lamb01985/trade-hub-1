@@ -244,6 +244,8 @@ export default function App() {
             levelMap={fullLevelMap}
             trades={trades}
             ticker={prep.ticker || 'QQQ'}
+            customLevels={customLevels}
+            onCustomLevelsChange={setCustomLevels}
           />
         )}
 

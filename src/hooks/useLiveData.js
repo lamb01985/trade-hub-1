@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { MassiveStream, getLastTrade, getPrevDay, getIntradayBars, getWeeklyData, getHistoricalBars } from '../lib/massive.js'
+import { MassiveStream, getLastTrade, getPrevDay, getIntradayBars, getIntradayBarsForDate, priorTradingDayStr, getWeeklyData, getHistoricalBars } from '../lib/massive.js'
 import { calcVWAP, calcPivots, detectSDZones, calcVolumeProfile, calcATR } from '../lib/levels.js'
 import { checkLevelAlerts } from '../lib/alerts.js'
 import { todayStr, getETMins } from '../constants.js'
@@ -25,6 +25,8 @@ export function useLiveData(apiKey, ticker = 'QQQ', levelMap = null, settings = 
   const [openPrice, setOpenPrice] = useState(null)
   const [volProfile, setVolProfile] = useState(null)
   const [intradayBars, setIntradayBars] = useState([])
+  const [isHistoricalFallback, setIsHistoricalFallback] = useState(false)
+  const [avgDayVol, setAvgDayVol] = useState(null)
 
   const streamRef = useRef(null)
   const vwapBarsRef = useRef([]) // Accumulate bars for VWAP
@@ -86,9 +88,18 @@ export function useLiveData(apiKey, ticker = 'QQQ', levelMap = null, settings = 
       ])
 
       vwapBarsRef.current = intradayBars
-      setIntradayBars(intradayBars)
       const vwap = calcVWAP(intradayBars)
       setVwapData(vwap)
+
+      // Chart bars: today if available, else prior trading day fallback so the chart is never empty
+      if (intradayBars.length) {
+        setIntradayBars(intradayBars)
+        setIsHistoricalFallback(false)
+      } else {
+        const fallback = await getIntradayBarsForDate(apiKey, ticker, priorTradingDayStr()).catch(() => [])
+        setIntradayBars(fallback)
+        setIsHistoricalFallback(fallback.length > 0)
+      }
       setPrevDay(pd)
       setWeeklyData(wd)
 
@@ -111,9 +122,10 @@ export function useLiveData(apiKey, ticker = 'QQQ', levelMap = null, settings = 
 
       // RVOL: session volume vs projected daily average
       const sessionVol = intradayBars.reduce((s, b) => s + (b.v || 0), 0)
-      const avgDayVol = histBars.length > 0 ? histBars.reduce((s, b) => s + (b.v || 0), 0) / histBars.length : 0
+      const avgDV = histBars.length > 0 ? histBars.reduce((s, b) => s + (b.v || 0), 0) / histBars.length : 0
+      setAvgDayVol(avgDV > 0 ? avgDV : null)
       const minsElapsed = Math.max(1, getETMins() - 570) // 9:30 ET = 570 mins from midnight
-      setRvol(avgDayVol > 0 ? sessionVol / (avgDayVol * minsElapsed / 390) : null)
+      setRvol(avgDV > 0 ? sessionVol / (avgDV * minsElapsed / 390) : null)
     } catch (e) {
       setContextError(e.message)
     } finally {
@@ -163,5 +175,7 @@ export function useLiveData(apiKey, ticker = 'QQQ', levelMap = null, settings = 
     openPrice,
     volProfile,
     intradayBars,
+    isHistoricalFallback,
+    avgDayVol,
   }
 }
