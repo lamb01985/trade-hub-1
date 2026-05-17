@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Card, SLabel, Heading, Tile, Fld, Sel, Btn, Pill, CheckRow, Tip } from './ui.jsx'
 import { LIME, RED, YELLOW, BLUE, PURPLE, ORANGE, MONO, SANS, BORDER, DARK, PANEL, SETUP_TYPES, todayStr, tomorrowStr, uid, f2, fmtD, fmtU, rrColor, ivContext, calcOptionRR, bsCalc, getETMins, SESSION_LABELS, SESSION_COLORS, SESSION_TIPS } from '../constants.js'
 import { getOptionChain, getPrevDay, getHistoricalBars, getOptionsPCRatio, getTopMovers } from '../lib/massive.js'
+import { getOptionAsk, occSymbol, SCHWAB_TRADE_URL, SCHWAB_BLUE } from '../lib/schwab.js'
 import { useLocalStorage } from '../hooks/useStore.js'
 
 const CL_ITEMS = [
@@ -364,7 +365,7 @@ export function IVAnalyzerTab({ apiKey, instrument }) {
 }
 
 // ── Calculator Tab ────────────────────────────────────────────────────────────
-export function CalculatorTab({ prefill, onLogTrade, checklistPassed, lockedOut, maxTradesReached, apiKey, instrument }) {
+export function CalculatorTab({ prefill, onLogTrade, checklistPassed, lockedOut, maxTradesReached, apiKey, instrument, schwabToken, schwabAccount, schwabAcctInfo, prep }) {
   const [ticker, setTicker] = useState('')
   const [optType, setOptType] = useState('call')
   const [strike, setStrike] = useState('')
@@ -376,8 +377,12 @@ export function CalculatorTab({ prefill, onLogTrade, checklistPassed, lockedOut,
   const [setupType, setSetupType] = useState('ORB')
   const [liveAskLoading, setLiveAskLoading] = useState(false)
   const [liveAskError, setLiveAskError] = useState(null)
+  const [askDetail, setAskDetail] = useState(null)  // { bid, ask, spread }
+  const [stageOpen, setStageOpen] = useState(false)
+  const [expiry, setExpiry] = useState(todayStr())
 
   const isStock = instrument === 'stock'
+  const schwabConnected = !!schwabToken?.access_token
 
   useEffect(() => {
     if (!prefill) return
@@ -386,15 +391,15 @@ export function CalculatorTab({ prefill, onLogTrade, checklistPassed, lockedOut,
     if (prefill.setupType) setSetupType(prefill.setupType)
   }, [prefill])
 
-  async function fetchLiveAsk() {
-    if (!apiKey || !ticker || !strike) { setLiveAskError('Need API key, ticker, and strike first.'); return }
-    setLiveAskLoading(true); setLiveAskError(null)
+  async function fetchSchwabAsk() {
+    if (!schwabToken?.access_token || !ticker || !strike) { setLiveAskError('Need Schwab connection, ticker, and strike.'); return }
+    setLiveAskLoading(true); setLiveAskError(null); setAskDetail(null)
     try {
-      const results = await getOptionChain(apiKey, ticker, todayStr(), strike, optType)
-      if (!results.length) { setLiveAskError('No contracts found.'); setLiveAskLoading(false); return }
-      const top = results[0]
-      if (top.last_quote?.ask) setEntry(f2(top.last_quote.ask))
-    } catch (e) { setLiveAskError(e.message) }
+      const quote = await getOptionAsk(schwabToken, { ticker, optType, strike, expiry })
+      if (!quote || quote.ask == null) { setLiveAskError('No contract found at that strike/expiry.'); setLiveAskLoading(false); return }
+      setEntry(f2(quote.ask))
+      setAskDetail({ bid: quote.bid, ask: quote.ask, spread: quote.ask - quote.bid })
+    } catch (e) { setLiveAskError(e.message || 'Schwab quote failed') }
     setLiveAskLoading(false)
   }
 
@@ -478,11 +483,16 @@ export function CalculatorTab({ prefill, onLogTrade, checklistPassed, lockedOut,
           <>
             <div style={{ fontSize: 9, letterSpacing: '0.16em', color: '#3a5030', textTransform: 'uppercase', fontFamily: MONO, marginBottom: 6 }}>Option Contract Prices (premium per share)</div>
             <div style={{ fontSize: 10, color: '#3a5030', fontFamily: MONO, marginBottom: 14, lineHeight: 1.7 }}>Entry, stop, target = option's own price. 1 contract = 100 shares. $ amounts = price × 100 × contracts.</div>
-            {apiKey && (
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 12 }}>
-                <Btn small variant="blue" onClick={fetchLiveAsk} disabled={liveAskLoading || !ticker || !strike}>{liveAskLoading ? 'Fetching...' : 'Get Live Ask →'}</Btn>
+            {schwabConnected ? (
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+                <Fld label="Expiry" value={expiry} onChange={setExpiry} type="date" />
+                <button onClick={fetchSchwabAsk} disabled={liveAskLoading || !ticker || !strike} style={{ background: liveAskLoading || !ticker || !strike ? '#1a1a1a' : SCHWAB_BLUE, color: liveAskLoading || !ticker || !strike ? '#444' : '#fff', border: 'none', borderRadius: 4, padding: '8px 14px', fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', cursor: liveAskLoading || !ticker || !strike ? 'not-allowed' : 'pointer', alignSelf: 'flex-end' }}>{liveAskLoading ? 'Fetching...' : 'Get Live Ask (Schwab) →'}</button>
                 {liveAskError && <span style={{ fontSize: 10, color: RED, fontFamily: MONO }}>{liveAskError}</span>}
-                {!liveAskError && entry && <span style={{ fontSize: 10, color: LIME, fontFamily: MONO }}>✓ Entry from live ask</span>}
+                {askDetail && <span style={{ fontSize: 10, color: SCHWAB_BLUE, fontFamily: MONO }}>Bid ${f2(askDetail.bid)} / Ask ${f2(askDetail.ask)} · spread ${f2(askDetail.spread)}</span>}
+              </div>
+            ) : (
+              <div style={{ fontSize: 10, color: '#444', fontFamily: MONO, marginBottom: 12, lineHeight: 1.6 }}>
+                Enter ask price from your broker's option chain. <span style={{ color: '#666' }}>(Connect Schwab in Command for one-click live ask.)</span>
               </div>
             )}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
@@ -510,16 +520,78 @@ export function CalculatorTab({ prefill, onLogTrade, checklistPassed, lockedOut,
           </div>
         )}
       </div>
-      <Btn disabled={!valid || blocked} onClick={() => {
-        if (!valid || blocked) return
-        onLogTrade({ id: uid(), ticker: ticker || '—', instrument: instrument || 'options', optType: isStock ? null : optType, strike: isStock ? null : (parseFloat(strike) || null), dte: isStock ? null : (parseInt(dte) || null), setupType, entry: parseFloat(entry), stop: parseFloat(stop), target: parseFloat(target), contracts: parseInt(contracts) || 1, rr: calc.rr, dollarRisk: calc.dollarRisk, dollarReward: calc.dollarReward, totalCost: calc.totalCost, status: 'open', pnl: null, notes: '', date: new Date().toISOString() })
-      }}>{blocked ? 'Trading Locked' : !valid ? (isStock ? 'Enter share prices above' : 'Enter premium prices above') : 'Log This Trade →'}</Btn>
+      {/* Buying power check (Schwab connected only) */}
+      {schwabConnected && valid && !isStock && schwabAcctInfo?.buyingPower != null && (() => {
+        const cost = calc.totalCost
+        const bp = schwabAcctInfo.buyingPower
+        const over = cost > bp
+        return (
+          <div style={{ background: over ? '#150505' : '#0a1408', border: `1px solid ${over ? RED + '55' : LIME + '44'}`, borderRadius: 4, padding: '10px 14px', fontSize: 11, fontFamily: MONO, color: over ? RED : LIME, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>{over ? '⚠ Exceeds buying power' : '✓ Within buying power'}</span>
+            <span style={{ color: '#888' }}>Cost ${cost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · BP ${bp.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          </div>
+        )
+      })()}
+
+      <div style={{ display: 'flex', gap: 10 }}>
+        <Btn disabled={!valid || blocked} onClick={() => {
+          if (!valid || blocked) return
+          onLogTrade({ id: uid(), ticker: ticker || '—', instrument: instrument || 'options', optType: isStock ? null : optType, strike: isStock ? null : (parseFloat(strike) || null), dte: isStock ? null : (parseInt(dte) || null), expiry: isStock ? null : expiry, setupType, entry: parseFloat(entry), stop: parseFloat(stop), target: parseFloat(target), contracts: parseInt(contracts) || 1, rr: calc.rr, dollarRisk: calc.dollarRisk, dollarReward: calc.dollarReward, totalCost: calc.totalCost, status: 'open', pnl: null, notes: '', date: new Date().toISOString() })
+        }}>{blocked ? 'Trading Locked' : !valid ? (isStock ? 'Enter share prices above' : 'Enter premium prices above') : 'Log This Trade →'}</Btn>
+        {schwabConnected && valid && !isStock && checklistPassed && !blocked && (
+          <button onClick={() => setStageOpen(true)} style={{ background: SCHWAB_BLUE, color: '#fff', border: 'none', borderRadius: 4, padding: '12px 18px', fontFamily: MONO, fontSize: 11, fontWeight: 900, letterSpacing: '0.14em', cursor: 'pointer' }}>
+            Stage Order →
+          </button>
+        )}
+      </div>
+
+      {/* ── Stage Order modal ────────────────────────────────────────────── */}
+      {stageOpen && (() => {
+        const sym = occSymbol({ ticker, expiry, strike, optType })
+        const limit = parseFloat(entry)
+        const qty = parseInt(contracts) || 1
+        const totalCost = limit * qty * 100
+        function copyOcc() {
+          if (navigator?.clipboard) navigator.clipboard.writeText(sym).catch(() => {})
+        }
+        function openSchwab() {
+          window.open(SCHWAB_TRADE_URL, '_blank', 'noopener,noreferrer')
+        }
+        return (
+          <div onClick={() => setStageOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: '#0a0d12', border: `1px solid ${SCHWAB_BLUE}44`, borderRadius: 6, maxWidth: 520, width: '100%', padding: '24px 26px', fontFamily: MONO }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+                <div style={{ fontSize: 14, fontWeight: 900, color: SCHWAB_BLUE, letterSpacing: '0.14em' }}>STAGE ORDER</div>
+                <button onClick={() => setStageOpen(false)} style={{ background: 'transparent', border: 'none', color: '#666', fontSize: 12, cursor: 'pointer', letterSpacing: '0.1em' }}>CLOSE ✕</button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+                <div><span style={{ fontSize: 9, color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Symbol</span><div style={{ fontSize: 14, fontWeight: 700, color: '#e8e8e8', marginTop: 2 }}>{sym || '—'}</div></div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, fontSize: 11 }}>
+                  <div><div style={{ fontSize: 9, color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>Action</div><div style={{ color: optType === 'put' ? RED : LIME, fontWeight: 700 }}>BUY TO OPEN {(optType || '').toUpperCase()}</div></div>
+                  <div><div style={{ fontSize: 9, color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>Quantity</div><div style={{ color: '#e8e8e8', fontWeight: 700 }}>{qty} contract{qty !== 1 ? 's' : ''}</div></div>
+                  <div><div style={{ fontSize: 9, color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>Limit Price</div><div style={{ color: '#e8e8e8', fontWeight: 700 }}>${f2(limit)}</div></div>
+                  <div><div style={{ fontSize: 9, color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>Total Cost</div><div style={{ color: '#aaa', fontWeight: 700 }}>${totalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div></div>
+                  <div><div style={{ fontSize: 9, color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>Stop</div><div style={{ color: RED, fontWeight: 700 }}>${f2(parseFloat(stop))}</div></div>
+                  <div><div style={{ fontSize: 9, color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>Target</div><div style={{ color: LIME, fontWeight: 700 }}>${f2(parseFloat(target))}</div></div>
+                </div>
+              </div>
+              <div style={{ background: '#0d0a05', border: `1px solid ${YELLOW}33`, borderRadius: 4, padding: '10px 12px', fontSize: 10, color: '#c8a030', lineHeight: 1.6, marginBottom: 16 }}>
+                ⚠ Trade Hub never auto-submits orders. Copy the symbol, open Schwab, and enter manually. You confirm in Schwab — always.
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button onClick={copyOcc} style={{ flex: 1, minWidth: 140, background: '#1a1a1a', border: `1px solid ${BORDER}`, color: '#aaa', fontFamily: MONO, fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', padding: '11px', borderRadius: 4, cursor: 'pointer' }}>COPY OCC SYMBOL</button>
+                <button onClick={openSchwab} style={{ flex: 2, minWidth: 200, background: SCHWAB_BLUE, color: '#fff', border: 'none', fontFamily: MONO, fontSize: 11, fontWeight: 900, letterSpacing: '0.14em', padding: '11px', borderRadius: 4, cursor: 'pointer' }}>Open Schwab Trade →</button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
 
 // ── Checklist Tab ─────────────────────────────────────────────────────────────
-export function ChecklistTab({ onPass, instrument, setupQuality, alignmentScore }) {
+export function ChecklistTab({ onPass, instrument, setupQuality, alignmentScore, schwabConnected, schwabDayTrades = 0 }) {
   const [checked, setChecked] = useState({})
   const isStock = instrument === 'stock'
   const sqItem = {
@@ -532,7 +604,12 @@ export function ChecklistTab({ onPass, instrument, setupQuality, alignmentScore 
     text: `1H structure confirms trade direction AND alignment score above 55 (currently: ${alignmentScore || 0}/100${alignmentScore >= 70 ? ' — ideal' : alignmentScore >= 55 ? ' — acceptable' : ' — too low, stand aside'})`,
     required: true,
   }
-  const items = [sqItem, alignItem, ...(isStock ? CL_ITEMS_STOCK : CL_ITEMS)]
+  const pdtItem = schwabConnected ? {
+    id: 'cp',
+    text: `PDT trades remaining (currently: ${3 - schwabDayTrades}/3${schwabDayTrades >= 3 ? ' — NO MORE DAY TRADES' : ''})`,
+    required: true,
+  } : null
+  const items = [sqItem, alignItem, ...(pdtItem ? [pdtItem] : []), ...(isStock ? CL_ITEMS_STOCK : CL_ITEMS)]
   const req = items.filter(i => i.required), allReq = req.every(i => checked[i.id])
   const done = items.filter(i => checked[i.id]).length, pct = Math.round((done / items.length) * 100)
   return (

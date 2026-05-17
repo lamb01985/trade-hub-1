@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useLocalStorage } from '../hooks/useStore.js'
 import { Card, SLabel, Heading, Btn, Pill } from './ui.jsx'
 import { LIME, RED, YELLOW, ORANGE, MONO, BORDER, PANEL, todayStr, f2, fmtD, fmtU } from '../constants.js'
+import { getTodaysFilledOrders, ordersToTrades, SCHWAB_BLUE } from '../lib/schwab.js'
 
 const SETUP_OPTIONS = ['ORB Breakout', 'VWAP Bounce', 'Level Touch', 'Pivot Break', 'Golden Pocket', 'Other']
 
@@ -206,7 +207,7 @@ function TradeRow({ trade, onUpdate, onEdit, onDelete }) {
 
 // ── Main Journal component ───────────────────────────────────────────────────
 
-export default function Journal({ trades, onUpdate, onDelete, onEdit, onOpenQuickLog, anthropicKey, prep }) {
+export default function Journal({ trades, onUpdate, onDelete, onEdit, onOpenQuickLog, anthropicKey, prep, schwabToken, schwabAccount, onAddTrades }) {
   const [_, setTick] = useState(0)
   useEffect(() => { const id = setInterval(() => setTick(t => t + 1), 30000); return () => clearInterval(id) }, [])
 
@@ -218,6 +219,26 @@ export default function Journal({ trades, onUpdate, onDelete, onEdit, onOpenQuic
   const [eodNotes, setEodNotes] = useLocalStorage('th-eod-notes', {})
   const [coachLoading, setCoachLoading] = useState(false)
   const [coachError, setCoachError] = useState('')
+  const [syncStatus, setSyncStatus] = useState({ state: 'idle', msg: '', at: null })
+
+  const schwabConnected = !!schwabToken?.access_token && !!schwabAccount?.hash
+
+  async function syncFromSchwab() {
+    if (!schwabConnected || !onAddTrades) return
+    setSyncStatus({ state: 'loading', msg: 'Fetching from Schwab...', at: null })
+    try {
+      const orders = await getTodaysFilledOrders(schwabToken, schwabAccount.hash)
+      const newTrades = ordersToTrades(orders, trades)
+      if (newTrades.length === 0) {
+        setSyncStatus({ state: 'ok', msg: 'No new filled orders to sync.', at: Date.now() })
+      } else {
+        onAddTrades(newTrades)
+        setSyncStatus({ state: 'ok', msg: `Synced ${newTrades.length} new trade${newTrades.length !== 1 ? 's' : ''}.`, at: Date.now() })
+      }
+    } catch (e) {
+      setSyncStatus({ state: 'err', msg: e.message || 'Schwab sync failed', at: Date.now() })
+    }
+  }
 
   const today = todayStr()
   const openTrades = trades.filter(t => t.status === 'open')
@@ -339,8 +360,20 @@ Be direct and specific. No generic advice. Max 150 words total. End with "GRADE:
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
         <div><SLabel>Real-Time Trade Tracker</SLabel><Heading>Journal</Heading></div>
-        <Btn onClick={() => onOpenQuickLog(null)}>+ New Trade</Btn>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          {schwabConnected && (
+            <button onClick={syncFromSchwab} disabled={syncStatus.state === 'loading'} style={{ background: syncStatus.state === 'loading' ? '#1a1a1a' : SCHWAB_BLUE, color: syncStatus.state === 'loading' ? '#666' : '#fff', border: 'none', borderRadius: 4, padding: '8px 14px', fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', cursor: syncStatus.state === 'loading' ? 'not-allowed' : 'pointer' }}>
+              {syncStatus.state === 'loading' ? 'Syncing...' : 'Sync from Schwab →'}
+            </button>
+          )}
+          <Btn onClick={() => onOpenQuickLog(null)}>+ New Trade</Btn>
+        </div>
       </div>
+      {schwabConnected && syncStatus.at && (
+        <div style={{ fontSize: 10, fontFamily: MONO, color: syncStatus.state === 'err' ? RED : '#888', padding: '4px 0' }}>
+          {syncStatus.msg} <span style={{ color: '#444' }}>· {new Date(syncStatus.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
+        </div>
+      )}
 
       {/* ── OPEN TRADES ─────────────────────────────────────────────────────── */}
       {openTrades.length > 0 && (
