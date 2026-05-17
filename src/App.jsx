@@ -206,6 +206,7 @@ export default function App() {
             anthropicKey={anthropicKey}
             savedPreps={savedPreps}
             onSavedPrepsChange={setSavedPreps}
+            levelMap={fullLevelMap}
           />
         )}
 

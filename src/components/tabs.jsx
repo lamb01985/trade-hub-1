@@ -1347,15 +1347,13 @@ const ROUTINE = [
   { time: '10:30 CT', label: 'Chop starts. No new entries. Trailing winner? Decide now: trail stop or close. Do not hold through chop.' },
 ]
 
-export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, anthropicKey, savedPreps, onSavedPrepsChange }) {
+export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, anthropicKey, savedPreps, onSavedPrepsChange, levelMap }) {
   const [rc, setRc] = useState({})
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState('')
   const [dataLoaded, setDataLoaded] = useState(false)
   const [justSaved, setJustSaved] = useState(false)
 
-  const oh = parseFloat(prep.orbHigh), ol = parseFloat(prep.orbLow)
-  const range = !isNaN(oh) && !isNaN(ol) && oh > ol ? oh - ol : null
   const dc = ROUTINE.filter((_, i) => rc[i]).length
   const upd = (k, v) => onPrepChange({ ...prep, [k]: v })
 
@@ -1584,13 +1582,128 @@ Only use the levels provided. No generic advice.`
           <Fld label="Planned DTE" value={prep.plannedDTE || ''} onChange={v => upd('plannedDTE', v)} placeholder="1" step="1" suffix="d" />
           <Fld label="IV Note (from option chain)" value={prep.ivNote || ''} onChange={v => upd('ivNote', v)} placeholder="~26%" mono />
         </div>
-        {range && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 14 }}>
-            <Tile compact label="Day Range" value={`$${f2(range)}`} />
-            <Tile compact label="2:1 Long" value={`$${f2(oh + range * 2)}`} color={LIME} />
-            <Tile compact label="2:1 Short" value={`$${f2(ol - range * 2)}`} color={RED} />
-          </div>
-        )}
+        {(() => {
+          const price = liveData?.price
+          const vwap = liveData?.vwapData?.vwap
+          const vwapDelta = price != null && vwap != null ? price - vwap : null
+          const sq = levelMap?.setupQuality
+          const above = levelMap?.nearestAbove
+          const below = levelMap?.nearestBelow
+          const nearest = (() => {
+            if (!price) return null
+            if (!above && !below) return null
+            if (!above) return { ...below, dist: price - below.price, dir: 'below' }
+            if (!below) return { ...above, dist: above.price - price, dir: 'above' }
+            const dA = above.price - price, dB = price - below.price
+            return dA < dB ? { ...above, dist: dA, dir: 'above' } : { ...below, dist: dB, dir: 'below' }
+          })()
+          const activeCount = (levelMap?.levels || []).length
+          const pdh = liveData?.prevDay?.high
+          const pdl = liveData?.prevDay?.low
+          const pp = liveData?.pivots?.pp
+
+          const qColor = sq === 'ON LEVEL' ? LIME : sq === 'APPROACHING' ? YELLOW : sq === 'TIGHT RANGE' ? PURPLE : '#888'
+          const qDesc = sq === 'ON LEVEL' ? 'price is touching a key level — await candle close' : sq === 'APPROACHING' ? 'price is closing in on a level — get ready' : sq === 'TIGHT RANGE' ? 'compressed between two close levels — breakout setup' : sq === 'BETWEEN LEVELS' ? 'no immediate level — wait for price to reach one' : 'live data not loaded'
+
+          const plan = (prep.gamePlan || '').trim()
+          const briefDetected = !!anthropicKey && (plan.includes('THESIS') || plan.includes('PRIMARY SETUP') || plan.includes('KEY LEVELS'))
+
+          const checks = [
+            { label: `Ticker set${prep.ticker ? ` (${prep.ticker})` : ''}`, done: !!prep.ticker, nudge: 'Enter a ticker above' },
+            { label: `Prior day levels loaded${prep.orbHigh && prep.orbLow ? ` ($${prep.orbHigh} / $${prep.orbLow})` : ''}`, done: !!(prep.orbHigh && prep.orbLow), nudge: 'Hit "Load Market Data" ↑' },
+            { label: `Key level (PP) set${prep.keyLevel ? ` ($${prep.keyLevel})` : ''}`, done: !!prep.keyLevel, nudge: 'Hit "Load Market Data" ↑' },
+            { label: `Strike plan set${prep.plannedStrike ? ` ($${prep.plannedStrike})` : ''}`, done: !!prep.plannedStrike, nudge: 'Set a planned strike above' },
+            { label: 'Game plan written', done: plan.length > 20, nudge: 'Write your plan below' },
+            { label: 'AI brief generated', done: briefDetected, nudge: anthropicKey ? 'Hit "Generate AI Brief" ↑' : 'Add Claude API key in Command' },
+          ]
+          const doneCount = checks.filter(c => c.done).length
+          const allDone = doneCount === checks.length
+
+          return (
+            <div style={{ background: '#0a0d08', border: `1px solid ${qColor}33`, borderRadius: 5, padding: '16px 18px', marginBottom: 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <SLabel style={{ marginBottom: 0 }}>Setup Quality</SLabel>
+                <span style={{ fontSize: 9, fontFamily: MONO, color: '#444', letterSpacing: '0.1em', textTransform: 'uppercase' }}>live</span>
+              </div>
+
+              {/* Quality badge */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                <div style={{ background: `${qColor}11`, border: `1px solid ${qColor}55`, borderRadius: 4, padding: '8px 14px', minWidth: 150 }}>
+                  <div style={{ fontSize: 9, color: '#555', fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>Quality</div>
+                  <div style={{ fontSize: 14, fontFamily: MONO, fontWeight: 900, color: qColor, letterSpacing: '0.04em' }}>{sq || 'NO DATA'}</div>
+                </div>
+                <div style={{ fontSize: 11, fontFamily: MONO, color: '#777', lineHeight: 1.5, flex: 1 }}>{qDesc}</div>
+              </div>
+
+              {/* Key context */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                <div style={{ background: '#080808', border: '1px solid #161616', borderRadius: 4, padding: '10px 12px' }}>
+                  <div style={{ fontSize: 9, color: '#444', fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>vs VWAP</div>
+                  <div style={{ fontSize: 13, fontFamily: MONO, fontWeight: 700, color: vwapDelta == null ? '#444' : vwapDelta >= 0 ? LIME : RED }}>
+                    {vwapDelta == null ? '—' : vwapDelta >= 0 ? `Above +$${f2(vwapDelta)}` : `Below -$${f2(Math.abs(vwapDelta))}`}
+                  </div>
+                </div>
+                <div style={{ background: '#080808', border: '1px solid #161616', borderRadius: 4, padding: '10px 12px' }}>
+                  <div style={{ fontSize: 9, color: '#444', fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>Nearest Level</div>
+                  <div style={{ fontSize: 13, fontFamily: MONO, fontWeight: 700, color: nearest ? '#e8e8e8' : '#444' }}>
+                    {nearest ? `${nearest.label} $${f2(nearest.price)}` : '—'}
+                  </div>
+                  {nearest && (
+                    <div style={{ fontSize: 9, fontFamily: MONO, color: '#555', marginTop: 2 }}>{nearest.dir === 'above' ? '↑' : '↓'} ${f2(nearest.dist)} away</div>
+                  )}
+                </div>
+                <div style={{ background: '#080808', border: '1px solid #161616', borderRadius: 4, padding: '10px 12px' }}>
+                  <div style={{ fontSize: 9, color: '#444', fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>Active Levels</div>
+                  <div style={{ fontSize: 13, fontFamily: MONO, fontWeight: 700, color: activeCount > 0 ? '#e8e8e8' : '#444' }}>
+                    {activeCount > 0 ? `${activeCount} loaded` : '—'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Tomorrow's structure */}
+              <div>
+                <div style={{ fontSize: 9, color: '#444', fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 6 }}>Tomorrow's Structure</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                  {[
+                    { l: 'PDH — resistance', v: pdh, c: RED },
+                    { l: 'PP — pivot', v: pp, c: '#888' },
+                    { l: 'PDL — support', v: pdl, c: BLUE },
+                  ].map(({ l, v, c }) => (
+                    <div key={l} style={{ background: '#080808', border: `1px solid ${v != null ? c + '22' : '#161616'}`, borderRadius: 4, padding: '8px 12px' }}>
+                      <div style={{ fontSize: 9, color: '#555', fontFamily: MONO, letterSpacing: '0.05em', marginBottom: 3 }}>{l}</div>
+                      <div style={{ fontSize: 13, fontFamily: MONO, fontWeight: 700, color: v != null ? c : '#333' }}>{v != null ? `$${f2(v)}` : '—'}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Readiness checklist */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <span style={{ fontSize: 9, color: '#444', fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Prep Readiness</span>
+                  <span style={{ fontSize: 10, fontFamily: MONO, color: allDone ? LIME : '#666' }}>{doneCount}/{checks.length} complete</span>
+                </div>
+                <div style={{ height: 3, background: '#1a1a1a', borderRadius: 2, overflow: 'hidden', marginBottom: 10 }}>
+                  <div style={{ height: '100%', width: `${(doneCount / checks.length) * 100}%`, background: allDone ? LIME : YELLOW, transition: 'width 0.3s' }} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {checks.map((c, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontFamily: MONO, fontSize: 11 }}>
+                      <span style={{ color: c.done ? LIME : RED, fontWeight: 700, minWidth: 14 }}>{c.done ? '✓' : '✗'}</span>
+                      <span style={{ color: c.done ? '#aaa' : '#666' }}>{c.label}</span>
+                      {!c.done && <span style={{ color: '#3a3a3a', fontSize: 10 }}>— {c.nudge}</span>}
+                    </div>
+                  ))}
+                </div>
+                {allDone && (
+                  <div style={{ marginTop: 12, padding: '10px 14px', background: '#071208', border: `1px solid ${LIME}55`, borderRadius: 4, textAlign: 'center' }}>
+                    <span style={{ fontSize: 12, fontFamily: MONO, fontWeight: 900, color: LIME, letterSpacing: '0.12em' }}>READY FOR MONDAY</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })()}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <label style={{ fontSize: 9, letterSpacing: '0.14em', color: '#666', textTransform: 'uppercase', fontFamily: MONO }}>
