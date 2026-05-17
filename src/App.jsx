@@ -5,7 +5,9 @@ import { buildLevelMap } from './lib/levels.js'
 import Command from './components/Command.jsx'
 import Levels from './components/Levels.jsx'
 import ChartTab from './components/Chart.jsx'
+import CalendarTab from './components/Calendar.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
+import { getAllEvents, highImpactToday } from './lib/calendar.js'
 import { ORBTab, IVAnalyzerTab, CalculatorTab, ChecklistTab, JournalTab, StatsTab, WatchlistTab, PrepTab } from './components/tabs.jsx'
 import GlossaryModal from './components/Glossary.jsx'
 import { LIME, RED, YELLOW, MONO, SANS, DARK, BORDER, todayStr, uid, getSession } from './constants.js'
@@ -14,6 +16,7 @@ const TABS = [
   { id: 'watchlist', label: 'Watchlist', desc: 'Stocks to watch' },
   { id: 'prep', label: 'Prep', desc: 'Morning game plan' },
   { id: 'command', label: 'Command', desc: 'Session center' },
+  { id: 'calendar', label: 'Calendar', desc: 'Events & catalysts' },
   { id: 'levels', label: 'Levels', desc: 'Live level map', accent: true },
   { id: 'chart', label: 'Chart', desc: 'Live price chart', accent: true },
   { id: 'orb', label: 'ORB', desc: 'Opening range' },
@@ -63,6 +66,10 @@ export default function App() {
     customLevels,
     volProfile: liveData.volProfile,
   }), [liveData, manualFibs, levelMapInput, customLevels])
+
+  // Calendar events for next 14 days, recomputed once per session
+  const calendarEvents = useMemo(() => getAllEvents(new Date(), 14), [])
+  const todayHighImpact = useMemo(() => highImpactToday(calendarEvents), [calendarEvents])
 
   // Loss limit lockout
   const todayTrades = trades.filter(t => t.date?.slice(0, 10) === todayStr())
@@ -174,6 +181,20 @@ export default function App() {
         </div>
       </div>
 
+      {/* High-impact event banner — visible on every tab */}
+      {todayHighImpact.length > 0 && (
+        <div style={{ background: '#110d04', borderBottom: `1px solid ${YELLOW}33` }}>
+          <div style={{ maxWidth: 960, margin: '0 auto', padding: '7px 20px', display: 'flex', alignItems: 'center', gap: 10, fontFamily: MONO }}>
+            <span style={{ fontSize: 11, color: YELLOW }}>⚠</span>
+            <span style={{ fontSize: 10, color: YELLOW, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>High Impact Today:</span>
+            <span style={{ fontSize: 10, color: '#c8a030', flex: 1 }}>
+              {todayHighImpact.map(e => `${e.name}${e.time ? ` at ${e.time} CT` : ''}`).join(' · ')}
+            </span>
+            <button onClick={() => setActiveTab('calendar')} style={{ background: 'transparent', border: `1px solid ${YELLOW}44`, color: YELLOW, fontFamily: MONO, fontSize: 9, padding: '3px 9px', borderRadius: 3, cursor: 'pointer', letterSpacing: '0.1em', textTransform: 'uppercase' }}>View Calendar →</button>
+          </div>
+        </div>
+      )}
+
       <style>{`
         @keyframes hdrpulse { 0%,100%{opacity:1}50%{opacity:0.5} }
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -227,7 +248,14 @@ export default function App() {
             instrument={prep.instrument || 'options'}
             ticker={prep.ticker || 'QQQ'}
             levelMap={fullLevelMap}
+            todayEvents={todayHighImpact}
           />
+        )}
+
+        {activeTab === 'calendar' && (
+          <ErrorBoundary label="Calendar tab">
+            <CalendarTab />
+          </ErrorBoundary>
         )}
 
         {activeTab === 'levels' && (

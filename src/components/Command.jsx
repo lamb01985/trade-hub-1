@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Card, SLabel, Heading, Tile, Fld, Sel, Btn, Tip } from './ui.jsx'
 import { LIME, RED, YELLOW, MONO, BORDER, SESSION_LABELS, SESSION_COLORS, SESSION_TIPS, getSession, todayStr, f2, fmtD, fmtU } from '../constants.js'
 
-export default function Command({ trades, settings, onSettingsChange, lockedOut, onUnlock, apiKey, onApiKeyChange, anthropicKey, onAnthropicKeyChange, liveData, marketEvents, instrument, ticker = 'QQQ', levelMap }) {
+export default function Command({ trades, settings, onSettingsChange, lockedOut, onUnlock, apiKey, onApiKeyChange, anthropicKey, onAnthropicKeyChange, liveData, marketEvents, instrument, ticker = 'QQQ', levelMap, todayEvents = [] }) {
   const [time, setTime] = useState(new Date())
   useEffect(() => { const t = setInterval(() => setTime(new Date()), 1000); return () => clearInterval(t) }, [])
 
@@ -403,6 +403,8 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
           },
         }
         const c = cfg[session]
+        const eventSteps = (todayEvents || []).map(e => `⚠ ${e.name}${e.time ? ` at ${e.time} CT` : ''} today — adjust your plan around it.`)
+        const allSteps = [...eventSteps, ...c.steps]
         return (
           <div style={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: 5, padding: '16px 20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -412,12 +414,15 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
               </div>
               <div style={{ width: 8, height: 8, borderRadius: '50%', background: c.color, boxShadow: session === 'open' ? `0 0 10px ${LIME}` : 'none' }} />
             </div>
-            {c.steps.map((step, i) => (
-              <div key={i} style={{ display: 'flex', gap: 10, padding: '5px 0', borderBottom: i < c.steps.length - 1 ? `1px solid ${c.border}` : 'none' }}>
-                <span style={{ color: c.color, fontFamily: MONO, fontSize: 10, minWidth: 16, opacity: 0.6, marginTop: 1 }}>{i + 1}.</span>
-                <span style={{ color: session === 'open' ? '#aaa' : '#777', fontFamily: MONO, fontSize: 11, lineHeight: 1.5 }}>{step}</span>
-              </div>
-            ))}
+            {allSteps.map((step, i) => {
+              const isEventStep = i < eventSteps.length
+              return (
+                <div key={i} style={{ display: 'flex', gap: 10, padding: '5px 0', borderBottom: i < allSteps.length - 1 ? `1px solid ${c.border}` : 'none' }}>
+                  <span style={{ color: isEventStep ? YELLOW : c.color, fontFamily: MONO, fontSize: 10, minWidth: 16, opacity: 0.6, marginTop: 1 }}>{isEventStep ? '!' : `${i - eventSteps.length + 1}.`}</span>
+                  <span style={{ color: isEventStep ? YELLOW : session === 'open' ? '#aaa' : '#777', fontFamily: MONO, fontSize: 11, lineHeight: 1.5 }}>{step}</span>
+                </div>
+              )
+            })}
             <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${c.border}`, fontSize: 10, color: c.color, fontFamily: MONO, opacity: 0.7, fontStyle: 'italic' }}>{c.note}</div>
             <div style={{ marginTop: 8, fontSize: 9, color: '#1e2e1e', fontFamily: MONO }}>New here? Tap any <span style={{ color: '#2a3a2a' }}>?</span> icon for an explanation.</div>
           </div>
