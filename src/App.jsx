@@ -186,7 +186,7 @@ export default function App() {
       `}</style>
 
       {/* Content */}
-      <div style={{ maxWidth: 960, margin: '0 auto', padding: '28px 20px 60px' }}>
+      <div style={{ maxWidth: activeTab === 'chart' ? '100%' : 960, margin: '0 auto', padding: activeTab === 'chart' ? '20px 24px 40px' : '28px 20px 60px' }}>
         {activeTab === 'watchlist' && (
           <WatchlistTab
             apiKey={apiKey}
