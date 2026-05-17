@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Card, SLabel, Heading, Tile, Fld, Sel, Btn, Tip } from './ui.jsx'
-import { LIME, RED, YELLOW, MONO, BORDER, SESSION_LABELS, SESSION_COLORS, SESSION_TIPS, getSession, todayStr, f2, fmtD, fmtU } from '../constants.js'
+import { LIME, RED, YELLOW, MONO, BORDER, SESSION_LABELS, SESSION_COLORS, SESSION_TIPS, getSession, getMarketHolidayName, todayStr, f2, fmtD, fmtU } from '../constants.js'
 
 export default function Command({ trades, settings, onSettingsChange, lockedOut, onUnlock, apiKey, onApiKeyChange, anthropicKey, onAnthropicKeyChange, liveData, marketEvents, instrument, ticker = 'QQQ', levelMap, todayEvents = [], schwabCreds, onSchwabCredsChange, schwabToken, onSchwabTokenChange, schwabAccount, schwabAcctInfo, schwabDayTrades = 0, schwabConnectError }) {
   const [time, setTime] = useState(new Date())
@@ -13,6 +13,7 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
   const todayWins = tt.filter(t => t.status === 'win').length
   const session = getSession()
   const sessionColor = SESSION_COLORS[session]
+  const holidayName = getMarketHolidayName()
 
   const etTime = time.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
   const ctTime = time.toLocaleTimeString('en-US', { timeZone: 'America/Chicago', hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -158,7 +159,13 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
                   </div>
                 </>
               )}
-              {liveData.rvol != null && (
+              {(session === 'weekend' || session === 'holiday') ? (
+                <div>
+                  <div style={{ fontSize: 9, color: '#666', fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.1em' }}>RVOL</div>
+                  <div style={{ fontSize: 11, fontFamily: MONO, fontWeight: 700, color: '#666' }}>unavailable</div>
+                  <div style={{ fontSize: 9, fontFamily: MONO, color: '#444', marginTop: 2 }}>market closed</div>
+                </div>
+              ) : liveData.rvol != null && (
                 <div>
                   <div style={{ fontSize: 9, color: '#666', fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.1em', display: 'flex', alignItems: 'center' }}>RVOL<Tip tip="Relative Volume — how today's volume compares to the average at this time of day. Above 1.5x means institutional activity is elevated and moves are real. Below 0.8x means low conviction — don't chase breakouts." /></div>
                   <div style={{ fontSize: 14, fontFamily: MONO, fontWeight: 700, color: liveData.rvol >= 1.2 ? LIME : liveData.rvol >= 0.8 ? YELLOW : RED }}>
@@ -442,8 +449,33 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
             ],
             note: 'Great traders prep at night. Tomorrow\'s edge is built right now.',
           },
+          'weekend': {
+            color: '#888', bg: '#0c0c0c', border: '#1e1e1e',
+            action: 'WEEKEND — MARKETS CLOSED',
+            steps: [
+              'Run the Watchlist scanner for Monday setups',
+              'Generate AI brief for Monday in the Prep tab',
+              'Check Calendar tab for Monday\'s economic events and earnings',
+              'Review last week\'s journal entries and discipline grades in Stats',
+              'Set Monday\'s daily loss limit and max trades in Command',
+              'Step away from charts — get some rest',
+            ],
+            note: 'Markets reopen Monday at 8:30 CT. Prep wins Monday before Monday arrives.',
+          },
+          'holiday': {
+            color: '#888', bg: '#0c0c0c', border: '#1e1e1e',
+            action: holidayName ? `HOLIDAY — ${holidayName.toUpperCase()}` : 'MARKET HOLIDAY',
+            steps: [
+              'US equity markets are closed today',
+              'No trading — review last week\'s grades instead',
+              'Update your prep for the next trading day',
+              'Check Calendar tab to plan around the rest of the week',
+              'Use the time off intentionally',
+            ],
+            note: 'Closed days exist for a reason. Treat them as part of the system.',
+          },
         }
-        const c = cfg[session]
+        const c = cfg[session] || cfg['after-hours']
         const eventSteps = (todayEvents || []).map(e => `⚠ ${e.name}${e.time ? ` at ${e.time} CT` : ''} today — adjust your plan around it.`)
         const allSteps = [...eventSteps, ...c.steps]
         return (

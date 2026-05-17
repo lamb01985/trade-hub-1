@@ -30,6 +30,8 @@ export const SESSION_LABELS = {
   chop: 'MIDDAY CHOP',
   'power-hour': 'POWER HOUR',
   'after-hours': 'AFTER HOURS',
+  weekend: 'WEEKEND',
+  holiday: 'MARKET HOLIDAY',
 }
 
 export const SESSION_COLORS = {
@@ -38,6 +40,8 @@ export const SESSION_COLORS = {
   chop: YELLOW,
   'power-hour': ORANGE,
   'after-hours': '#444',
+  weekend: '#3a3a3a',
+  holiday: '#3a3a3a',
 }
 
 export const SESSION_TIPS = {
@@ -46,6 +50,41 @@ export const SESSION_TIPS = {
   chop: 'Avoid 10:30–1:30 CT. Price chops between levels, theta kills you. No new positions.',
   'power-hour': 'Power hour: trend follow only. Tighter stops. Watch for level breaks.',
   'after-hours': 'Market closed. Log trades, review the level map, prep tomorrow.',
+  weekend: 'Markets closed — prep for Monday.',
+  holiday: 'Market holiday — closed today.',
+}
+
+// US market holidays — hardcoded 2026 (date strings YYYY-MM-DD in ET).
+// Refresh annually from nyse.com/markets/hours-calendars.
+export const MARKET_HOLIDAYS_2026 = {
+  '2026-01-01': "New Year's Day",
+  '2026-01-19': 'Martin Luther King Jr. Day',
+  '2026-02-16': "Presidents' Day",
+  '2026-04-03': 'Good Friday',
+  '2026-05-25': 'Memorial Day',
+  '2026-06-19': 'Juneteenth',
+  '2026-07-03': 'Independence Day (observed)',
+  '2026-09-07': 'Labor Day',
+  '2026-11-26': 'Thanksgiving',
+  '2026-12-25': 'Christmas',
+}
+
+// Returns the holiday name if today is a market holiday in ET, otherwise null.
+export function getMarketHolidayName(date = new Date()) {
+  // Get the ET date as YYYY-MM-DD (handles timezone properly)
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date)
+  const y = parts.find(p => p.type === 'year')?.value
+  const m = parts.find(p => p.type === 'month')?.value
+  const d = parts.find(p => p.type === 'day')?.value
+  const key = `${y}-${m}-${d}`
+  return MARKET_HOLIDAYS_2026[key] || null
+}
+
+// Returns 0..6 day-of-week in ET (0=Sun, 6=Sat). Required for weekend detection
+// because the user's local clock might be a different calendar day than ET.
+export function getETDayOfWeek(date = new Date()) {
+  const wd = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', weekday: 'short' }).format(date)
+  return { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }[wd]
 }
 
 export const SETUP_TYPES = ['ORB','Trend Continuation','VWAP Bounce','VWAP Band Touch','Pivot Level','Fibonacci','Supply/Demand Zone','Reversal','Bull Flag','Bear Flag','Gap Fill','Other']
@@ -57,6 +96,11 @@ export function getETMins() {
 }
 
 export function getSession() {
+  // Day-of-week + holiday check first — the time-of-day check below is only
+  // meaningful on a regular trading day.
+  const dow = getETDayOfWeek()
+  if (dow === 0 || dow === 6) return 'weekend'
+  if (getMarketHolidayName()) return 'holiday'
   const e = getETMins()
   if (e < 570) return 'pre-market'
   if (e >= 960) return 'after-hours'
