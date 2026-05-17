@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Card, SLabel, Heading, Tile, Fld, Sel, Btn, Pill, CheckRow, Tip } from './ui.jsx'
 import { LIME, RED, YELLOW, BLUE, PURPLE, ORANGE, MONO, SANS, BORDER, DARK, PANEL, SETUP_TYPES, todayStr, tomorrowStr, uid, f2, fmtD, fmtU, rrColor, ivContext, calcOptionRR, bsCalc, getETMins, SESSION_LABELS, SESSION_COLORS, SESSION_TIPS } from '../constants.js'
-import { getOptionChain, getPrevDay, getHistoricalBars, getOptionsPCRatio } from '../lib/massive.js'
+import { getOptionChain, getPrevDay, getHistoricalBars, getOptionsPCRatio, getTopMovers } from '../lib/massive.js'
 import { useLocalStorage } from '../hooks/useStore.js'
 
 const CL_ITEMS = [
@@ -917,17 +917,59 @@ function buildObservation(pd, score) {
   return `${rangeStr}, ${closeStr}, ${volStr} — ${verdict}`
 }
 
-function DataChip({ label, value, color, tip }) {
+function DataChip({ label, value, color, tip, sub }) {
   return (
     <div>
       <div style={{ fontSize: 8, color: '#333', fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3, display: 'flex', alignItems: 'center' }}>{label}{tip && <Tip tip={tip} />}</div>
       <div style={{ fontSize: 12, fontFamily: MONO, fontWeight: 700, color: color || '#888' }}>{value}</div>
+      {sub && <div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, marginTop: 1 }}>{sub}</div>}
     </div>
   )
 }
 
+function fmtVol(v) {
+  if (!v) return '—'
+  if (v >= 1e9) return (v / 1e9).toFixed(1) + 'B'
+  if (v >= 1e6) return (v / 1e6).toFixed(1) + 'M'
+  if (v >= 1e3) return (v / 1e3).toFixed(0) + 'K'
+  return String(v)
+}
+
+function scoreSnapshot(snap) {
+  const pd = snap.prevDay
+  if (!pd || !pd.h || !pd.l || pd.h <= pd.l) return null
+  const range = pd.h - pd.l
+  const rangePct = range / pd.c * 100
+  const closePos = (pd.c - pd.l) / range
+  const extremity = Math.abs(closePos - 0.5)
+  const rangeScore = rangePct < 0.5 ? 0 : Math.min(100, (rangePct - 0.5) / 2.5 * 100)
+  const structureScore = extremity < 0.15 ? 0 : Math.min(100, extremity * 200)
+  const minsElapsed = Math.max(1, getETMins() - 570)
+  const dayVol = snap.day?.v || 0
+  const volRatio = pd.v > 0 && minsElapsed > 5 && minsElapsed < 500
+    ? dayVol / (pd.v * minsElapsed / 390)
+    : 1
+  const volScore = Math.min(100, Math.max(0, (volRatio - 0.7) / 1.3 * 100))
+  return {
+    total: Math.round(rangeScore * 0.45 + structureScore * 0.40 + volScore * 0.15),
+    rangeScore: Math.round(rangeScore),
+    structureScore: Math.round(structureScore),
+    volScore: Math.round(volScore),
+    rangePct,
+    closePos,
+    volRatio,
+  }
+}
+
 export function WatchlistTab({ apiKey, onSendToPrep, savedPreps, onLoadSavedPrep }) {
   const [tickers, setTickers] = useLocalStorage('th-scanner-tickers', DEFAULT_TICKERS)
+  // Layer 1 — auto universe
+  const [autoResults, setAutoResults] = useState([])
+  const [autoScanning, setAutoScanning] = useState(false)
+  const [autoScanTime, setAutoScanTime] = useState(() => {
+    try { const t = localStorage.getItem('th-auto-scan-time'); return t ? parseInt(t) : null } catch { return null }
+  })
+  // Layer 2 — manual watchlist
   const [results, setResults] = useState([])
   const [scanning, setScanning] = useState(false)
   const [scanErrors, setScanErrors] = useState(0)
@@ -935,52 +977,69 @@ export function WatchlistTab({ apiKey, onSendToPrep, savedPreps, onLoadSavedPrep
     try { const t = localStorage.getItem('th-scanner-time'); return t ? parseInt(t) : null } catch { return null }
   })
   const [addInput, setAddInput] = useState('')
-  const autoScanned = useRef(false)
+  const initialized = useRef(false)
 
+  // ── Layer 1: auto universe scan ───────────────────────────────────────────
+  async function runAutoScan() {
+    if (!apiKey || autoScanning) return
+    setAutoScanning(true)
+    try {
+      const snaps = await getTopMovers(apiKey)
+      const minsElapsed = Math.max(1, getETMins() - 570)
+      const filtered = snaps
+        .filter(snap => {
+          const pd = snap.prevDay
+          if (!pd || !pd.c || pd.h <= pd.l) return false
+          if (pd.c < 10) return false                          // price > $10
+          if ((pd.h - pd.l) / pd.c < 0.02) return false       // range > 2%
+          if (pd.v < 1_000_000) return false                   // avg vol > 1M
+          if (Math.abs(snap.todaysChangePerc || 0) > 35) return false  // no binary events
+          return true
+        })
+        .map(snap => {
+          const pd = snap.prevDay
+          const dayVol = snap.day?.v || 0
+          const rvol = pd.v > 0 && minsElapsed > 5 && minsElapsed < 500
+            ? dayVol / (pd.v * minsElapsed / 390)
+            : null
+          const score = scoreSnapshot(snap)
+          const pdAdapted = { high: pd.h, low: pd.l, close: pd.c, volume: pd.v, open: pd.o }
+          return { ticker: snap.ticker, price: pd.c, change: snap.todaysChangePerc, prevDay: pdAdapted, dayVol, rvol, score }
+        })
+        .filter(r => r.score !== null)
+        .sort((a, b) => (b.score?.total ?? 0) - (a.score?.total ?? 0))
+        .slice(0, 10)
+      setAutoResults(filtered)
+      const ts = Date.now()
+      setAutoScanTime(ts)
+      try { localStorage.setItem('th-auto-scan-time', String(ts)) } catch {}
+    } catch {}
+    setAutoScanning(false)
+  }
+
+  // ── Layer 2: manual watchlist scan ────────────────────────────────────────
   async function runScan() {
     if (!apiKey || scanning) return
     setScanning(true)
     setScanErrors(0)
-
     const settled = await Promise.allSettled(
       tickers.map(async ticker => {
         let pd = null, hist = [], pcr = {}, fetchError = null
         try { pd = await getPrevDay(apiKey, ticker) } catch (e) { fetchError = e.message }
         try { hist = await getHistoricalBars(apiKey, ticker, 21) } catch {}
         try { pcr = await getOptionsPCRatio(apiKey, ticker) } catch {}
-
-        console.log(`[scanner] ${ticker}`, { pd, histLen: hist?.length, pcr })
-
         const histBars = Array.isArray(hist) && hist.length > 1 ? hist.slice(0, -1) : (hist || [])
-        const avgVol = histBars.length > 0
-          ? histBars.reduce((s, b) => s + b.v, 0) / histBars.length
-          : null
+        const avgVol = histBars.length > 0 ? histBars.reduce((s, b) => s + b.v, 0) / histBars.length : null
         const score = pd ? calcSetupScore(pd, avgVol) : null
         return { ticker, pd, avgVol, score, pcr, fetchError }
       })
     )
-
-    console.log('[scanner] settled:', settled)
-
-    // Keep ALL results so failures are visible as error rows, not silent omissions.
-    // Sort: scored tickers first (desc), no-data tickers at bottom.
     const data = settled
       .filter(r => r.status === 'fulfilled')
       .map(r => r.value)
-      .concat(
-        settled.filter(r => r.status === 'rejected')
-          .map(r => ({ ticker: '?', pd: null, score: null, pcr: {}, fetchError: r.reason?.message || 'Request failed' }))
-      )
-      .sort((a, b) => {
-        const sa = a.score?.total ?? -1
-        const sb = b.score?.total ?? -1
-        return sb - sa
-      })
-
-    console.log('[scanner] data to render:', data)
-
-    const errCount = data.filter(r => !r.pd).length
-    setScanErrors(errCount)
+      .concat(settled.filter(r => r.status === 'rejected').map(r => ({ ticker: '?', pd: null, score: null, pcr: {}, fetchError: r.reason?.message || 'Request failed' })))
+      .sort((a, b) => (b.score?.total ?? -1) - (a.score?.total ?? -1))
+    setScanErrors(data.filter(r => !r.pd).length)
     setResults(data)
     const ts = Date.now()
     setScanTime(ts)
@@ -988,11 +1047,25 @@ export function WatchlistTab({ apiKey, onSendToPrep, savedPreps, onLoadSavedPrep
     setScanning(false)
   }
 
-  // Auto-scan on tab open if last scan was > 30 min ago
+  async function scanAll() {
+    await Promise.all([runAutoScan(), runScan()])
+  }
+
+  // Auto-init on tab open
   useEffect(() => {
-    if (autoScanned.current || !apiKey) return
-    autoScanned.current = true
-    if (!scanTime || Date.now() - scanTime > 30 * 60 * 1000) runScan()
+    if (initialized.current || !apiKey) return
+    initialized.current = true
+    const stale = 30 * 60 * 1000
+    const now = Date.now()
+    if (!autoScanTime || now - autoScanTime > stale) runAutoScan()
+    if (!scanTime || now - scanTime > stale) runScan()
+  }, [apiKey]) // eslint-disable-line
+
+  // Auto-refresh Layer 1 every 30 min
+  useEffect(() => {
+    if (!apiKey) return
+    const iv = setInterval(runAutoScan, 30 * 60 * 1000)
+    return () => clearInterval(iv)
   }, [apiKey]) // eslint-disable-line
 
   function addTicker() {
@@ -1007,167 +1080,254 @@ export function WatchlistTab({ apiKey, onSendToPrep, savedPreps, onLoadSavedPrep
     setResults(prev => prev.filter(r => r.ticker !== t))
   }
 
-  const timeSince = scanTime ? Math.round((Date.now() - scanTime) / 60000) : null
-  const scanLabel = timeSince === null ? null
-    : timeSince < 1 ? 'just now'
-    : timeSince === 1 ? '1 min ago'
-    : `${timeSince} min ago`
+  const isRefreshing = autoScanning || scanning
+  const autoTickers = new Set(autoResults.map(r => r.ticker))
+
+  // Helper to format time-since label
+  function ageLbl(ts) {
+    if (!ts) return null
+    const m = Math.round((Date.now() - ts) / 60000)
+    return m < 1 ? 'just now' : m === 1 ? '1 min ago' : `${m} min ago`
+  }
+
+  // Shared skeleton row for scanning states
+  function SkeletonRow({ label }) {
+    return (
+      <div style={{ background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 5, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 16 }}>
+        <div style={{ fontSize: 10, fontFamily: MONO, color: '#1e1e1e', width: 18 }}>—</div>
+        <div style={{ fontSize: 16, fontWeight: 900, fontFamily: MONO, color: '#1e1e1e', minWidth: 60 }}>{label}</div>
+        <div style={{ flex: 1, height: 8, background: '#161616', borderRadius: 3 }} />
+        <div style={{ width: 40, height: 22, background: '#161616', borderRadius: 3 }} />
+      </div>
+    )
+  }
+
+  // Shared result row (used for both layers)
+  function ResultRow({ ticker, pd, score, pcr, fetchError, volRatioOverride, dayVol, rank, isTop3 }) {
+    if (!pd) {
+      return (
+        <div style={{ background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 5, padding: '12px 18px', display: 'flex', alignItems: 'center', gap: 16, opacity: 0.4 }}>
+          <div style={{ fontSize: 10, fontFamily: MONO, color: '#333', width: 18 }}>—</div>
+          <div style={{ fontSize: 15, fontWeight: 900, fontFamily: MONO, color: '#333', minWidth: 60 }}>{ticker}</div>
+          <span style={{ fontSize: 10, fontFamily: MONO, color: '#333', flex: 1 }}>
+            {fetchError ? `API error: ${fetchError}` : 'No data — ticker may be invalid or API plan restriction'}
+          </span>
+        </div>
+      )
+    }
+    const range = pd.high - pd.low
+    const rangePct = pd.close > 0 ? range / pd.close * 100 : 0
+    const movePct = pd.open > 0 ? (pd.close - pd.open) / pd.open * 100 : 0
+    const total = score?.total ?? 0
+    const volRatio = volRatioOverride != null ? volRatioOverride : (score?.volRatio ?? 1)
+    const closePos = score?.closePos ?? 0.5
+    const scoreColor = total >= 70 ? LIME : total >= 45 ? YELLOW : RED
+    const closeLbl = closePos > 0.80 ? 'Near HOD' : closePos < 0.20 ? 'Near LOD' : 'Mid Range'
+    const closeLblColor = (closePos > 0.80 || closePos < 0.20) ? '#aaa' : '#444'
+    const volColor = volRatio >= 1.5 ? LIME : volRatio >= 1.0 ? '#777' : '#444'
+    const obs = buildObservation(pd, score)
+    const unusualVol = volRatio >= 2.0
+    const hasPCR = pcr && !pcr.planError && !pcr.error && pcr.pcRatio != null
+    const pcrColor = hasPCR ? (pcr.pcRatio > 1.2 ? RED : pcr.pcRatio < 0.8 ? LIME : '#888') : '#444'
+    const absVol = dayVol || pd.volume
+    return (
+      <div style={{ background: PANEL, border: `1px solid ${isTop3 ? LIME + '44' : BORDER}`, borderRadius: 5, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '14px 18px' }}>
+          <div style={{ fontSize: 10, fontFamily: MONO, color: '#222', width: 18, flexShrink: 0, textAlign: 'right' }}>#{rank}</div>
+          <div style={{ flexShrink: 0, minWidth: 60 }}>
+            <div style={{ fontSize: 16, fontWeight: 900, fontFamily: MONO, color: total >= 70 ? LIME : total >= 45 ? YELLOW : '#e8e8e8' }}>{ticker}</div>
+            {unusualVol && <div style={{ fontSize: 8, color: YELLOW, fontFamily: MONO, letterSpacing: '0.08em' }}>⚡ UNUSUAL VOL</div>}
+          </div>
+          <div style={{ flex: 1, display: 'flex', gap: 18, flexWrap: 'wrap' }}>
+            <DataChip label="Prev Range" value={`$${f2(range)} (${f2(rangePct)}%)`} />
+            <DataChip label="% Move" value={`${movePct > 0 ? '+' : ''}${f2(movePct)}%`} color={movePct > 0.3 ? LIME : movePct < -0.3 ? RED : '#888'} />
+            <DataChip
+              label="RVOL"
+              value={`${volRatio.toFixed(1)}x avg`}
+              sub={absVol ? fmtVol(absVol) : undefined}
+              color={volColor}
+              tip="Relative Volume — today's volume vs. the projected daily average. Above 1.5x means institutional conviction. Below 0.8x means low conviction — don't chase breakouts."
+            />
+            <DataChip label="Structure" value={closeLbl} color={closeLblColor} />
+            {pcr && <DataChip label="P/C Ratio" value={hasPCR ? pcr.pcRatio.toFixed(2) : '—'} color={pcrColor} />}
+          </div>
+          <div style={{ textAlign: 'right', flexShrink: 0, minWidth: 60 }}>
+            <div style={{ fontSize: 8, color: '#333', fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>Score</div>
+            <div style={{ fontSize: 22, fontWeight: 900, fontFamily: MONO, color: scoreColor, lineHeight: 1 }}>{total}</div>
+            <div style={{ width: 60, height: 3, background: '#1a1a1a', borderRadius: 2, marginTop: 5 }}>
+              <div style={{ height: '100%', width: `${total}%`, background: scoreColor, borderRadius: 2 }} />
+            </div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '9px 18px', background: '#0a0a0a', borderTop: '1px solid #111' }}>
+          <span style={{ fontSize: 10, fontFamily: MONO, color: '#444', flex: 1 }}>{obs}</span>
+          {savedPreps?.[ticker]
+            ? <Btn small variant="lime" onClick={() => onLoadSavedPrep(savedPreps[ticker])}>Load Saved Prep</Btn>
+            : <Btn small variant="blue" onClick={() => onSendToPrep({ ticker, priorHigh: String(f2(pd.high)), priorLow: String(f2(pd.low)) })}>→ Prep</Btn>
+          }
+        </div>
+      </div>
+    )
+  }
+
+  // Layer 2 results filtered to exclude tickers already in auto top setups
+  const myResults = results.filter(r => !autoTickers.has(r.ticker))
+  const myScored = myResults.filter(r => r.pd).length
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10 }}>
         <div>
-          <SLabel>Nightly Setup Scanner</SLabel>
+          <SLabel>Two-Layer Setup Scanner</SLabel>
           <Heading>Watchlist</Heading>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {scanLabel && <span style={{ fontSize: 9, fontFamily: MONO, color: '#444' }}>Scanned {scanLabel}</span>}
           {!apiKey && <span style={{ fontSize: 9, fontFamily: MONO, color: RED }}>No API key — add in Command</span>}
-          <Btn small onClick={runScan} disabled={!apiKey || scanning}>
-            {scanning ? 'Scanning...' : `Scan ${tickers.length} tickers`}
+          <Btn small onClick={scanAll} disabled={!apiKey || isRefreshing}>
+            {isRefreshing ? 'Scanning...' : 'Scan All'}
           </Btn>
         </div>
       </div>
 
-      {/* Ticker management */}
-      <Card>
-        <SLabel>Ticker List</SLabel>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-          {tickers.map(t => (
-            <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#141414', border: `1px solid ${BORDER}`, borderRadius: 3, padding: '4px 10px' }}>
-              <span style={{ fontSize: 11, fontFamily: MONO, color: '#888' }}>{t}</span>
-              <span onClick={() => removeTicker(t)} style={{ fontSize: 9, color: '#3a3a3a', cursor: 'pointer', lineHeight: 1 }}>✕</span>
-            </div>
-          ))}
+      {/* ── LAYER 1: Today's Top Setups ── */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: 9, fontFamily: MONO, color: '#555', letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 3 }}>Layer 1 — Auto Universe</div>
+            <div style={{ fontSize: 14, fontWeight: 700, fontFamily: MONO, color: '#e8e8e8', letterSpacing: '-0.01em' }}>Today's Top Setups</div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            {ageLbl(autoScanTime) && <div style={{ fontSize: 9, fontFamily: MONO, color: '#2a2a2a' }}>Updated {ageLbl(autoScanTime)}</div>}
+            <div style={{ fontSize: 8, fontFamily: MONO, color: '#1a1a1a', marginTop: 2 }}>Auto-refreshes every 30 min</div>
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input
-            value={addInput}
-            onInput={e => setAddInput(e.target.value.toUpperCase())}
-            onKeyDown={e => e.key === 'Enter' && addTicker()}
-            placeholder="Add ticker..."
-            style={{ background: '#161616', border: `1px solid ${BORDER}`, borderRadius: 4, color: '#e8e8e8', fontFamily: MONO, fontSize: 12, padding: '7px 12px', outline: 'none', width: 130 }}
-          />
-          <Btn small variant="ghost" onClick={addTicker} disabled={!addInput.trim()}>Add</Btn>
-        </div>
-      </Card>
 
-      {/* Scanning — skeleton rows */}
-      {scanning && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <span style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase', paddingLeft: 2 }}>
-            Scanning {tickers.length} tickers...
-          </span>
-          {tickers.map(t => (
-            <div key={t} style={{ background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 5, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 16 }}>
-              <div style={{ fontSize: 10, fontFamily: MONO, color: '#1e1e1e', width: 18 }}>—</div>
-              <div style={{ fontSize: 16, fontWeight: 900, fontFamily: MONO, color: '#1e1e1e', minWidth: 60 }}>{t}</div>
-              <div style={{ flex: 1, height: 8, background: '#161616', borderRadius: 3 }} />
-              <div style={{ width: 40, height: 22, background: '#161616', borderRadius: 3 }} />
-            </div>
-          ))}
-        </div>
-      )}
+        {autoScanning && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Scanning gainers + losers universe...</div>
+            {[...Array(5)].map((_, i) => <SkeletonRow key={i} label="···" />)}
+          </div>
+        )}
 
-      {/* Results — shown after any scan attempt, including all-error cases */}
-      {!scanning && results.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingLeft: 2, flexWrap: 'wrap', gap: 6 }}>
-            <span style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-              {results.filter(r => r.pd).length} of {results.length} tickers scored — ranked best to worst
-            </span>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-              {scanErrors > 0 && (
-                <span style={{ fontSize: 9, color: '#4a3a2a', fontFamily: MONO }}>⚠ {scanErrors} returned no data</span>
-              )}
-              {results.some(r => r.pcr?.planError) && (
-                <span style={{ fontSize: 9, color: '#333', fontFamily: MONO }}>◦ P/C ratio requires Options Advanced plan</span>
-              )}
+        {!autoScanning && autoResults.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, letterSpacing: '0.06em' }}>
+              {autoResults.length} setups ranked from gainers + losers universe · price &gt;$10 · range &gt;2% · vol &gt;1M
+            </div>
+            {autoResults.map((r, idx) => (
+              <ResultRow
+                key={r.ticker}
+                ticker={r.ticker}
+                pd={r.prevDay}
+                score={r.score}
+                pcr={null}
+                fetchError={null}
+                volRatioOverride={r.rvol}
+                dayVol={r.dayVol}
+                rank={idx + 1}
+                isTop3={idx < 3}
+              />
+            ))}
+          </div>
+        )}
+
+        {!autoScanning && autoResults.length === 0 && (
+          <div style={{ background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 5, padding: '20px 24px', textAlign: 'center' }}>
+            <div style={{ fontSize: 11, fontFamily: MONO, color: '#2a2a2a' }}>
+              {apiKey ? 'No setups found in today\'s universe. Try scanning again after market open.' : 'Add your Massive API key in Command to enable auto-scanning.'}
             </div>
           </div>
-          {results.map(({ ticker, pd, score, pcr, fetchError }, idx) => {
-            // Error row — ticker fetched but no prev-day data came back
-            if (!pd) {
-              return (
-                <div key={ticker + idx} style={{ background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 5, padding: '12px 18px', display: 'flex', alignItems: 'center', gap: 16, opacity: 0.5 }}>
-                  <div style={{ fontSize: 10, fontFamily: MONO, color: '#333', width: 18 }}>—</div>
-                  <div style={{ fontSize: 15, fontWeight: 900, fontFamily: MONO, color: '#333', minWidth: 60 }}>{ticker}</div>
-                  <span style={{ fontSize: 10, fontFamily: MONO, color: '#333', flex: 1 }}>
-                    {fetchError ? `API error: ${fetchError}` : 'No data — ticker may be invalid or API plan restriction'}
-                  </span>
-                </div>
-              )
-            }
+        )}
+      </div>
 
-            const range = pd.high - pd.low
-            const rangePct = pd.close > 0 ? range / pd.close * 100 : 0
-            const movePct = pd.open > 0 ? (pd.close - pd.open) / pd.open * 100 : 0
-            const total = score?.total ?? 0
-            const volRatio = score?.volRatio ?? 1
-            const closePos = score?.closePos ?? 0.5
-            const scoreColor = total >= 70 ? LIME : total >= 45 ? YELLOW : RED
-            const scoredIdx = results.slice(0, idx).filter(r => r.pd).length
-            const topThree = scoredIdx < 3
-            const closeLbl = closePos > 0.80 ? 'Near HOD' : closePos < 0.20 ? 'Near LOD' : 'Mid Range'
-            const closeLblColor = (closePos > 0.80 || closePos < 0.20) ? '#aaa' : '#444'
-            const volColor = volRatio >= 1.5 ? LIME : volRatio >= 1.0 ? '#777' : '#444'
-            const obs = buildObservation(pd, score)
-            const unusualVol = volRatio >= 2.0
-            const hasPCR = pcr && !pcr.planError && !pcr.error && pcr.pcRatio != null
-            const pcrColor = hasPCR ? (pcr.pcRatio > 1.2 ? RED : pcr.pcRatio < 0.8 ? LIME : '#888') : '#444'
-            return (
-              <div key={ticker} style={{ background: PANEL, border: `1px solid ${topThree ? LIME + '44' : BORDER}`, borderRadius: 5, overflow: 'hidden' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '14px 18px' }}>
-                  {/* Rank */}
-                  <div style={{ fontSize: 10, fontFamily: MONO, color: '#222', width: 18, flexShrink: 0, textAlign: 'right' }}>#{scoredIdx + 1}</div>
+      {/* Divider */}
+      <div style={{ borderTop: `1px solid #111` }} />
 
-                  {/* Ticker + flash */}
-                  <div style={{ flexShrink: 0, minWidth: 60 }}>
-                    <div style={{ fontSize: 16, fontWeight: 900, fontFamily: MONO, color: total >= 70 ? LIME : total >= 45 ? YELLOW : '#e8e8e8' }}>{ticker}</div>
-                    {unusualVol && <div style={{ fontSize: 8, color: YELLOW, fontFamily: MONO, letterSpacing: '0.08em' }}>⚡ UNUSUAL VOL</div>}
-                  </div>
+      {/* ── LAYER 2: My Watchlist ── */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: 9, fontFamily: MONO, color: '#555', letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 3 }}>Layer 2 — Manual</div>
+            <div style={{ fontSize: 14, fontWeight: 700, fontFamily: MONO, color: '#e8e8e8', letterSpacing: '-0.01em' }}>My Watchlist</div>
+          </div>
+          {ageLbl(scanTime) && <div style={{ fontSize: 9, fontFamily: MONO, color: '#2a2a2a' }}>Updated {ageLbl(scanTime)}</div>}
+        </div>
 
-                  {/* Data chips */}
-                  <div style={{ flex: 1, display: 'flex', gap: 18, flexWrap: 'wrap' }}>
-                    <DataChip label="Prev Range" value={`$${f2(range)} (${f2(rangePct)}%)`} />
-                    <DataChip label="% Move" value={`${movePct > 0 ? '+' : ''}${f2(movePct)}%`} color={movePct > 0.3 ? LIME : movePct < -0.3 ? RED : '#888'} />
-                    <DataChip label="RVOL" value={`${volRatio.toFixed(1)}x`} color={volColor} tip="Relative Volume — yesterday's volume vs. the historical daily average. Above 1.5x means the market was actively interested. Below 0.8x means low-conviction session — be cautious on breakouts." />
-                    <DataChip label="Structure" value={closeLbl} color={closeLblColor} />
-                    <DataChip label="P/C Ratio" value={hasPCR ? pcr.pcRatio.toFixed(2) : '—'} color={pcrColor} />
-                  </div>
-
-                  {/* Score */}
-                  <div style={{ textAlign: 'right', flexShrink: 0, minWidth: 60 }}>
-                    <div style={{ fontSize: 8, color: '#333', fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>Score</div>
-                    <div style={{ fontSize: 22, fontWeight: 900, fontFamily: MONO, color: scoreColor, lineHeight: 1 }}>{total}</div>
-                    <div style={{ width: 60, height: 3, background: '#1a1a1a', borderRadius: 2, marginTop: 5 }}>
-                      <div style={{ height: '100%', width: `${total}%`, background: scoreColor, borderRadius: 2 }} />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Observation + Send to Prep */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '9px 18px', background: '#0a0a0a', borderTop: '1px solid #111' }}>
-                  <span style={{ fontSize: 10, fontFamily: MONO, color: '#444', flex: 1 }}>{obs}</span>
-                  {savedPreps?.[ticker]
-                    ? <Btn small variant="lime" onClick={() => onLoadSavedPrep(savedPreps[ticker])}>Load Saved Prep</Btn>
-                    : <Btn small variant="blue" onClick={() => onSendToPrep({ ticker, priorHigh: String(f2(pd.high)), priorLow: String(f2(pd.low)) })}>→ Prep</Btn>
-                  }
-                </div>
+        {/* Ticker pill management */}
+        <Card>
+          <SLabel>Tickers</SLabel>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+            {tickers.map(t => (
+              <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 6, background: autoTickers.has(t) ? '#0a1208' : '#141414', border: `1px solid ${autoTickers.has(t) ? LIME + '33' : BORDER}`, borderRadius: 3, padding: '4px 10px' }}>
+                <span style={{ fontSize: 11, fontFamily: MONO, color: autoTickers.has(t) ? '#5a7a5a' : '#888' }}>{t}</span>
+                {autoTickers.has(t) && <span style={{ fontSize: 7, fontFamily: MONO, color: '#3a5a3a' }}>↑top</span>}
+                <span onClick={() => removeTicker(t)} style={{ fontSize: 9, color: '#3a3a3a', cursor: 'pointer', lineHeight: 1 }}>✕</span>
               </div>
-            )
-          })}
-        </div>
-      )}
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              value={addInput}
+              onInput={e => setAddInput(e.target.value.toUpperCase())}
+              onKeyDown={e => e.key === 'Enter' && addTicker()}
+              placeholder="Add ticker..."
+              style={{ background: '#161616', border: `1px solid ${BORDER}`, borderRadius: 4, color: '#e8e8e8', fontFamily: MONO, fontSize: 12, padding: '7px 12px', outline: 'none', width: 130 }}
+            />
+            <Btn small variant="ghost" onClick={addTicker} disabled={!addInput.trim()}>Add</Btn>
+          </div>
+        </Card>
 
-      {/* Empty state */}
-      {!scanning && results.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '60px 0', color: '#1e1e1e', fontFamily: MONO, fontSize: 12 }}>
-          <div style={{ fontSize: 28, marginBottom: 12, opacity: 0.3 }}>◈</div>
-          {apiKey ? "Hit Scan to analyze tonight's setups." : 'Add your Massive API key in Command to enable scanning.'}
-        </div>
-      )}
+        {/* Scanning skeleton */}
+        {scanning && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Scanning {tickers.length} tickers...</div>
+            {tickers.filter(t => !autoTickers.has(t)).map(t => <SkeletonRow key={t} label={t} />)}
+          </div>
+        )}
+
+        {/* Layer 2 results — deduplicated */}
+        {!scanning && myResults.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {autoTickers.size > 0 && (
+              <div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, letterSpacing: '0.06em' }}>
+                {autoResults.filter(r => tickers.includes(r.ticker)).length > 0
+                  ? `${autoResults.filter(r => tickers.includes(r.ticker)).length} watchlist ticker${autoResults.filter(r => tickers.includes(r.ticker)).length > 1 ? 's' : ''} already shown in Top Setups above`
+                  : `${myScored} of ${myResults.length} tickers scored`
+                }
+              </div>
+            )}
+            {scanErrors > 0 && <div style={{ fontSize: 9, color: '#4a3a2a', fontFamily: MONO }}>⚠ {scanErrors} ticker{scanErrors > 1 ? 's' : ''} returned no data</div>}
+            {results.some(r => r.pcr?.planError) && <div style={{ fontSize: 9, color: '#333', fontFamily: MONO }}>◦ P/C ratio requires Options Advanced plan</div>}
+            {myResults.map(({ ticker, pd, score, pcr, fetchError, avgVol }, idx) => (
+              <ResultRow
+                key={ticker + idx}
+                ticker={ticker}
+                pd={pd}
+                score={score}
+                pcr={pcr}
+                fetchError={fetchError}
+                volRatioOverride={null}
+                dayVol={null}
+                rank={myResults.slice(0, idx).filter(r => r.pd).length + 1}
+                isTop3={myResults.slice(0, idx).filter(r => r.pd).length < 3}
+              />
+            ))}
+          </div>
+        )}
+
+        {!scanning && myResults.length === 0 && results.length > 0 && autoTickers.size > 0 && (
+          <div style={{ fontSize: 10, fontFamily: MONO, color: '#2a2a2a', padding: '8px 0' }}>
+            All watchlist tickers are already shown in Today's Top Setups above.
+          </div>
+        )}
+
+        {!scanning && results.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '40px 0', color: '#1e1e1e', fontFamily: MONO, fontSize: 11 }}>
+            {apiKey ? "Hit 'Scan All' to score your watchlist." : 'Add your Massive API key in Command to enable scanning.'}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

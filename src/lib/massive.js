@@ -96,6 +96,16 @@ export async function getOptionsPCRatio(apiKey, ticker) {
   }
 }
 
+export async function getTopMovers(apiKey) {
+  const [gData, lData] = await Promise.all([
+    get(apiKey, '/v2/snapshot/locale/us/markets/stocks/gainers', { include_otc: 'false' }).catch(() => ({ tickers: [] })),
+    get(apiKey, '/v2/snapshot/locale/us/markets/stocks/losers', { include_otc: 'false' }).catch(() => ({ tickers: [] })),
+  ])
+  const all = [...(gData.tickers || []), ...(lData.tickers || [])]
+  const seen = new Set()
+  return all.filter(s => { if (seen.has(s.ticker)) return false; seen.add(s.ticker); return true })
+}
+
 // ── WebSocket ────────────────────────────────────────────────────────────────
 
 export class MassiveStream {
