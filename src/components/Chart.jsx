@@ -130,6 +130,25 @@ function detectConfluences(levels, threshold = 0.30) {
 }
 
 export default function ChartTab({ liveData, levelMap, trades, ticker, customLevels = [], onCustomLevelsChange, mtfAlignment }) {
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 768)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const onResize = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  if (isMobile) {
+    return (
+      <div style={{ padding: '40px 24px', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center', maxWidth: 460, margin: '60px auto' }}>
+        <div style={{ fontSize: 36, opacity: 0.4 }}>📊</div>
+        <div style={{ fontSize: 14, fontFamily: MONO, fontWeight: 700, color: '#e8e8e8', letterSpacing: '0.04em' }}>Open on desktop for the full chart view.</div>
+        <div style={{ fontSize: 12, fontFamily: MONO, color: '#666', lineHeight: 1.7 }}>
+          Use the <strong style={{ color: LIME }}>Levels</strong> tab for real-time level intelligence, setup quality, alignment score, and entry conditions. Use <strong style={{ color: LIME }}>Journal</strong> with the floating + button to log trades from your phone.
+        </div>
+      </div>
+    )
+  }
   const wrapRef = useRef(null)
   const chartRef = useRef(null)
   const candleRef = useRef(null)

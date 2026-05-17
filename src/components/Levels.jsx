@@ -170,7 +170,8 @@ export default function Levels({ liveData, orbHigh, orbLow, settings, onSettings
   const [customLabel, setCustomLabel] = useState('')
   const [customPrice, setCustomPrice] = useState('')
   const [customLevels, setCustomLevels] = useState([])
-  const [notifGranted, setNotifGranted] = useState(Notification.permission === 'granted')
+  const [notifGranted, setNotifGranted] = useState(typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted')
+  const notifSupported = typeof window !== 'undefined' && 'Notification' in window
   const [filter, setFilter] = useState('all')
 
   const { price, vwapData, prevDay, weeklyData, pivots, sdZones } = liveData || {}
@@ -244,7 +245,9 @@ export default function Levels({ liveData, orbHigh, orbLow, settings, onSettings
           <Heading>Level Map</Heading>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          {!settings?.alertsEnabled ? (
+          {!notifSupported ? (
+            <span style={{ fontSize: 9, fontFamily: MONO, color: '#666' }}>Alerts not supported on this browser</span>
+          ) : !settings?.alertsEnabled ? (
             <Btn small variant="lime" onClick={handleEnableAlerts}>Enable Alerts + Sound</Btn>
           ) : (
             <span style={{ fontSize: 9, fontFamily: MONO, color: LIME }}>✓ ALERTS ON</span>
@@ -333,7 +336,7 @@ export default function Levels({ liveData, orbHigh, orbLow, settings, onSettings
 
       {/* Stats row */}
       {price && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
           {[
             { label: 'Live Price', value: `$${f2(price)}`, color: LIME },
             { label: 'VWAP', value: vwapData ? `$${f2(vwapData.vwap)}` : '—', color: PURPLE, tip: "Volume Weighted Average Price — the average price weighted by volume. Institutions use VWAP as their primary anchor. Price above VWAP favors longs, below favors shorts." },
@@ -415,7 +418,7 @@ export default function Levels({ liveData, orbHigh, orbLow, settings, onSettings
       {/* Level type legend */}
       <Card>
         <SLabel>Level Key</SLabel>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 }}>
           {[
             { type: 'pivot-r', label: 'Resistance Pivots (R1-R3)' },
             { type: 'pivot-s', label: 'Support Pivots (S1-S3)' },

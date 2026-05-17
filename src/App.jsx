@@ -334,14 +334,16 @@ export default function App() {
         )}
 
         {activeTab === 'levels' && (
-          <Levels
-            liveData={{ ...liveData, lastAlerts: liveData.lastAlerts }}
-            orbHigh={orbPrefill?.orbHigh || prep.orbHigh}
-            orbLow={orbPrefill?.orbLow || prep.orbLow}
-            settings={settings}
-            onSettingsChange={setSettings}
-            mtfAlignment={mtfAlignment}
-          />
+          <ErrorBoundary label="Levels tab">
+            <Levels
+              liveData={{ ...liveData, lastAlerts: liveData.lastAlerts }}
+              orbHigh={orbPrefill?.orbHigh || prep.orbHigh}
+              orbLow={orbPrefill?.orbLow || prep.orbLow}
+              settings={settings}
+              onSettingsChange={setSettings}
+              mtfAlignment={mtfAlignment}
+            />
+          </ErrorBoundary>
         )}
 
         {activeTab === 'chart' && (
