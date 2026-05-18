@@ -405,7 +405,7 @@ export default function App() {
 
         {activeTab === 'playbook' && (
           <ErrorBoundary label="Playbook tab">
-            <Playbook trades={trades} settings={settings} lockedOut={lockedOut} />
+            <Playbook trades={trades} settings={settings} lockedOut={lockedOut} prep={prep} />
           </ErrorBoundary>
         )}
 
@@ -484,7 +484,7 @@ export default function App() {
         )}
 
         {activeTab === 'checklist' && (
-          <ChecklistTab onPass={() => { setChecklistPassed(true); setActiveTab('calc') }} instrument={prep.instrument || 'options'} setupQuality={fullLevelMap.setupQuality} alignmentScore={mtfAlignment.score} schwabConnected={!!schwabToken?.access_token} schwabDayTrades={schwabDayTrades} />
+          <ChecklistTab onPass={() => { setChecklistPassed(true); setActiveTab('calc') }} instrument={prep.instrument || 'options'} setupQuality={fullLevelMap.setupQuality} alignmentScore={mtfAlignment.score} schwabConnected={!!schwabToken?.access_token} schwabDayTrades={schwabDayTrades} plannedDTE={parseInt(prep.plannedDTE) || 0} />
         )}
 
         {activeTab === 'calc' && (
@@ -500,6 +500,7 @@ export default function App() {
             schwabAccount={schwabAccount}
             schwabAcctInfo={schwabAcctInfo}
             prep={prep}
+            liveData={liveData}
           />
         )}
 

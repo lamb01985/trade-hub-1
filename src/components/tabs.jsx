@@ -195,6 +195,7 @@ export function IVAnalyzerTab({ apiKey, instrument }) {
   const [contracts, setContracts] = useState('1')
   const [stopP, setStopP] = useState('')
   const [targetP, setTargetP] = useState('')
+  const [ivRank, setIvRank] = useLocalStorage('th-iv-rank-input', '')
 
   async function doFetch() {
     if (!apiKey) { setFetchError('No API key — enter it in the Command tab.'); return }
@@ -322,6 +323,39 @@ export function IVAnalyzerTab({ apiKey, instrument }) {
               <div style={{ fontSize: 11, color: '#555', fontFamily: MONO, lineHeight: 1.7 }}>{ivCtx.detail}</div>
             </div>
           </div>}
+
+          {/* IV Rank panel — surfaced when holding multi-day */}
+          {parseInt(dte) > 3 && (() => {
+            const rank = parseFloat(ivRank)
+            const valid = !isNaN(rank) && rank >= 0 && rank <= 100
+            let label, color, msg
+            if (!valid) {
+              label = 'Enter IV Rank'; color = '#888'
+              msg = 'IV Rank tells you how today\'s IV compares to the last 52 weeks. Your broker shows it on each option chain.'
+            } else if (rank >= 50) {
+              label = 'EXPENSIVE'; color = RED
+              msg = 'High IV rank: premium is rich. Caution buying — you\'re paying up. Consider selling premium or waiting for IV to drop.'
+            } else if (rank >= 30) {
+              label = 'FAIR'; color = YELLOW
+              msg = 'Mid IV rank: premium is fairly priced relative to history. Acceptable for directional plays.'
+            } else {
+              label = 'CHEAP'; color = LIME
+              msg = 'Low IV rank: options are cheap relative to history. Good environment to buy options if the setup is there.'
+            }
+            return (
+              <Card>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <SLabel style={{ marginBottom: 0 }}>IV Rank ({parseInt(dte)} DTE — matters more on multi-day)</SLabel>
+                  <span style={{ fontSize: 10, fontFamily: MONO, fontWeight: 700, color }}>{label}{valid ? ` · ${f2(rank)}%` : ''}</span>
+                </div>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 10 }}>
+                  <input type="number" min="0" max="100" value={ivRank} onChange={e => setIvRank(e.target.value)} placeholder="e.g. 32" style={{ width: 120, background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 4, color: '#e8e8e8', fontFamily: MONO, fontSize: 13, padding: '8px 10px', outline: 'none' }} />
+                  <span style={{ fontSize: 10, fontFamily: MONO, color: '#555' }}>0–100 (from your broker's option chain)</span>
+                </div>
+                <div style={{ fontSize: 11, fontFamily: MONO, color: valid ? color : '#666', lineHeight: 1.6 }}>{msg}</div>
+              </Card>
+            )
+          })()}
           {(beU || em) && <Card>
             <SLabel>Key Levels</SLabel>
             {beU && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #0f0f0f' }}><div><div style={{ fontSize: 11, fontFamily: MONO, color: '#555' }}>Break-even at expiry (underlying)</div><div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, marginTop: 2 }}>QQQ must reach here for profit at expiry</div></div><div style={{ fontSize: 15, fontFamily: MONO, fontWeight: 700, color: YELLOW }}>${f2(beU)}</div></div>}
@@ -365,7 +399,7 @@ export function IVAnalyzerTab({ apiKey, instrument }) {
 }
 
 // ── Calculator Tab ────────────────────────────────────────────────────────────
-export function CalculatorTab({ prefill, onLogTrade, checklistPassed, lockedOut, maxTradesReached, apiKey, instrument, schwabToken, schwabAccount, schwabAcctInfo, prep }) {
+export function CalculatorTab({ prefill, onLogTrade, checklistPassed, lockedOut, maxTradesReached, apiKey, instrument, schwabToken, schwabAccount, schwabAcctInfo, prep, liveData }) {
   const [ticker, setTicker] = useState('')
   const [optType, setOptType] = useState('call')
   const [strike, setStrike] = useState('')
@@ -520,6 +554,51 @@ export function CalculatorTab({ prefill, onLogTrade, checklistPassed, lockedOut,
           </div>
         )}
       </div>
+      {/* Multi-day theta + break-even */}
+      {!isStock && valid && parseInt(dte) > 1 && (() => {
+        const dteN = parseInt(dte)
+        const S = liveData?.price
+        const K = parseFloat(strike)
+        const e = parseFloat(entry)
+        const T = dteN / 365
+        const ivPct = parseFloat((prep?.ivNote || '').replace(/[^\d.]/g, '')) || 25
+        const sigma = ivPct / 100
+        const r = 0.045
+        const bsForTheta = (!isNaN(S) && !isNaN(K) && T > 0 && sigma > 0) ? bsCalc(S, K, T, r, sigma, optType) : null
+        const dailyTheta = bsForTheta?.theta != null ? bsForTheta.theta : -e / dteN  // fallback: linear decay heuristic
+        const thetaPerContractDollar = Math.abs(dailyTheta) * 100
+        const holdCost = thetaPerContractDollar * dteN * (parseInt(contracts) || 1)
+        const breakeven = !isNaN(K) && !isNaN(e) ? (optType === 'call' ? K + e : K - e) : null
+        const expiryDate = (() => { const d = new Date(); d.setDate(d.getDate() + dteN); return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) })()
+        return (
+          <div style={{ background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: 5, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ fontSize: 9, fontFamily: MONO, color: '#666', letterSpacing: '0.14em', textTransform: 'uppercase' }}>Multi-Day Trade — {dteN} DTE</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, fontFamily: MONO, fontSize: 11 }}>
+              <div>
+                <div style={{ fontSize: 9, color: '#555', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 3 }}>Daily theta</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: RED }}>-${f2(thetaPerContractDollar)} <span style={{ fontSize: 10, color: '#444' }}>per contract / day</span></div>
+              </div>
+              <div>
+                <div style={{ fontSize: 9, color: '#555', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 3 }}>Cost to hold {dteN} day{dteN !== 1 ? 's' : ''}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: RED }}>-${f2(holdCost)} <span style={{ fontSize: 10, color: '#444' }}>({contracts || 1}c)</span></div>
+              </div>
+              {breakeven != null && (
+                <div>
+                  <div style={{ fontSize: 9, color: '#555', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 3 }}>Break-even by expiry</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#e8e8e8' }}>${f2(breakeven)} <span style={{ fontSize: 10, color: '#444' }}>by {expiryDate}</span></div>
+                  {S != null && (
+                    <div style={{ fontSize: 10, fontFamily: MONO, color: '#666', marginTop: 3 }}>{optType === 'call' ? 'Underlying needs +' : 'Underlying needs -'}${f2(Math.abs(breakeven - S))} from current</div>
+                  )}
+                </div>
+              )}
+            </div>
+            {!bsForTheta && (
+              <div style={{ fontSize: 9, fontFamily: MONO, color: '#444', fontStyle: 'italic' }}>Theta estimated linearly. For Black-Scholes theta, set IV in Prep and have live price loaded.</div>
+            )}
+          </div>
+        )
+      })()}
+
       {/* Buying power check (Schwab connected only) */}
       {schwabConnected && valid && !isStock && schwabAcctInfo?.buyingPower != null && (() => {
         const cost = calc.totalCost
@@ -591,7 +670,7 @@ export function CalculatorTab({ prefill, onLogTrade, checklistPassed, lockedOut,
 }
 
 // ── Checklist Tab ─────────────────────────────────────────────────────────────
-export function ChecklistTab({ onPass, instrument, setupQuality, alignmentScore, schwabConnected, schwabDayTrades = 0 }) {
+export function ChecklistTab({ onPass, instrument, setupQuality, alignmentScore, schwabConnected, schwabDayTrades = 0, plannedDTE = 0 }) {
   const [checked, setChecked] = useState({})
   const isStock = instrument === 'stock'
   const sqItem = {
@@ -609,7 +688,21 @@ export function ChecklistTab({ onPass, instrument, setupQuality, alignmentScore,
     text: `PDT trades remaining (currently: ${3 - schwabDayTrades}/3${schwabDayTrades >= 3 ? ' — NO MORE DAY TRADES' : ''})`,
     required: true,
   } : null
-  const items = [sqItem, alignItem, ...(pdtItem ? [pdtItem] : []), ...(isStock ? CL_ITEMS_STOCK : CL_ITEMS)]
+  const isMultiDay = plannedDTE > 1
+  let baseItems = isStock ? CL_ITEMS_STOCK : CL_ITEMS
+  if (isMultiDay) {
+    // Swap intraday-chop item for a stop-related multi-day equivalent
+    baseItems = baseItems.map(it => it.id === 'c8'
+      ? { ...it, text: 'Stop is set and will protect position through overnight risk' }
+      : it)
+  }
+  const multiDayItems = isMultiDay ? [
+    { id: 'md1', text: 'IV rank checked — not buying expensive premium', required: true },
+    { id: 'md2', text: 'Thesis is valid for multi-day hold — not just today\'s price action', required: true },
+    { id: 'md3', text: 'Stop placed at a technical level, not an arbitrary price', required: true },
+    { id: 'md4', text: 'Position size accounts for multi-day / overnight gap risk', required: true },
+  ] : []
+  const items = [sqItem, alignItem, ...(pdtItem ? [pdtItem] : []), ...multiDayItems, ...baseItems]
   const req = items.filter(i => i.required), allReq = req.every(i => checked[i.id])
   const done = items.filter(i => checked[i.id]).length, pct = Math.round((done / items.length) * 100)
   return (
@@ -1533,7 +1626,34 @@ Only use the levels provided. No generic advice.`
           <Fld label="Strike Plan" value={prep.plannedStrike || ''} onChange={v => upd('plannedStrike', v)} placeholder="714" prefix="$" mono />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
-          <Fld label="Planned DTE" value={prep.plannedDTE || ''} onChange={v => upd('plannedDTE', v)} placeholder="1" step="1" suffix="d" />
+          {(() => {
+            const presets = [
+              { v: '0', label: '0DTE' },
+              { v: '1', label: '1DTE' },
+              { v: '3', label: '3DTE' },
+              { v: '7', label: '1W' },
+              { v: '14', label: '2W' },
+            ]
+            const current = String(prep.plannedDTE ?? '')
+            const isPreset = presets.some(p => p.v === current)
+            return (
+              <div>
+                <div style={{ fontSize: 9, letterSpacing: '0.14em', color: '#3a3a3a', textTransform: 'uppercase', fontFamily: MONO, marginBottom: 6 }}>Planned DTE</div>
+                <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                  {presets.map(p => {
+                    const active = current === p.v
+                    return (
+                      <button key={p.v} onClick={() => upd('plannedDTE', p.v)} style={{ flex: 1, background: active ? LIME : 'transparent', color: active ? '#000' : '#888', border: `1px solid ${active ? LIME : BORDER}`, borderRadius: 3, padding: '7px 8px', fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', cursor: 'pointer', minWidth: 42 }}>{p.label}</button>
+                    )
+                  })}
+                  <button onClick={() => upd('plannedDTE', isPreset ? '' : current || '')} style={{ flex: 1, background: !isPreset && current ? LIME : 'transparent', color: !isPreset && current ? '#000' : '#888', border: `1px solid ${!isPreset && current ? LIME : BORDER}`, borderRadius: 3, padding: '7px 8px', fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', cursor: 'pointer', minWidth: 56 }}>Custom</button>
+                </div>
+                {!isPreset && (
+                  <input type="number" value={current} onChange={e => upd('plannedDTE', e.target.value)} placeholder="days" style={{ marginTop: 6, width: '100%', background: '#111', border: `1px solid ${BORDER}`, borderRadius: 3, color: '#bbb', fontFamily: MONO, fontSize: 12, padding: '7px 10px', outline: 'none' }} />
+                )}
+              </div>
+            )
+          })()}
           <Fld label="IV Note (from option chain)" value={prep.ivNote || ''} onChange={v => upd('ivNote', v)} placeholder="~26%" mono />
         </div>
         {(() => {

@@ -121,9 +121,19 @@ export default function QuickLog({ open, onClose, onSubmit, prep, editing }) {
     const entryDate = new Date(entryDateStr)
     entryDate.setHours(hh || 0, mm || 0, 0, 0)
 
+    // Stamp closedAt on the moment a trade transitions out of 'open'. Preserve
+    // an existing closedAt when editing a closed trade so the holding period
+    // doesn't reset on every edit.
+    const wasOpen = !editing || editing.status === 'open'
+    const isClosed = status !== 'open'
+    const closedAt = isClosed
+      ? (wasOpen ? new Date().toISOString() : editing?.closedAt || new Date().toISOString())
+      : null
+
     const data = {
       id: editing?.id || uid(),
       ticker: ticker.trim().toUpperCase(),
+      closedAt,
       instrument: 'options',
       optType,
       strike: parseFloat(strike) || null,

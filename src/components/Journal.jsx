@@ -160,11 +160,12 @@ function TradeRow({ trade, onUpdate, onEdit, onDelete }) {
 
   return (
     <div style={{ borderLeft: `3px solid ${sideColor}`, background: '#0a0a0a', borderBottom: '1px solid #111' }}>
-      <div onClick={() => setOpen(o => !o)} style={{ display: 'grid', gridTemplateColumns: '50px 56px 56px 50px 70px 70px 80px 60px 1fr 30px', gap: 8, padding: '10px 14px', cursor: 'pointer', alignItems: 'center', fontFamily: MONO, fontSize: 11 }}>
+      <div onClick={() => setOpen(o => !o)} style={{ display: 'grid', gridTemplateColumns: '50px 56px 56px 50px 50px 70px 70px 78px 60px 1fr 30px', gap: 8, padding: '10px 14px', cursor: 'pointer', alignItems: 'center', fontFamily: MONO, fontSize: 11 }}>
         <span style={{ color: '#666' }}>{time}</span>
         <span style={{ color: LIME, fontWeight: 700 }}>{trade.ticker || '—'}</span>
         <span style={{ color: '#666' }}>{trade.strike ? `$${trade.strike}` : '—'}</span>
         <span style={{ color: trade.optType === 'call' ? LIME : trade.optType === 'put' ? RED : '#666', fontWeight: 700, fontSize: 10 }}>{(trade.optType || '—').toUpperCase()}</span>
+        <span style={{ color: trade.dte == null ? '#444' : trade.dte === 0 ? YELLOW : trade.dte >= 3 ? '#60A5FA' : '#aaa', fontSize: 10, fontWeight: 700 }}>{trade.dte != null ? `${trade.dte}DTE` : '—'}</span>
         <span style={{ color: '#aaa' }}>${f2(trade.entry)}</span>
         <span style={{ color: '#aaa' }}>{trade.exitPrice != null ? `$${f2(trade.exitPrice)}` : '—'}</span>
         <span style={{ color: trade.pnl != null ? (trade.pnl >= 0 ? LIME : RED) : '#666', fontWeight: 700 }}>{trade.pnl != null ? fmtD(trade.pnl) : '—'}</span>
@@ -180,6 +181,21 @@ function TradeRow({ trade, onUpdate, onEdit, onDelete }) {
             <div><div style={{ color: '#444', fontSize: 9, letterSpacing: '0.1em', marginBottom: 3 }}>CONTRACTS</div><div style={{ color: '#aaa' }}>{trade.contracts || 1}</div></div>
             <div><div style={{ color: '#444', fontSize: 9, letterSpacing: '0.1em', marginBottom: 3 }}>EXIT TIME</div><div style={{ color: '#aaa' }}>{trade.exitTime || '—'}</div></div>
           </div>
+
+          {/* Holding period — only meaningful on closed multi-bar trades */}
+          {trade.date && trade.closedAt && (() => {
+            const ms = new Date(trade.closedAt).getTime() - new Date(trade.date).getTime()
+            if (ms < 60_000) return null
+            const days = Math.floor(ms / 86400000)
+            const hours = Math.floor((ms % 86400000) / 3600000)
+            const mins = Math.floor((ms % 3600000) / 60000)
+            const label = days > 0 ? `${days} day${days !== 1 ? 's' : ''}, ${hours} hour${hours !== 1 ? 's' : ''}` : hours > 0 ? `${hours} hour${hours !== 1 ? 's' : ''}, ${mins} min` : `${mins} min`
+            return (
+              <div style={{ fontSize: 10, fontFamily: MONO, color: '#666' }}>
+                <span style={{ color: '#444', letterSpacing: '0.1em' }}>HELD</span> {label}
+              </div>
+            )
+          })()}
           <div>
             <div style={{ fontSize: 9, color: '#444', letterSpacing: '0.1em', fontFamily: MONO, marginBottom: 4 }}>NOTES</div>
             <input type="text" value={notes} onChange={e => setNotes(e.target.value)} style={{ width: '100%', background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 4, color: '#aaa', fontFamily: MONO, fontSize: 11, padding: '8px 10px', outline: 'none' }} />
@@ -433,8 +449,8 @@ Be direct and specific. No generic advice. Max 150 words total. End with "GRADE:
         </div>
       ) : (
         <div style={{ background: '#090909', border: `1px solid ${BORDER}`, borderRadius: 5, overflow: 'hidden' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '50px 56px 56px 50px 70px 70px 80px 60px 1fr 30px', gap: 8, padding: '9px 14px', borderBottom: '1px solid #111', background: '#0a0a0a' }}>
-            {['Time', 'Ticker', 'Strike', 'Type', 'Entry', 'Exit', 'P&L', 'R:R', 'Setup', ''].map(h => <span key={h} style={{ fontSize: 9, letterSpacing: '0.1em', color: '#333', textTransform: 'uppercase', fontFamily: MONO }}>{h}</span>)}
+          <div style={{ display: 'grid', gridTemplateColumns: '50px 56px 56px 50px 50px 70px 70px 78px 60px 1fr 30px', gap: 8, padding: '9px 14px', borderBottom: '1px solid #111', background: '#0a0a0a' }}>
+            {['Time', 'Ticker', 'Strike', 'Type', 'DTE', 'Entry', 'Exit', 'P&L', 'R:R', 'Setup', ''].map(h => <span key={h} style={{ fontSize: 9, letterSpacing: '0.1em', color: '#333', textTransform: 'uppercase', fontFamily: MONO }}>{h}</span>)}
           </div>
           {visibleSorted.map(t => <TradeRow key={t.id} trade={t} onUpdate={onUpdate} onEdit={onEdit} onDelete={onDelete} />)}
         </div>

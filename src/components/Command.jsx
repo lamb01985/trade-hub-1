@@ -477,7 +477,9 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
         }
         const c = cfg[session] || cfg['after-hours']
         const eventSteps = (todayEvents || []).map(e => `⚠ ${e.name}${e.time ? ` at ${e.time} CT` : ''} today — adjust your plan around it.`)
-        const allSteps = [...eventSteps, ...c.steps]
+        const openMultiDay = (trades || []).filter(t => t.status === 'open' && (parseInt(t.dte) || 0) >= 3)
+        const multiDaySteps = openMultiDay.map(t => `◆ Multi-day position active (${t.ticker} ${t.optType?.toUpperCase()} ${t.strike ? '$' + t.strike : ''}, ${t.dte}DTE) — check delta and theta. Is the thesis still valid? Adjust stop if needed.`)
+        const allSteps = [...eventSteps, ...multiDaySteps, ...c.steps]
         return (
           <div style={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: 5, padding: '16px 20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -489,10 +491,13 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
             </div>
             {allSteps.map((step, i) => {
               const isEventStep = i < eventSteps.length
+              const isMultiDayStep = !isEventStep && i < eventSteps.length + multiDaySteps.length
+              const callout = isEventStep || isMultiDayStep
+              const calloutColor = isEventStep ? YELLOW : isMultiDayStep ? '#60A5FA' : c.color
               return (
                 <div key={i} style={{ display: 'flex', gap: 10, padding: '5px 0', borderBottom: i < allSteps.length - 1 ? `1px solid ${c.border}` : 'none' }}>
-                  <span style={{ color: isEventStep ? YELLOW : c.color, fontFamily: MONO, fontSize: 10, minWidth: 16, opacity: 0.6, marginTop: 1 }}>{isEventStep ? '!' : `${i - eventSteps.length + 1}.`}</span>
-                  <span style={{ color: isEventStep ? YELLOW : session === 'open' ? '#aaa' : '#777', fontFamily: MONO, fontSize: 11, lineHeight: 1.5 }}>{step}</span>
+                  <span style={{ color: calloutColor, fontFamily: MONO, fontSize: 10, minWidth: 16, opacity: 0.6, marginTop: 1 }}>{callout ? (isEventStep ? '!' : '◆') : `${i - eventSteps.length - multiDaySteps.length + 1}.`}</span>
+                  <span style={{ color: callout ? calloutColor : session === 'open' ? '#aaa' : '#777', fontFamily: MONO, fontSize: 11, lineHeight: 1.5 }}>{step}</span>
                 </div>
               )
             })}

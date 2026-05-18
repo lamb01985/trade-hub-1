@@ -8,18 +8,24 @@ const SUBTABS = [
   { id: 'decision', label: 'DECISION' },
 ]
 
-const NON_NEGOTIABLES = [
-  { n: 1, text: 'Three losses = stop. Close the platform.', tier: 'hard' },
-  { n: 2, text: 'Hit daily loss limit = stop. The app locks you out.', tier: 'hard' },
-  { n: 3, text: '10:30–1:30 CT = no new trades. Ever.', tier: 'hard' },
-  { n: 4, text: '2:45 CT = exit all 0DTE. Right now.', tier: 'hard' },
-  { n: 5, text: 'Feeling emotional = stop. Come back tomorrow.', tier: 'hard' },
-  { n: 6, text: 'R:R below 2:1 = no trade. The math must work first.', tier: 'filter' },
-  { n: 7, text: 'Checklist incomplete = no trade. Every box green.', tier: 'filter' },
-  { n: 8, text: 'Alignment score below 55 = no trade. Wait.', tier: 'filter' },
-  { n: 9, text: 'No candle CLOSE confirmation = no trade. Wicks don\'t count.', tier: 'filter' },
-  { n: 10, text: '"I want to trade" is not a reason. The system decides.', tier: 'filter' },
-]
+function buildNonNegotiables(isMultiDay) {
+  return [
+    { n: 1, text: 'Three losses = stop. Close the platform.', tier: 'hard' },
+    { n: 2, text: 'Hit daily loss limit = stop. The app locks you out.', tier: 'hard' },
+    { n: 3, text: isMultiDay
+      ? '10:30–1:30 CT — no NEW entries on 0DTE. Multi-day positions: manage existing trades, no new opens.'
+      : '10:30–1:30 CT = no new trades. Ever.', tier: 'hard' },
+    { n: 4, text: isMultiDay
+      ? '2:45 CT — exit 0DTE only. Multi-day positions: trail stop and hold.'
+      : '2:45 CT = exit all 0DTE. Right now.', tier: 'hard' },
+    { n: 5, text: 'Feeling emotional = stop. Come back tomorrow.', tier: 'hard' },
+    { n: 6, text: 'R:R below 2:1 = no trade. The math must work first.', tier: 'filter' },
+    { n: 7, text: 'Checklist incomplete = no trade. Every box green.', tier: 'filter' },
+    { n: 8, text: 'Alignment score below 55 = no trade. Wait.', tier: 'filter' },
+    { n: 9, text: 'No candle CLOSE confirmation = no trade. Wicks don\'t count.', tier: 'filter' },
+    { n: 10, text: '"I want to trade" is not a reason. The system decides.', tier: 'filter' },
+  ]
+}
 
 const PROCESS_BLOCKS = [
   { time: 'NIGHT BEFORE', morning: true, steps: [
@@ -194,7 +200,11 @@ function DecisionTreeSVG() {
 
 // ── Main component ───────────────────────────────────────────────────────────
 
-export default function Playbook({ trades, settings, lockedOut }) {
+export default function Playbook({ trades, settings, lockedOut, prep }) {
+  const plannedDTE = parseInt(prep?.plannedDTE) || 0
+  const openMultiDay = (trades || []).some(t => t.status === 'open' && (parseInt(t.dte) || 0) >= 3)
+  const isMultiDay = plannedDTE >= 3 || openMultiDay
+  const NON_NEGOTIABLES = buildNonNegotiables(isMultiDay)
   const [pbState, setPbState] = useLocalStorage('th-playbook', { date: '', steps: {} })
   const [subTab, setSubTab] = useState('process')
   const today = todayStr()
