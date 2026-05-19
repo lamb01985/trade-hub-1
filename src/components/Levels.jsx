@@ -171,7 +171,7 @@ function SetupBadge({ quality, nearestAbove, nearestBelow, price, atr, vwapData,
   )
 }
 
-export default function Levels({ liveData, orbHigh, orbLow, settings, onSettingsChange, mtfAlignment }) {
+export default function Levels({ liveData, orbHigh, orbLow, settings, onSettingsChange, mtfAlignment, putThesis }) {
   const [customLabel, setCustomLabel] = useState('')
   const [customPrice, setCustomPrice] = useState('')
   const [customLevels, setCustomLevels] = useState([])
@@ -259,6 +259,21 @@ export default function Levels({ liveData, orbHigh, orbLow, settings, onSettings
           )}
         </div>
       </div>
+
+      {/* Active put thesis banner */}
+      {putThesis?.trigger != null && (() => {
+        const triggered = price != null && price <= putThesis.trigger
+        return (
+          <div style={{ background: triggered ? '#150505' : '#100404', border: `1px solid ${RED}55`, borderRadius: 5, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, animation: triggered ? 'hdrpulse 1.5s infinite' : 'none' }}>
+            <div style={{ fontSize: 12, fontFamily: MONO, color: RED, fontWeight: 700, letterSpacing: '0.06em' }}>
+              {triggered ? '⚠ PUT THESIS TRIGGERED' : '⚠ PUT THESIS ACTIVE'} — entry below ${f2(putThesis.trigger)}
+            </div>
+            <div style={{ fontSize: 10, fontFamily: MONO, color: '#aa6666' }}>
+              {price != null && `Current $${f2(price)} · ${triggered ? 'BREAK CONFIRMED' : `$${f2(price - putThesis.trigger)} above trigger`}`}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Setup quality banner */}
       {price && (

@@ -8,6 +8,7 @@ import Levels from './components/Levels.jsx'
 import ChartTab from './components/Chart.jsx'
 import CalendarTab from './components/Calendar.jsx'
 import Playbook from './components/Playbook.jsx'
+import ShortThesis from './components/ShortThesis.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
 import { getAllEvents, highImpactToday } from './lib/calendar.js'
 import { exchangeCode, refreshTokens, getAccountNumbers, getAccountSummary, getTodaysFilledOrders, countDayTrades, SCHWAB_BLUE } from './lib/schwab.js'
@@ -15,10 +16,11 @@ import { ORBTab, IVAnalyzerTab, CalculatorTab, ChecklistTab, StatsTab, Watchlist
 import Journal from './components/Journal.jsx'
 import QuickLog from './components/QuickLog.jsx'
 import GlossaryModal from './components/Glossary.jsx'
-import { LIME, RED, YELLOW, MONO, SANS, DARK, BORDER, todayStr, uid, getSession } from './constants.js'
+import { LIME, RED, YELLOW, MONO, SANS, DARK, BORDER, todayStr, uid, getSession, f2 } from './constants.js'
 
 const TABS = [
   { id: 'watchlist', label: 'Watchlist', desc: 'Stocks to watch' },
+  { id: 'shortthesis', label: 'Short Thesis', desc: 'Put candidates' },
   { id: 'prep', label: 'Prep', desc: 'Morning game plan' },
   { id: 'playbook', label: 'Playbook', desc: 'Daily system' },
   { id: 'command', label: 'Command', desc: 'Session center' },
@@ -59,6 +61,7 @@ export default function App() {
   const [schwabDayTrades, setSchwabDayTrades] = useState(0)
   const [schwabToast, setSchwabToast] = useState('')
   const [schwabConnectError, setSchwabConnectError] = useState('')
+  const [putTheses, setPutTheses] = useLocalStorage('th-short-theses', {})
   const [_priceTick, setPriceTick] = useState(0)
   useEffect(() => { const id = setInterval(() => setPriceTick(t => t + 1), 5000); return () => clearInterval(id) }, [])
 
@@ -277,6 +280,19 @@ export default function App() {
                 {headerOpenSummary} {headerOpenPnl >= 0 ? '+' : ''}${Math.abs(headerOpenPnl).toFixed(0)}
               </button>
             )}
+            {(() => {
+              const curT = (prep.ticker || 'QQQ').toUpperCase()
+              const thesis = putTheses[curT]
+              if (!thesis?.trigger || !liveData?.price) return null
+              const near = Math.abs(liveData.price - thesis.trigger) <= 1
+              const triggered = liveData.price <= thesis.trigger
+              if (!near && !triggered) return null
+              return (
+                <button onClick={() => setActiveTab('shortthesis')} title="Active put thesis trigger" style={{ fontSize: 9, color: RED, fontFamily: MONO, background: 'transparent', border: `1px solid ${RED}55`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.08em', cursor: 'pointer', fontWeight: 700, animation: triggered ? 'hdrpulse 1.5s infinite' : 'none' }}>
+                  PUT {triggered ? 'TRIGGER' : 'NEAR'}: {curT} ↓${f2(thesis.trigger)}
+                </button>
+              )
+            })()}
             {schwabToken?.access_token && schwabDayTrades > 0 && (() => {
               const c = schwabDayTrades >= 3 ? RED : schwabDayTrades >= 2 ? YELLOW : '#888'
               return (
@@ -379,6 +395,12 @@ export default function App() {
 
       {/* Content */}
       <div style={{ maxWidth: activeTab === 'chart' ? '100%' : 960, margin: '0 auto', padding: activeTab === 'chart' ? '20px 24px 40px' : '28px 20px 60px' }}>
+        {activeTab === 'shortthesis' && (
+          <ErrorBoundary label="Short Thesis tab">
+            <ShortThesis apiKey={apiKey} anthropicKey={anthropicKey} theses={putTheses} onThesesChange={setPutTheses} />
+          </ErrorBoundary>
+        )}
+
         {activeTab === 'watchlist' && (
           <WatchlistTab
             apiKey={apiKey}
@@ -439,7 +461,7 @@ export default function App() {
 
         {activeTab === 'calendar' && (
           <ErrorBoundary label="Calendar tab">
-            <CalendarTab />
+            <CalendarTab putTheses={putTheses} />
           </ErrorBoundary>
         )}
 
@@ -452,6 +474,7 @@ export default function App() {
               settings={settings}
               onSettingsChange={setSettings}
               mtfAlignment={mtfAlignment}
+              putThesis={putTheses[(prep.ticker || 'QQQ').toUpperCase()]}
             />
           </ErrorBoundary>
         )}
@@ -466,6 +489,7 @@ export default function App() {
               customLevels={customLevels}
               onCustomLevelsChange={setCustomLevels}
               mtfAlignment={mtfAlignment}
+              putThesis={putTheses[(prep.ticker || 'QQQ').toUpperCase()]}
             />
           </ErrorBoundary>
         )}

@@ -251,7 +251,7 @@ function OpexEducation({ onDismiss }) {
   )
 }
 
-export default function CalendarTab() {
+export default function CalendarTab({ putTheses = {} }) {
   const [view, setView] = useState('week')
   const [selectedDate, setSelectedDate] = useState(null)
   const [edu, setEdu] = useLocalStorage('th-opex-edu-dismissed', false)
@@ -310,6 +310,23 @@ export default function CalendarTab() {
       </div>
 
       <SmartWarnings events={events} />
+
+      {/* Put thesis earnings flags */}
+      {(() => {
+        const thesisTickers = Object.keys(putTheses || {})
+        if (!thesisTickers.length) return null
+        const flagged = events.filter(e => e.type === 'earnings' && thesisTickers.includes(e.ticker?.toUpperCase()))
+        if (!flagged.length) return null
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {flagged.map((e, i) => (
+              <div key={i} style={{ background: '#150505', border: `1px solid ${RED}55`, borderRadius: 4, padding: '10px 14px', fontSize: 11, fontFamily: MONO, color: '#cc7a7a', lineHeight: 1.55 }}>
+                ⚠ <strong style={{ color: RED }}>{e.ticker}</strong> earnings {parseYmd(e.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} {e.bmo || ''} — active put thesis. IV spike incoming. Buy puts BEFORE if thesis confirmed.
+              </div>
+            ))}
+          </div>
+        )
+      })()}
 
       {!edu && <OpexEducation onDismiss={() => setEdu(true)} />}
 

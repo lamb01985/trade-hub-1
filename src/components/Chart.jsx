@@ -129,7 +129,7 @@ function detectConfluences(levels, threshold = 0.30) {
   })
 }
 
-export default function ChartTab({ liveData, levelMap, trades, ticker, customLevels = [], onCustomLevelsChange, mtfAlignment }) {
+export default function ChartTab({ liveData, levelMap, trades, ticker, customLevels = [], onCustomLevelsChange, mtfAlignment, putThesis }) {
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 768)
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -162,6 +162,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
   const swingLowLineRef = useRef(null)
   const bosLineRef = useRef(null)
   const profileOverlayRef = useRef(null)
+  const putTriggerLineRef = useRef(null)
 
   const [timeframe, setTimeframe] = useState('5m')
   const [layers, setLayers] = useState({ pivots: true, vwap: true, fibs: true, zones: true, signals: true, structure: true, premarket: true, volprofile: true })
@@ -545,6 +546,27 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
       })
     }
   }, [currentAnalysis, layers.structure])
+
+  // ── Active put-thesis entry trigger line ───────────────────────────────────
+  useEffect(() => {
+    if (!candleRef.current) return
+    if (putTriggerLineRef.current) {
+      try { candleRef.current.removePriceLine(putTriggerLineRef.current) } catch {}
+      putTriggerLineRef.current = null
+    }
+    if (putThesis?.trigger != null) {
+      putTriggerLineRef.current = candleRef.current.createPriceLine({
+        price: putThesis.trigger,
+        color: RED,
+        lineWidth: 2,
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+        axisLabelColor: '#1a1a1a',
+        axisLabelTextColor: RED,
+        title: `PUT ENTRY $${f2(putThesis.trigger)}`,
+      })
+    }
+  }, [putThesis?.trigger])
 
   // ── Volume profile sidebar (SVG overlay on right side of chart) ────────────
   useEffect(() => {

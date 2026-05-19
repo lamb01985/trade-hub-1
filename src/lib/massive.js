@@ -42,6 +42,45 @@ export async function getIntradayBarsForDate(apiKey, ticker, dateStr, multiplier
   return d.results || []
 }
 
+// ── Fundamentals & reference (Short Thesis screener) ─────────────────────────
+
+export async function getFinancials(apiKey, ticker, timeframe = 'quarterly', limit = 8) {
+  const d = await get(apiKey, '/vX/reference/financials', { ticker, timeframe, limit, order: 'desc' })
+  return d.results || []
+}
+
+export async function getTickerDetails(apiKey, ticker) {
+  const d = await get(apiKey, `/v3/reference/tickers/${ticker}`)
+  return d.results || null
+}
+
+export async function getSnapshot(apiKey, ticker) {
+  const d = await get(apiKey, `/v2/snapshot/locale/us/markets/stocks/tickers/${ticker}`)
+  return d.ticker || null
+}
+
+export async function getWeeklyBarsRange(apiKey, ticker, weeks = 52) {
+  const to = new Date().toISOString().slice(0, 10)
+  const from = new Date(Date.now() - weeks * 7 * 86400000).toISOString().slice(0, 10)
+  const d = await get(apiKey, `/v2/aggs/ticker/${ticker}/range/1/week/${from}/${to}`, { adjusted: 'true', sort: 'asc', limit: '300' })
+  return d.results || []
+}
+
+export async function getRecentNews(apiKey, ticker, limit = 5) {
+  const d = await get(apiKey, '/v2/reference/news', { ticker, limit, order: 'desc', sort: 'published_utc' })
+  return d.results || []
+}
+
+// Short interest is paid-tier on Polygon — we attempt and gracefully return null.
+export async function getShortInterest(apiKey, ticker) {
+  try {
+    const d = await get(apiKey, '/v3/reference/short-interest', { 'ticker.eq': ticker, limit: 1, order: 'desc' })
+    return d.results?.[0] || null
+  } catch {
+    return null
+  }
+}
+
 export function priorTradingDayStr(refDate = new Date()) {
   const d = new Date(refDate)
   d.setDate(d.getDate() - 1)
