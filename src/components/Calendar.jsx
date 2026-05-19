@@ -3,6 +3,7 @@ import { Card, SLabel, Heading, Pill, Btn } from './ui.jsx'
 import { useLocalStorage } from '../hooks/useStore.js'
 import { LIME, RED, YELLOW, BLUE, ORANGE, PURPLE, MONO, BORDER, PANEL } from '../constants.js'
 import { getAllEvents, eventsOn, ymd, parseYmd, startOfWeek, colorForEvent, fetchNasdaqEarnings, MAJOR_TICKERS } from '../lib/calendar.js'
+import { getRotationSnapshot, flowLabel, tierColor, trendArrow, SECTORS, writeSectorCache, readSectorCache } from '../lib/sectors.js'
 
 const VIEWS = [
   { id: 'week', label: 'This Week' },
@@ -251,7 +252,159 @@ function OpexEducation({ onDismiss }) {
   )
 }
 
-export default function CalendarTab({ putTheses = {} }) {
+// ── Sector Rotation view ─────────────────────────────────────────────────────
+
+function SectorHeatTile({ row, onClick }) {
+  const c = tierColor(row.tier)
+  const isStrong = row.tier === 'strong-in' || row.tier === 'strong-out'
+  const bg = row.tier === 'strong-in' ? '#0a1408' : row.tier === 'mod-in' ? '#0a0e08' : row.tier === 'strong-out' ? '#150505' : row.tier === 'mod-out' ? '#110808' : '#0a0a0a'
+  const todayPct = row.metrics?.todayChangePct
+  return (
+    <div onClick={onClick} style={{ background: bg, border: `1px solid ${c}55`, borderRadius: 4, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 4, cursor: 'pointer', minHeight: 86 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <span style={{ fontSize: 11, fontFamily: MONO, fontWeight: 900, color: '#e8e8e8', letterSpacing: '0.04em' }}>{row.short}</span>
+        <span style={{ fontSize: 9, fontFamily: MONO, color: '#555' }}>{row.etf}</span>
+      </div>
+      <div style={{ fontSize: 14, fontFamily: MONO, fontWeight: 700, color: todayPct == null ? '#666' : todayPct >= 0 ? LIME : RED }}>
+        {todayPct == null ? '—' : `${todayPct >= 0 ? '+' : ''}${todayPct.toFixed(2)}%`}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: 11, fontFamily: MONO, color: c, fontWeight: 700, letterSpacing: '0.08em' }}>{trendArrow(row.metrics?.fiveDayReturn)}</span>
+        <span style={{ fontSize: 11, fontFamily: MONO, fontWeight: 900, color: c }}>{row.score >= 0 ? '+' : ''}{row.score}</span>
+      </div>
+    </div>
+  )
+}
+
+function SectorRotationView({ apiKey }) {
+  const [data, setData] = useState(() => {
+    const cached = readSectorCache()
+    return cached?.rows ? cached : null
+  })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  async function load() {
+    if (!apiKey) { setError('Add a Massive API key in Command to activate sector rotation.'); return }
+    setLoading(true); setError('')
+    try {
+      const snap = await getRotationSnapshot(apiKey)
+      setData(snap)
+      writeSectorCache(snap)
+    } catch (e) {
+      setError(e.message || 'Sector fetch failed')
+    }
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    // Skip the immediate fetch if we already loaded fresh cached data
+    if (!data || (Date.now() - (data.fetchedAt || 0)) > 30 * 60 * 1000) load()
+    // Auto-refresh every 30 min during weekday market hours (8:30-15:00 CT)
+    const id = setInterval(() => {
+      const day = new Date().getDay()
+      if (day === 0 || day === 6) return
+      const h = new Date().getHours()
+      if (h >= 8 && h < 15) load()
+    }, 30 * 60 * 1000)
+    return () => clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiKey])
+
+  const isWeekend = (() => { const d = new Date().getDay(); return d === 0 || d === 6 })()
+  const top = data?.rows?.slice(0, 2) || []
+  const bottom = data?.rows ? [...data.rows].slice(-2).reverse() : []
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+        <SLabel style={{ marginBottom: 0 }}>Sector Rotation Heat Map</SLabel>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {data?.fetchedAt && (
+            <span style={{ fontSize: 10, fontFamily: MONO, color: '#444' }}>
+              {isWeekend ? 'Weekend — showing Friday close · ' : ''}Updated {new Date(data.fetchedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+          <Btn small variant="ghost" onClick={load} disabled={loading || !apiKey}>{loading ? 'Refreshing...' : 'Refresh'}</Btn>
+        </div>
+      </div>
+
+      {error && <div style={{ background: '#150505', border: `1px solid ${RED}55`, borderRadius: 4, padding: '12px 16px', fontSize: 11, fontFamily: MONO, color: RED }}>{error}</div>}
+
+      {data?.rows?.length ? (
+        <>
+          {/* 4×3 heat map (11 sectors + last cell shows SPY benchmark) */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+            {data.rows.map(r => <SectorHeatTile key={r.etf} row={r} onClick={() => {}} />)}
+            {data.spy && (() => {
+              const pct = data.spy.todayChangePct
+              const c = pct == null ? '#666' : pct >= 0 ? LIME : RED
+              return (
+                <div style={{ background: '#0a0a0a', border: '1px solid #1a2a1a', borderRadius: 4, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 4, minHeight: 86 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                    <span style={{ fontSize: 11, fontFamily: MONO, fontWeight: 900, color: '#aaa', letterSpacing: '0.04em' }}>SPY</span>
+                    <span style={{ fontSize: 9, fontFamily: MONO, color: '#444' }}>BENCH</span>
+                  </div>
+                  <div style={{ fontSize: 14, fontFamily: MONO, fontWeight: 700, color: c }}>{pct == null ? '—' : `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`}</div>
+                  <div style={{ fontSize: 10, fontFamily: MONO, color: '#444' }}>5d {data.spy.fiveDayReturn != null ? `${data.spy.fiveDayReturn >= 0 ? '+' : ''}${data.spy.fiveDayReturn.toFixed(1)}%` : '—'}</div>
+                </div>
+              )
+            })()}
+          </div>
+
+          {/* Ranked table */}
+          <div style={{ background: '#090909', border: `1px solid ${BORDER}`, borderRadius: 5, overflow: 'hidden' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 60px 70px 70px 80px 60px 60px 80px', gap: 8, padding: '9px 14px', borderBottom: '1px solid #111', background: '#0a0a0a' }}>
+              {['Sector', 'ETF', 'Today', '5-Day', 'RS / SPY', 'RVOL', 'Score', 'Flow'].map(h => <span key={h} style={{ fontSize: 9, letterSpacing: '0.1em', color: '#333', textTransform: 'uppercase', fontFamily: MONO }}>{h}</span>)}
+            </div>
+            {data.rows.map(r => {
+              const m = r.metrics
+              const c = tierColor(r.tier)
+              return (
+                <div key={r.etf} style={{ display: 'grid', gridTemplateColumns: '1.4fr 60px 70px 70px 80px 60px 60px 80px', gap: 8, padding: '10px 14px', alignItems: 'center', fontFamily: MONO, fontSize: 11, borderBottom: '1px solid #0d0d0d', borderLeft: `3px solid ${c}` }}>
+                  <span style={{ color: '#e8e8e8', fontWeight: 700 }}>{r.name}</span>
+                  <span style={{ color: '#888' }}>{r.etf}</span>
+                  <span style={{ color: m?.todayChangePct == null ? '#444' : m.todayChangePct >= 0 ? LIME : RED, fontWeight: 700 }}>{m?.todayChangePct == null ? '—' : `${m.todayChangePct >= 0 ? '+' : ''}${m.todayChangePct.toFixed(2)}%`}</span>
+                  <span style={{ color: m?.fiveDayReturn == null ? '#444' : m.fiveDayReturn >= 0 ? LIME : RED }}>{m?.fiveDayReturn == null ? '—' : `${m.fiveDayReturn >= 0 ? '+' : ''}${m.fiveDayReturn.toFixed(1)}%`}</span>
+                  <span style={{ color: m?.rsToday == null ? '#444' : m.rsToday > 1 ? LIME : RED }}>{m?.rsToday == null ? '—' : m.rsToday.toFixed(2)}</span>
+                  <span style={{ color: m?.rvol == null ? '#444' : m.rvol > 1.5 ? LIME : m.rvol > 1 ? YELLOW : '#888' }}>{m?.rvol == null ? '—' : `${m.rvol.toFixed(2)}x`}</span>
+                  <span style={{ color: c, fontWeight: 900 }}>{r.score >= 0 ? '+' : ''}{r.score}</span>
+                  <span style={{ color: c, fontWeight: 700, letterSpacing: '0.08em' }}>{r.arrow}</span>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Rotation intelligence */}
+          <div style={{ background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 5, padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <SLabel style={{ marginBottom: 0 }}>Rotation Intelligence</SLabel>
+            {top.length === 2 && (
+              <div style={{ fontSize: 11, fontFamily: MONO, color: LIME, lineHeight: 1.7 }}>
+                <strong style={{ color: LIME }}>MONEY FLOWING INTO:</strong> {top.map(t => t.name).join(', ')}<br />
+                <span style={{ color: '#7a9a6a' }}>Bias: long setups have tailwind in these names. Tickers: {SECTORS.filter(s => top.map(t => t.etf).includes(s.etf)).map(s => s.etf).join(', ')}.</span>
+              </div>
+            )}
+            {bottom.length === 2 && bottom[0].score < 0 && (
+              <div style={{ fontSize: 11, fontFamily: MONO, color: RED, lineHeight: 1.7 }}>
+                <strong style={{ color: RED }}>MONEY FLOWING OUT OF:</strong> {bottom.map(t => t.name).join(', ')}<br />
+                <span style={{ color: '#9a6a6a' }}>Bias: put setups favored. Check Short Thesis tab for candidates.</span>
+              </div>
+            )}
+          </div>
+        </>
+      ) : (
+        !loading && !error && (
+          <div style={{ fontSize: 11, fontFamily: MONO, color: '#444', padding: '20px 0' }}>No data loaded yet.</div>
+        )
+      )}
+    </div>
+  )
+}
+
+// ── Calendar root ────────────────────────────────────────────────────────────
+
+export default function CalendarTab({ putTheses = {}, apiKey }) {
+  const [topTab, setTopTab] = useState('rotation')
   const [view, setView] = useState('week')
   const [selectedDate, setSelectedDate] = useState(null)
   const [edu, setEdu] = useLocalStorage('th-opex-edu-dismissed', false)
@@ -300,13 +453,50 @@ export default function CalendarTab({ putTheses = {} }) {
 
   const dayDetail = selectedDate ? eventsOn(events, selectedDate) : []
 
+  const earningsOnly = events.filter(e => e.type === 'earnings')
+  const TOP_TABS = [
+    { id: 'rotation', label: 'ROTATION' },
+    { id: 'events', label: 'EVENTS' },
+    { id: 'earnings', label: 'EARNINGS' },
+  ]
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
         <div><SLabel>Events & Catalysts</SLabel><Heading>Calendar</Heading></div>
-        <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
-          {VIEWS.map(v => <Pill key={v.id} label={v.label} active={view === v.id} onClick={() => setView(v.id)} />)}
-        </div>
+      </div>
+
+      {/* Top-level sub-tab switcher */}
+      <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid #161616' }}>
+        {TOP_TABS.map(t => {
+          const active = topTab === t.id
+          return (
+            <button key={t.id} onClick={() => setTopTab(t.id)} style={{
+              background: 'transparent', border: 'none',
+              borderBottom: active ? `2px solid ${LIME}` : '2px solid transparent',
+              color: active ? LIME : '#555',
+              fontFamily: MONO, fontSize: 11, fontWeight: active ? 700 : 500,
+              letterSpacing: '0.18em', padding: '10px 18px', cursor: 'pointer',
+              marginBottom: -1, transition: 'color 0.15s, border-color 0.15s',
+            }}>{t.label}</button>
+          )
+        })}
+      </div>
+
+      {/* ── ROTATION sub-tab ─────────────────────────────────────────────── */}
+      {topTab === 'rotation' && <SectorRotationView apiKey={apiKey} />}
+
+      {/* ── EARNINGS sub-tab ─────────────────────────────────────────────── */}
+      {topTab === 'earnings' && (
+        earningsOnly.length === 0
+          ? <div style={{ fontSize: 11, fontFamily: MONO, color: '#444', padding: '20px 0' }}>No earnings in the next 14 days.</div>
+          : <ListView events={earningsOnly} />
+      )}
+
+      {/* ── EVENTS sub-tab ───────────────────────────────────────────────── */}
+      {topTab === 'events' && (<>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 5 }}>
+        {VIEWS.map(v => <Pill key={v.id} label={v.label} active={view === v.id} onClick={() => setView(v.id)} />)}
       </div>
 
       <SmartWarnings events={events} />
@@ -360,6 +550,7 @@ export default function CalendarTab({ putTheses = {} }) {
           )}
         </>
       )}
+      </>)}
     </div>
   )
 }

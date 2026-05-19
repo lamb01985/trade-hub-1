@@ -461,7 +461,7 @@ export default function App() {
 
         {activeTab === 'calendar' && (
           <ErrorBoundary label="Calendar tab">
-            <CalendarTab putTheses={putTheses} />
+            <CalendarTab putTheses={putTheses} apiKey={apiKey} />
           </ErrorBoundary>
         )}
 
