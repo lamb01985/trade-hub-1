@@ -20,7 +20,6 @@ import { LIME, RED, YELLOW, MONO, SANS, DARK, BORDER, todayStr, uid, getSession,
 
 const TABS = [
   { id: 'watchlist', label: 'Watchlist', desc: 'Stocks to watch' },
-  { id: 'shortthesis', label: 'Short Thesis', desc: 'Put candidates' },
   { id: 'prep', label: 'Prep', desc: 'Morning game plan' },
   { id: 'playbook', label: 'Playbook', desc: 'Daily system' },
   { id: 'command', label: 'Command', desc: 'Session center' },
@@ -33,6 +32,7 @@ const TABS = [
   { id: 'calc', label: 'Calculator', desc: 'R:R + trade size' },
   { id: 'journal', label: 'Journal', desc: 'Trade log' },
   { id: 'stats', label: 'Stats', desc: 'Performance' },
+  { id: 'shortthesis', label: 'Short Thesis', desc: 'Put candidates' },
 ]
 
 const defaultSettings = { dailyLossLimit: 500, maxTradesPerDay: 5, orPeriod: '15', alertsEnabled: false }
