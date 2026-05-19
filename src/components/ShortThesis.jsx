@@ -2,8 +2,9 @@ import { useState, useMemo, useEffect } from 'react'
 import { useLocalStorage } from '../hooks/useStore.js'
 import { Card, SLabel, Heading, Btn, Pill } from './ui.jsx'
 import { LIME, RED, YELLOW, BLUE, ORANGE, MONO, BORDER, PANEL, f2, fmtD, fmtU } from '../constants.js'
-import { DEFAULT_UNIVERSE, scanUniverse, scoreLabel } from '../lib/shortThesis.js'
+import { DEFAULT_UNIVERSE, scanUniverse, scoreLabel, stageColor, highFreshness } from '../lib/shortThesis.js'
 import { getRecentNews } from '../lib/massive.js'
+import { rotationContextForTicker } from '../lib/sectors.js'
 
 function fmtPct(v, digits = 1) {
   if (v == null || isNaN(v)) return '—'
@@ -22,18 +23,27 @@ function fmtBig(v) {
 
 function Explainer({ onDismiss }) {
   return (
-    <div style={{ background: '#150505', border: `1px solid ${RED}33`, borderRadius: 6, padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div style={{ background: '#150505', border: `1px solid ${RED}33`, borderRadius: 6, padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <SLabel style={{ marginBottom: 0, color: RED }}>How to find the next Roblox</SLabel>
+        <SLabel style={{ marginBottom: 0, color: RED }}>Finding them early — the edge</SLabel>
         <button onClick={onDismiss} style={{ background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', fontFamily: MONO, fontSize: 10, letterSpacing: '0.1em' }}>DISMISS ✕</button>
       </div>
-      <div style={{ fontSize: 12, fontFamily: MONO, color: '#aa6666', lineHeight: 1.75 }}>
-        Roblox peaked at $150 with a P/S of 25× and decelerating revenue growth. Short volume quietly rose for weeks before anyone noticed.
+      <div style={{ fontSize: 12, fontFamily: MONO, color: '#aa6666', lineHeight: 1.8 }}>
+        The best put trades look <em style={{ color: '#cc7a7a' }}>wrong</em> at first. The stock is still near highs. Everyone believes the growth story. Fundamentals are "fine" on the surface.
         <br /><br />
-        This scanner finds exactly that pattern: <strong style={{ color: RED }}>extreme valuation</strong> + <strong style={{ color: RED }}>slowing growth</strong> + <strong style={{ color: RED }}>smart money positioning short</strong>.
+        But underneath:
+        <br />— Growth is decelerating quarter by quarter
+        <br />— Cash is burning faster than revenue grows
+        <br />— Insiders are quietly selling
+        <br />— Short volume is slowly rising
+        <br />— The valuation only works if perfection continues
+        <br /><br />
+        When one quarter disappoints, the multiple compresses <strong style={{ color: RED }}>violently</strong>. A stock at 25× P/S going to 8× P/S is a 68% loss for shareholders <em>even with no change in revenue</em>.
       </div>
-      <div style={{ background: '#0a0a0a', border: '1px solid #2a1010', borderRadius: 4, padding: '10px 14px', fontSize: 11, fontFamily: MONO, color: '#cc7a7a', lineHeight: 1.7 }}>
-        <strong style={{ color: RED }}>THE RULE:</strong> Never buy puts on fundamentals alone. Wait for a key technical level to FAIL on the chart. The scanner finds the thesis. The chart confirms the entry.
+      <div style={{ background: '#0a0a0a', border: '1px solid #2a1010', borderRadius: 4, padding: '12px 16px', fontSize: 11, fontFamily: MONO, color: '#cc7a7a', lineHeight: 1.7 }}>
+        <strong style={{ color: RED }}>ROBLOX example:</strong> At $140 — P/S 22×, growth slowing 83% → 45% → 22%, short volume rising. Nobody cared. Three quarters later: $40.
+        <br /><br />
+        That's what we're looking for. <strong style={{ color: '#e8c8c8' }}>Not after $140 → $40. At $140, when the cracks are forming.</strong>
       </div>
     </div>
   )
@@ -92,40 +102,37 @@ Days to cover: ${d.daysToCover ?? 'N/A'}
 Bear score: ${result.score}/100 (${result.label})
 Key reasons: ${result.reasons.join('; ')}`
 
-    const prompt = `You are a professional short seller. Write a concise, specific put thesis. No fluff. No disclaimers. Be direct.
+    const prompt = `You are a professional short seller specializing in early identification of overvalued growth stocks before the inevitable multiple compression.
 
-Use these exact section headers:
+Focus on: valuation extreme + growth deceleration + cash burn + dilution risk.
 
-[${d.ticker}] PUT THESIS
+The stock is still near highs — this is an EARLY thesis, not a late one. Do NOT mention technical breakdown (it hasn't happened yet). DO focus on when/why the narrative will crack.
 
-BEAR CASE
-[2 sentences — specific fundamental reason this stock falls further]
+Write the thesis as if you're a hedge fund analyst presenting to a PM: specific, data-driven, early. Use these exact section headers:
 
-WHAT'S ALREADY BROKEN
-[Revenue numbers, margin compression, FCF — specific data points]
+[${d.ticker}] EARLY PUT THESIS
 
-SMART MONEY SIGNAL
-[Short volume / days-to-cover trend interpretation, or note if data unavailable]
+EARLY WARNING SIGNALS DETECTED
+[List the specific data points that triggered this alert — P/S, deceleration, FCF, dilution. Bullet form.]
 
-ENTRY TRIGGER
-Wait for break and close below $[level]. Do not enter before confirmation.
+WHEN THE NARRATIVE CRACKS
+[What specific event will cause the market to reprice this. Examples: next earnings miss, insider selling accelerates, secondary offering, revenue guidance cut. Be specific about which catalyst is most likely.]
 
-TARGETS
-T1: $[price] — [reason]
-T2: $[price] — [reason]
+THE SETUP
+Stock at $${f2(d.price)} with P/S of ${d.ps?.toFixed(1) || 'N/A'}×.
+For this valuation to be justified: [specific math — what revenue growth must continue]
+Current trajectory suggests: [where growth is heading based on the deceleration data]
 
-STOP: $[price]
-Thesis invalidated if price reclaims [level].
+OPTIMAL ENTRY
+Wait for [specific event/level]. Consider 45-60 DTE puts at [strike] when [condition]. Do NOT enter before [confirmation event].
 
-TIMEFRAME: [weeks/months]
-
-PUT SETUP
-Consider [2-4 week] DTE puts at [ATM or slightly OTM strike] after entry trigger confirms. Avoid buying puts when IV rank above 60%.
+POSITION SIZING
+This is an EARLY thesis — sizing should be 25-50% of normal. Add size when the narrative cracks. Starter position now, full position later.
 
 CONVICTION: HIGH / MEDIUM / LOW
 
 RISK FACTORS
-[Short squeeze risk, positive catalyst, sector rotation that could lift the stock]
+[Short squeeze risk, positive catalyst, sector rotation. Be specific to this name.]
 
 Data:
 ${dataBlob}`
@@ -154,8 +161,74 @@ ${dataBlob}`
     setThesisLoading(false)
   }
 
+  const sectorCtx = rotationContextForTicker(result.ticker)
+
   return (
     <div style={{ background: '#0a0606', borderTop: `1px solid ${RED}22`, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+      {/* Stage badge + DTE guidance */}
+      {result.stage && (() => {
+        const sc = stageColor(result.stage.stage)
+        const fresh = highFreshness(d.daysFromHigh)
+        return (
+          <div style={{ background: result.stage.background, border: `1px solid ${sc}55`, borderRadius: 4, padding: '14px 16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+              <div style={{ fontSize: 11, fontFamily: MONO, fontWeight: 900, color: sc, letterSpacing: '0.14em' }}>
+                {result.stage.icon} STAGE {result.stage.stage} · {result.stage.label}
+              </div>
+              {fresh && d.daysFromHigh != null && (
+                <div style={{ fontSize: 10, fontFamily: MONO, color: fresh.color }}>
+                  {fresh.icon} {fresh.label} — 52w high {d.daysFromHigh}d ago
+                </div>
+              )}
+            </div>
+            <div style={{ fontSize: 12, fontFamily: MONO, fontWeight: 700, color: '#e8e8e8', marginBottom: 6 }}>
+              Recommended DTE: <span style={{ color: sc }}>{result.stage.dteRange}{result.isMeme && result.stage.stage <= 2 ? ' (minimum 45-60 due to meme/momentum)' : ''}</span>
+            </div>
+            <div style={{ fontSize: 11, fontFamily: MONO, color: '#aa8888', lineHeight: 1.6 }}>{result.stage.dteCopy}</div>
+          </div>
+        )
+      })()}
+
+      {/* Momentum / meme stock warning */}
+      {result.isMeme && (
+        <div style={{ background: '#110d04', border: `1px solid ${YELLOW}55`, borderRadius: 4, padding: '12px 14px' }}>
+          <div style={{ fontSize: 11, fontFamily: MONO, fontWeight: 900, color: YELLOW, letterSpacing: '0.1em', marginBottom: 5 }}>⚠ MOMENTUM / MEME STOCK</div>
+          <div style={{ fontSize: 11, fontFamily: MONO, color: '#c8a030', lineHeight: 1.6 }}>
+            High short-squeeze risk. Use <strong style={{ color: YELLOW }}>45-60 DTE minimum</strong>. Size at <strong style={{ color: YELLOW }}>50%</strong> of normal. Never buy puts into a rip — wait for the failed rally entry.
+          </div>
+        </div>
+      )}
+
+      {/* Timing risk */}
+      {result.timing && result.timing.score > 0 && (
+        <div style={{ background: result.timing.level === 'EXTREME' || result.timing.level === 'HIGH' ? '#150505' : '#110d04', border: `1px solid ${result.timing.score >= 40 ? RED : YELLOW}55`, borderRadius: 4, padding: '12px 14px' }}>
+          <div style={{ fontSize: 9, fontFamily: MONO, color: result.timing.score >= 40 ? RED : YELLOW, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 5 }}>Timing Risk · {result.timing.level}</div>
+          <div style={{ fontSize: 11, fontFamily: MONO, color: result.timing.score >= 40 ? '#cc7a7a' : '#c8a030', lineHeight: 1.55 }}>{result.timing.msg}</div>
+        </div>
+      )}
+
+      {/* Sector outflow context */}
+      {sectorCtx && (sectorCtx.tier === 'mod-out' || sectorCtx.tier === 'strong-out') && (
+        <div style={{ background: '#0d0606', border: `1px solid ${RED}44`, borderRadius: 4, padding: '10px 14px', fontSize: 11, fontFamily: MONO, color: '#cc8888', lineHeight: 1.6 }}>
+          <strong style={{ color: RED }}>Sector {sectorCtx.name}</strong> is seeing {sectorCtx.label.toLowerCase()} (score {sectorCtx.score > 0 ? '+' : ''}{sectorCtx.score}) — strengthens the bearish thesis on this ticker.
+        </div>
+      )}
+
+      {/* Entry timing checklist */}
+      <div style={{ background: '#0a0a0a', border: '1px solid #161616', borderRadius: 4, padding: '12px 14px' }}>
+        <div style={{ fontSize: 9, fontFamily: MONO, color: '#666', letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 6 }}>Entry Timing — wait for one</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11, fontFamily: MONO, color: '#888', lineHeight: 1.7 }}>
+          <div>□ Failed retest of broken support</div>
+          <div>□ Lower high confirmed on 5-min chart</div>
+          <div>□ Dead-cat bounce fails after earnings</div>
+        </div>
+        <div style={{ fontSize: 10, fontFamily: MONO, color: existing?.trigger != null ? RED : '#444', marginTop: 8 }}>
+          Status: {existing?.trigger != null
+            ? (d.price <= existing.trigger ? 'TRIGGERED — below thesis level' : `waiting — above $${f2(existing.trigger)}`)
+            : 'No thesis trigger set yet'}
+        </div>
+      </div>
 
       {/* Valuation analysis */}
       <div>
@@ -451,7 +524,11 @@ export default function ShortThesis({ apiKey, anthropicKey, theses, onThesesChan
                   <span style={{ color: r.data?.ps > 10 ? RED : r.data?.ps > 5 ? YELLOW : '#888' }}>{r.data?.ps?.toFixed(1) ?? '—'}</span>
                   <span style={{ color: '#888' }}>{r.data?.pe?.toFixed(0) ?? '—'}</span>
                   <span style={{ color: r.data?.daysToCover > 5 ? RED : '#888' }}>{r.data?.daysToCover?.toFixed(1) ?? '—'}</span>
-                  <span style={{ color: c, fontWeight: 700, fontSize: 10, letterSpacing: '0.06em' }}>{r.icon} {r.label}</span>
+                  <span style={{ color: c, fontWeight: 700, fontSize: 10, letterSpacing: '0.06em' }}>
+                    {r.icon} {r.label}
+                    {r.timing?.score >= 40 && <span style={{ color: r.timing.score >= 60 ? RED : YELLOW, marginLeft: 6, fontSize: 9 }}>⚠ TIMING</span>}
+                    {r.isMeme && <span style={{ color: YELLOW, marginLeft: 6, fontSize: 9 }}>MEME</span>}
+                  </span>
                   <ScoreBar score={r.score} tier={r.tier} />
                   <span style={{ color: '#444', fontSize: 14 }}>{isOpen ? '−' : '+'}</span>
                 </div>

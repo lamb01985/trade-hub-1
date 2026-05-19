@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Card, SLabel, Heading, Tile, Fld, Sel, Btn, Tip } from './ui.jsx'
 import { LIME, RED, YELLOW, MONO, BORDER, SESSION_LABELS, SESSION_COLORS, SESSION_TIPS, getSession, getMarketHolidayName, todayStr, f2, fmtD, fmtU } from '../constants.js'
+import { rotationContextForTicker } from '../lib/sectors.js'
 
 export default function Command({ trades, settings, onSettingsChange, lockedOut, onUnlock, apiKey, onApiKeyChange, anthropicKey, onAnthropicKeyChange, liveData, marketEvents, instrument, ticker = 'QQQ', levelMap, todayEvents = [], schwabCreds, onSchwabCredsChange, schwabToken, onSchwabTokenChange, schwabAccount, schwabAcctInfo, schwabDayTrades = 0, schwabConnectError }) {
   const [time, setTime] = useState(new Date())
@@ -131,6 +132,18 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
               {liveData.bid && liveData.ask && (
                 <div style={{ fontSize: 11, fontFamily: MONO, color: '#777', marginTop: 6 }}>Bid ${f2(liveData.bid)} / Ask ${f2(liveData.ask)}</div>
               )}
+              {(() => {
+                const ctx = rotationContextForTicker(ticker)
+                if (!ctx) return null
+                const c = ctx.tier === 'strong-in' ? LIME : ctx.tier === 'mod-in' ? '#86A45A' : ctx.tier === 'strong-out' ? RED : ctx.tier === 'mod-out' ? '#8A4040' : '#888'
+                return (
+                  <div style={{ fontSize: 11, fontFamily: MONO, color: '#888', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    Sector: <strong style={{ color: '#aaa' }}>{ctx.name}</strong>
+                    <span style={{ color: c, fontWeight: 700 }}>{ctx.arrow} {ctx.score >= 0 ? '+' : ''}{ctx.score}</span>
+                    {ctx.stale && <span style={{ color: '#444', fontSize: 9 }}>(stale)</span>}
+                  </div>
+                )
+              })()}
               {liveData.volProfile?.poc != null && (() => {
                 const poc = liveData.volProfile.poc
                 const diff = liveData.price - poc

@@ -5,15 +5,21 @@
 
 import { getFinancials, getTickerDetails, getSnapshot, getWeeklyBarsRange, getRecentNews, getShortInterest } from './massive.js'
 
+// Early-warning universe: high-multiple growth names still near or recently
+// near their 52-week highs. The goal is to find them BEFORE the breakdown.
 export const DEFAULT_UNIVERSE = [
-  'TSLA', 'PLTR', 'COIN', 'RBLX', 'DUOL', 'SNOW', 'DDOG',
-  'CRWD', 'NET', 'SHOP', 'MSTR', 'SMCI', 'IONQ', 'RGTI',
-  'SOUN', 'HOOD', 'RIVN', 'LCID', 'NKLA', 'BYND',
-  'W', 'CHWY', 'DASH', 'UBER', 'LYFT', 'ZM', 'DOCU',
-  'PATH', 'AI', 'BBAI',
+  'PLTR', 'SNOW', 'DDOG', 'NET', 'CRWD', 'SHOP',
+  'MSTR', 'COIN', 'HOOD', 'DASH', 'UBER', 'LYFT',
+  'RBLX', 'DUOL', 'PATH', 'AI', 'SOUN', 'RGTI',
+  'IONQ', 'SMCI', 'NKLA', 'RIVN', 'LCID',
+  'HIMS', 'RDDT', 'RXRX', 'ACHR', 'JOBY',
+  'LUNR', 'RKLB', 'ASTS', 'WOLF', 'KTOS',
+  'BFLY', 'PRCT', 'TMDX', 'DOCS', 'AEHR',
+  'RELY', 'CELH', 'ARKG', 'ARKK',
 ]
 
-const WEIGHTS = { valuation: 35, fundamental: 35, shortflow: 20, technical: 10 }
+// Weights: valuation 30, growth deceleration 35, cash burn 20, proximity 15
+const WEIGHTS = { valuation: 30, growth: 35, cash: 20, proximity: 15 }
 
 function pickRev(q) {
   return q?.financials?.income_statement?.revenues?.value
@@ -87,9 +93,24 @@ export async function fetchTickerData(apiKey, ticker) {
     else break
   }
 
-  // 52-week high
-  const wHigh52 = weekly.length ? Math.max(...weekly.map(b => b.h)) : null
+  // 52-week high + days since that high was set
+  let wHigh52 = null, daysFromHigh = null
+  if (weekly.length) {
+    let highBar = weekly[0]
+    for (const b of weekly) if (b.h > highBar.h) highBar = b
+    wHigh52 = highBar.h
+    daysFromHigh = Math.max(0, Math.floor((Date.now() - highBar.t) / 86400000))
+  }
   const fromHighPct = wHigh52 ? ((price - wHigh52) / wHigh52) * 100 : null
+
+  // QoQ deceleration — most recent YoY growth vs the one before it. Positive
+  // value here means growth is slowing (Q-1 YoY > Q-now YoY).
+  const qoqDecel = (yoyGrowth.length >= 2 && yoyGrowth[1] != null)
+    ? yoyGrowth[1] - yoyGrowth[0]
+    : null
+
+  // FCF worsening — most recent FCF more negative than prior
+  const fcfWorsening = fcfs.length >= 2 ? (fcfs[0] < 0 && fcfs[0] < fcfs[1]) : false
 
   // Lower-highs structure — last 5 weekly highs trending down
   let lowerHighs = false
@@ -114,7 +135,8 @@ export async function fetchTickerData(apiKey, ticker) {
     revs, yoyGrowth, decelStreak,
     grossMargins, marginsCompressing,
     fcfs, fcfTurnedNegative,
-    wHigh52, fromHighPct, lowerHighs,
+    wHigh52, fromHighPct, daysFromHigh, lowerHighs,
+    qoqDecel, fcfWorsening,
     weekly,
     shortInterest: shortInt,
     siPct, daysToCover,
@@ -126,72 +148,161 @@ export async function fetchTickerData(apiKey, ticker) {
 
 // ── Scoring ──────────────────────────────────────────────────────────────────
 
+// Early-warning scoring — find them BEFORE the breakdown.
+// We deliberately do NOT reward stocks that already crashed (no "lower highs"
+// or "% below high" bonuses). Stocks deep below their high get penalized.
 export function scoreTicker(d) {
   if (!d || !d.price) return { score: 0, partial: true, components: {}, reasons: [], available: 0 }
 
-  const components = { valuation: 0, fundamental: 0, shortflow: 0, technical: 0 }
-  const have = { valuation: false, fundamental: false, shortflow: false, technical: false }
+  const components = { valuation: 0, growth: 0, cash: 0, proximity: 0 }
+  const have = { valuation: false, growth: false, cash: false, proximity: false }
   const reasons = []
 
-  // ── Valuation (max 35) ─────────────────────────────────────────────────────
-  if (d.ps != null || d.pe != null || d.ttmEPS != null || d.fcfs?.length) {
+  // ── VALUATION EXTREME (max 30) ─────────────────────────────────────────────
+  // The fuel. Higher valuation = further to fall when the multiple compresses.
+  if (d.ps != null || (d.mktCap && d.ttmRev)) {
     have.valuation = true
     let pts = 0
     if (d.ps != null) {
-      if (d.ps > 20) { pts += 30; reasons.push(`Extreme P/S ${d.ps.toFixed(1)}x`) }
-      else if (d.ps > 10) { pts += 20; reasons.push(`Very high P/S ${d.ps.toFixed(1)}x`) }
-      else if (d.ps > 5) { pts += 10; reasons.push(`Elevated P/S ${d.ps.toFixed(1)}x`) }
+      if (d.ps > 30) { pts += 30; reasons.push(`Extreme P/S ${d.ps.toFixed(1)}x`) }
+      else if (d.ps > 20) { pts += 25; reasons.push(`Very high P/S ${d.ps.toFixed(1)}x`) }
+      else if (d.ps > 15 && d.yoyGrowth?.[0] > 0) { pts += 20; reasons.push(`High P/S ${d.ps.toFixed(1)}x while still growing — dangerous`) }
     }
-    if (d.pe != null && d.pe > 0) {
-      if (d.pe > 100) pts += 20
-      else if (d.pe > 50) pts += 10
+    if (d.mktCap && d.ttmRev && d.mktCap / d.ttmRev > 20) {
+      pts += 5  // Cap/Rev redundant with P/S but adds bonus when both confirm
     }
-    if (d.ttmEPS != null && d.ttmEPS < 0) { pts += 15; reasons.push('Negative TTM EPS') }
-    if (d.fcfs?.length && d.fcfs[0] < 0) { pts += 10; reasons.push('Negative free cash flow') }
-    components.valuation = Math.min(35, pts)
+    components.valuation = Math.min(30, pts)
   }
 
-  // ── Fundamental deterioration (max 35) ─────────────────────────────────────
-  if (d.yoyGrowth?.length || d.marginsCompressing || d.fcfTurnedNegative) {
-    have.fundamental = true
+  // ── GROWTH DECELERATION (max 35) ───────────────────────────────────────────
+  // The trigger. Still positive but slowing is the prime setup — once growth
+  // is already negative the multiple has typically compressed.
+  if (d.qoqDecel != null || d.marginsCompressing) {
+    have.growth = true
     let pts = 0
-    if (d.decelStreak >= 2) { pts += 20; reasons.push(`Revenue growth decelerating ${d.decelStreak + 1} quarters`) }
-    if (d.yoyGrowth?.[0] != null && d.yoyGrowth[0] < 0) { pts += 30; reasons.push(`Revenue growth negative YoY (${d.yoyGrowth[0].toFixed(1)}%)`) }
-    if (d.marginsCompressing) { pts += 15; reasons.push('Gross margins compressing') }
-    if (d.fcfTurnedNegative) { pts += 20; reasons.push('FCF turned negative from positive') }
-    components.fundamental = Math.min(35, pts)
-  }
-
-  // ── Short flow (max 20) ────────────────────────────────────────────────────
-  if (d.shortInterest || d.daysToCover != null) {
-    have.shortflow = true
-    let pts = 0
-    if (d.daysToCover != null && d.daysToCover > 5) { pts += 10; reasons.push(`Days to cover ${d.daysToCover.toFixed(1)}`) }
-    components.shortflow = Math.min(20, pts)
-  }
-
-  // ── Technical (max 10) ─────────────────────────────────────────────────────
-  if (d.fromHighPct != null || d.lowerHighs) {
-    have.technical = true
-    let pts = 0
-    if (d.fromHighPct != null) {
-      if (d.fromHighPct < -60) { pts += 20; reasons.push(`${Math.abs(d.fromHighPct).toFixed(0)}% below 52w high`) }
-      else if (d.fromHighPct < -40) { pts += 10 }
-      else if (d.fromHighPct < -20) { pts += 5 }
+    if (d.qoqDecel != null) {
+      if (d.qoqDecel >= 20) { pts += 35; reasons.push(`Growth decelerated ${d.qoqDecel.toFixed(0)} pts QoQ`) }
+      else if (d.qoqDecel >= 10) { pts += 25; reasons.push(`Growth decelerated ${d.qoqDecel.toFixed(0)} pts QoQ`) }
+      else if (d.qoqDecel >= 5) { pts += 15; reasons.push(`Growth decelerated ${d.qoqDecel.toFixed(0)} pts QoQ`) }
     }
-    if (d.lowerHighs) { pts += 15; reasons.push('Lower-highs structure (bearish)') }
-    components.technical = Math.min(10, pts)
+    if (d.marginsCompressing) { pts += 10; reasons.push('Gross margins compressing YoY') }
+    components.growth = Math.min(35, pts)
   }
 
-  const rawTotal = components.valuation + components.fundamental + components.shortflow + components.technical
+  // ── CASH BURN & DILUTION (max 20) ──────────────────────────────────────────
+  if (d.fcfs?.length || d.shortInterest) {
+    have.cash = true
+    let pts = 0
+    if (d.fcfWorsening) { pts += 15; reasons.push('FCF negative and worsening') }
+    if (d.fcfs?.length && d.fcfs[0] < 0 && !d.fcfWorsening) { pts += 5 }
+    // Short interest rising while stock near highs — smart money positioning
+    if (d.shortInterest && d.fromHighPct != null && d.fromHighPct > -20) {
+      pts += 15
+      reasons.push('Short interest building while stock still near highs')
+    }
+    components.cash = Math.min(20, pts)
+  }
+
+  // ── PROXIMITY TO HIGH (max +15, can go to -40) ─────────────────────────────
+  // Key inversion: we WANT stocks near their highs. Already-crashed stocks
+  // are penalized because the move is mostly done.
+  if (d.fromHighPct != null) {
+    have.proximity = true
+    let pts = 0
+    if (d.fromHighPct >= -10) { pts += 15; reasons.push(`Within ${Math.abs(d.fromHighPct).toFixed(0)}% of 52w high — full downside available`) }
+    else if (d.fromHighPct >= -20) { pts += 10 }
+    else if (d.fromHighPct >= -30) { pts += 5 }
+    else if (d.fromHighPct <= -70) { pts -= 40; reasons.push(`${Math.abs(d.fromHighPct).toFixed(0)}% below high — most of move done`) }
+    else if (d.fromHighPct <= -50) { pts -= 20 }
+    components.proximity = pts
+  }
+
+  const rawTotal = components.valuation + components.growth + components.cash + components.proximity
   const availableWeight = (have.valuation ? WEIGHTS.valuation : 0)
-    + (have.fundamental ? WEIGHTS.fundamental : 0)
-    + (have.shortflow ? WEIGHTS.shortflow : 0)
-    + (have.technical ? WEIGHTS.technical : 0)
-  const score = availableWeight ? Math.min(100, Math.round((rawTotal / availableWeight) * 100)) : 0
+    + (have.growth ? WEIGHTS.growth : 0)
+    + (have.cash ? WEIGHTS.cash : 0)
+    + (have.proximity ? WEIGHTS.proximity : 0)
+  const score = availableWeight ? Math.max(0, Math.min(100, Math.round((rawTotal / availableWeight) * 100))) : 0
   const partial = availableWeight < 100
 
   return { score, partial, components, reasons, available: availableWeight, have }
+}
+
+// ── Setup stage (drives DTE guidance) ────────────────────────────────────────
+
+export const MOMENTUM_MEME_TICKERS = new Set([
+  'SOUN', 'RGTI', 'IONQ', 'BBAI', 'MSTR', 'SMCI',
+  'COIN', 'HOOD', 'RIVN', 'LCID', 'NKLA', 'BYND',
+])
+
+// Early-warning stage: 1 = best entry (still near highs), 4 = too late.
+// Stage is driven by proximity to 52-week high — the only honest measure of
+// how much of the move is still ahead of us.
+export function setupStage(d) {
+  if (!d || !d.price || d.fromHighPct == null) return null
+  const p = d.fromHighPct
+  if (p >= -15) return {
+    stage: 1, label: 'PRE-BREAKDOWN', icon: '🎯',
+    dteRange: '45-60',
+    background: '#170d22',
+    dteCopy: 'Stock still near highs. Thesis developing but not confirmed. Best risk/reward — most downside still available. Wait for the first technical signal but build a watchlist position.',
+  }
+  if (p >= -35) return {
+    stage: 2, label: 'CRACK FORMING', icon: '⚠',
+    dteRange: '30-45',
+    background: '#1a0e04',
+    dteCopy: 'Breakdown beginning. Fundamentals clearly deteriorating, structure starting to roll. Enter on failed bounces — solid setup with most of the move still ahead.',
+  }
+  if (p >= -60) return {
+    stage: 3, label: 'IN PROGRESS', icon: '📉',
+    dteRange: '21-30',
+    background: '#150505',
+    dteCopy: 'Partial move done. Thesis playing out but less upside remains. Tradeable on continuation but size smaller.',
+  }
+  return {
+    stage: 4, label: 'TOO LATE', icon: '❌',
+    dteRange: 'skip',
+    background: '#0a0a0a',
+    dteCopy: 'Most of the move already played out. Skip — find earlier setups instead.',
+  }
+}
+
+export function stageColor(stage) {
+  switch (stage) {
+    case 1: return '#a78bfa'  // purple
+    case 2: return '#F97316'  // orange
+    case 3: return '#FF4D4D'  // red
+    case 4: return '#555'     // gray
+    default: return '#666'
+  }
+}
+
+// Days-since-52w-high freshness indicator
+export function highFreshness(daysFromHigh) {
+  if (daysFromHigh == null) return null
+  if (daysFromHigh < 30) return { label: 'Very recent high', icon: '🔴', color: '#FF4D4D' }
+  if (daysFromHigh < 90) return { label: 'Recent high', icon: '🟠', color: '#F97316' }
+  if (daysFromHigh < 180) return { label: 'Aging high', icon: '🟡', color: '#FFD166' }
+  return { label: 'Old high', icon: '⚪', color: '#888' }
+}
+
+// Timing-risk overlay — separate from conviction score because a high-quality
+// short thesis still doesn't mean enter today if the stock is ripping.
+export function timingRisk(d) {
+  if (!d?.snapshot) return { level: 'NONE', score: 0, msg: 'No live data.' }
+  const todayPct = d.snapshot.todaysChangePerc ?? (d.snapshot.day?.c && d.snapshot.prevDay?.c ? ((d.snapshot.day.c - d.snapshot.prevDay.c) / d.snapshot.prevDay.c) * 100 : null)
+  if (todayPct == null) return { level: 'NONE', score: 0, todayPct: null, msg: 'Today change unavailable.' }
+  let score = 0, level = 'LOW', msg = ''
+  if (todayPct >= 20) { score = 60; level = 'EXTREME'; msg = `Stock up ${todayPct.toFixed(1)}% today — wait for the fade. Buying puts into this rip is throwing money away.` }
+  else if (todayPct >= 10) { score = 40; level = 'HIGH'; msg = `Stock ripping ${todayPct.toFixed(1)}% today — do not chase. Wait for the failed rally.` }
+  else if (todayPct >= 5) { score = 20; level = 'ELEVATED'; msg = `Stock up ${todayPct.toFixed(1)}% today — let it cool. Enter on the fade, not the rip.` }
+  else if (todayPct >= 0) { score = 5; level = 'LOW'; msg = 'No squeeze risk today.' }
+  else { score = 0; level = 'NONE'; msg = `Stock down ${Math.abs(todayPct).toFixed(1)}% — no timing-risk penalty.` }
+  return { level, score, todayPct, msg }
+}
+
+export function isMomentumMeme(ticker) {
+  return MOMENTUM_MEME_TICKERS.has((ticker || '').toUpperCase())
 }
 
 // ── Score interpretation ─────────────────────────────────────────────────────
@@ -213,7 +324,10 @@ export async function scanUniverse(apiKey, tickers, onProgress) {
     try {
       const data = await fetchTickerData(apiKey, ticker)
       const scored = scoreTicker(data)
-      const entry = { ticker, data, ...scored, ...scoreLabel(scored.score) }
+      const stage = setupStage(data)
+      const timing = timingRisk(data)
+      const isMeme = isMomentumMeme(ticker)
+      const entry = { ticker, data, stage, timing, isMeme, ...scored, ...scoreLabel(scored.score) }
       results.push(entry)
       onProgress?.({ done: i + 1, total: tickers.length, current: ticker, entry, all: [...results] })
     } catch (err) {
