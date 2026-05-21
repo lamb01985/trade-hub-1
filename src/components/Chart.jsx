@@ -94,6 +94,26 @@ function aggregateBars(bars, mins) {
   return [...groups.values()].sort((a, b) => a.t - b.t)
 }
 
+// Convert a hex color (#RRGGBB or named LIME etc) into rgba with the given alpha.
+// Used to fade distant level lines without re-creating them.
+function withAlpha(color, alpha) {
+  if (!color) return color
+  if (color.startsWith('rgba') || color.startsWith('rgb(')) return color
+  let c = color.startsWith('#') ? color.slice(1) : color
+  if (c.length === 3) c = c[0] + c[0] + c[1] + c[1] + c[2] + c[2]
+  if (c.length < 6) return color
+  const r = parseInt(c.slice(0, 2), 16)
+  const g = parseInt(c.slice(2, 4), 16)
+  const b = parseInt(c.slice(4, 6), 16)
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
+const FADE_DISTANCE = 1.50
+const ACTIVE_BAND_FILL = 'rgba(209, 255, 121, 0.06)'
+const HALO_FILL = 'rgba(209, 255, 121, 0.12)'
+const ABOVE_BG = '#15191A', ABOVE_BORDER = '#2A3320', ABOVE_TEXT = '#9DB877'
+const BELOW_BG = '#1A1515', BELOW_BORDER = '#332020', BELOW_TEXT = '#C77575'
+
 function shortName(label) {
   if (!label) return ''
   return label
@@ -162,6 +182,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
   const swingLowLineRef = useRef(null)
   const bosLineRef = useRef(null)
   const profileOverlayRef = useRef(null)
+  const [priceOverlay, setPriceOverlay] = useState(null)
   const putTriggerLineRef = useRef(null)
 
   const [timeframe, setTimeframe] = useState('5m')
@@ -211,9 +232,10 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
       borderDownColor: RED,
       wickUpColor: LIME,
       wickDownColor: RED,
-      priceLineColor: LIME,
-      priceLineWidth: 1,
-      priceLineStyle: LineStyle.Solid,
+      // Built-in price line disabled — replaced by the custom overlay with halo
+      // line, lime pill, distance badges, and position meter further down.
+      priceLineVisible: false,
+      lastValueVisible: false,
     })
 
     const volume = chart.addSeries(HistogramSeries, {
@@ -359,8 +381,8 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
   useEffect(() => {
     if (!candleRef.current) return
 
-    for (const line of linesRef.current) {
-      try { candleRef.current.removePriceLine(line) } catch {}
+    for (const entry of linesRef.current) {
+      try { candleRef.current.removePriceLine(entry.line || entry) } catch {}
     }
     linesRef.current = []
 
@@ -381,7 +403,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
         axisLabelTextColor: color,
         title: `${shortName(level.label)} $${f2(level.price)}`,
       })
-      linesRef.current.push(line)
+      linesRef.current.push({ line, level, baseColor: color, isConfluence: false, lastNear: null })
     }
 
     // Confluence highlighting — single bold lime line at the cluster midpoint
@@ -398,9 +420,67 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
         axisLabelTextColor: '#000',
         title: `${cluster.label} $${f2(cluster.price)}`,
       })
-      linesRef.current.push(line)
+      linesRef.current.push({ line, level: { price: cluster.price, label: cluster.label, type: 'confluence' }, baseColor: LIME, isConfluence: true, lastNear: null })
     }
   }, [levelMap, layers])
+
+  // ── Compute price overlay coords (current y, active band y range, %) ─────
+  // Recomputes on price change AND on chart pan/zoom (subscribed below).
+  useEffect(() => {
+    function compute() {
+      if (!candleRef.current || !liveData?.price) { setPriceOverlay(null); return }
+      const price = liveData.price
+      const currentY = candleRef.current.priceToCoordinate(price)
+      if (currentY == null) { setPriceOverlay(null); return }
+
+      const ceiling = levelMap?.nearestAbove?.price ?? null
+      const floor = levelMap?.nearestBelow?.price ?? null
+      const ceilingY = ceiling != null ? candleRef.current.priceToCoordinate(ceiling) : null
+      const floorY = floor != null ? candleRef.current.priceToCoordinate(floor) : null
+
+      let positionPct = null, toCeiling = null, toFloor = null
+      if (ceiling != null && floor != null && ceiling > floor) {
+        positionPct = Math.round(((price - floor) / (ceiling - floor)) * 100)
+        toCeiling = ceiling - price
+        toFloor = price - floor
+      }
+
+      setPriceOverlay({
+        price, currentY,
+        ceiling, ceilingY, ceilingLabel: levelMap?.nearestAbove?.label || null,
+        floor, floorY, floorLabel: levelMap?.nearestBelow?.label || null,
+        positionPct, toCeiling, toFloor,
+      })
+    }
+    compute()
+    if (!chartRef.current) return
+    const ts = chartRef.current.timeScale()
+    const handler = () => compute()
+    ts.subscribeVisibleLogicalRangeChange(handler)
+    return () => { try { ts.unsubscribeVisibleLogicalRangeChange(handler) } catch {} }
+  }, [liveData?.price, levelMap?.nearestAbove?.price, levelMap?.nearestBelow?.price])
+
+  // ── Fade distant level lines based on current price ──────────────────────
+  // Lines within FADE_DISTANCE stay opaque; further lines fade. Confluence
+  // lines fade less aggressively so they remain readable across the chart.
+  useEffect(() => {
+    if (!candleRef.current || !liveData?.price || !linesRef.current?.length) return
+    const price = liveData.price
+    for (const entry of linesRef.current) {
+      if (!entry?.line || !entry.level) continue
+      const near = Math.abs(entry.level.price - price) <= FADE_DISTANCE
+      if (entry.lastNear === near) continue
+      entry.lastNear = near
+      const alpha = near ? 1 : (entry.isConfluence ? 0.5 : 0.35)
+      const faded = withAlpha(entry.baseColor, alpha)
+      try {
+        entry.line.applyOptions({
+          color: faded,
+          axisLabelTextColor: entry.isConfluence ? (near ? '#000' : 'rgba(0,0,0,0.6)') : faded,
+        })
+      } catch {}
+    }
+  }, [liveData?.price])
 
   // ── Trade & signal markers ──────────────────────────────────────────────────
   useEffect(() => {
@@ -700,6 +780,119 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
       <div style={{ position: 'relative', width: '100%', height: '70vh', minHeight: 480, background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 5 }}>
         <div ref={wrapRef} style={{ width: '100%', height: '100%' }} />
         <div ref={profileOverlayRef} style={{ position: 'absolute', top: 0, right: 60, width: 60, height: '100%', pointerEvents: 'none' }} />
+
+        {/* ── Current-price overlay ───────────────────────────────────────── */}
+        {priceOverlay && priceOverlay.currentY != null && (() => {
+          const o = priceOverlay
+          // The lightweight-charts right price scale is roughly 60px wide; the
+          // pill anchors at the right edge of the chart plot area.
+          const AXIS_W = 60
+          const showActiveBand = o.ceilingY != null && o.floorY != null
+          const bandTop = showActiveBand ? Math.min(o.ceilingY, o.floorY) : null
+          const bandBottom = showActiveBand ? Math.max(o.ceilingY, o.floorY) : null
+          // Position-meter fill: fraction from floor (bottom) upward
+          const meterFillPct = (o.positionPct != null) ? Math.max(0, Math.min(100, o.positionPct)) : 0
+          return (
+            <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }}>
+              {/* Active zone fill — spans chart width between band ceiling and floor */}
+              {showActiveBand && (
+                <div style={{
+                  position: 'absolute',
+                  left: 0,
+                  right: AXIS_W,
+                  top: bandTop,
+                  height: bandBottom - bandTop,
+                  background: ACTIVE_BAND_FILL,
+                }} />
+              )}
+
+              {/* Halo line behind main price line */}
+              <div style={{
+                position: 'absolute', left: 0, right: AXIS_W,
+                top: o.currentY - 3, height: 6,
+                background: HALO_FILL,
+              }} />
+              {/* Main price line */}
+              <div style={{
+                position: 'absolute', left: 0, right: AXIS_W,
+                top: o.currentY - 1.25, height: 2.5,
+                background: LIME,
+              }} />
+
+              {/* Distance badge ABOVE pill (to ceiling) */}
+              {o.toCeiling != null && (
+                <div style={{
+                  position: 'absolute',
+                  right: AXIS_W + 6,
+                  top: o.currentY - 38,
+                  background: ABOVE_BG, border: `0.5px solid ${ABOVE_BORDER}`,
+                  color: ABOVE_TEXT, fontFamily: MONO, fontSize: 9,
+                  padding: '2px 5px', borderRadius: 3, lineHeight: 1.2,
+                  whiteSpace: 'nowrap',
+                }}>↑ +{f2(o.toCeiling)}</div>
+              )}
+
+              {/* Distance badge BELOW pill (to floor) */}
+              {o.toFloor != null && (
+                <div style={{
+                  position: 'absolute',
+                  right: AXIS_W + 6,
+                  top: o.currentY + 18,
+                  background: BELOW_BG, border: `0.5px solid ${BELOW_BORDER}`,
+                  color: BELOW_TEXT, fontFamily: MONO, fontSize: 9,
+                  padding: '2px 5px', borderRadius: 3, lineHeight: 1.2,
+                  whiteSpace: 'nowrap',
+                }}>↓ −{f2(o.toFloor)}</div>
+              )}
+
+              {/* Current-price PILL on the right axis */}
+              <div style={{
+                position: 'absolute',
+                right: 4,
+                top: o.currentY - 11,
+                background: LIME, color: '#000',
+                fontFamily: MONO, fontSize: 13, fontWeight: 700,
+                padding: '3px 8px', borderRadius: 4, lineHeight: 1.2,
+                whiteSpace: 'nowrap',
+                boxShadow: '0 0 0 1px rgba(0,0,0,0.4)',
+              }}>${f2(o.price)}</div>
+
+              {/* Position-in-zone meter — vertical bar to the right of the pill */}
+              {showActiveBand && o.positionPct != null && (
+                <>
+                  <div style={{
+                    position: 'absolute',
+                    right: AXIS_W + 70,
+                    top: bandTop,
+                    width: 3,
+                    height: bandBottom - bandTop,
+                    background: '#1a1a1a', borderRadius: 1.5,
+                    overflow: 'hidden',
+                  }}>
+                    <div style={{
+                      position: 'absolute',
+                      bottom: 0, left: 0, right: 0,
+                      height: `${meterFillPct}%`,
+                      background: LIME,
+                    }} />
+                  </div>
+                  <div style={{
+                    position: 'absolute',
+                    right: AXIS_W + 84,
+                    top: bandTop + (bandBottom - bandTop) / 2 - 18,
+                    color: LIME, fontFamily: MONO, fontSize: 10, fontWeight: 700,
+                    lineHeight: 1.1,
+                  }}>
+                    <div>{o.positionPct}%</div>
+                    <div style={{ color: '#666', fontSize: 8, marginTop: 2, fontWeight: 400, letterSpacing: '0.06em' }}>IN ZONE</div>
+                    <div style={{ color: '#555', fontSize: 8, fontWeight: 400, letterSpacing: '0.06em' }}>off floor</div>
+                  </div>
+                </>
+              )}
+            </div>
+          )
+        })()}
+
         {noData && (
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 8, pointerEvents: 'none' }}>
             <div style={{ fontSize: 12, fontFamily: MONO, color: '#444' }}>Waiting for bars...</div>
@@ -707,6 +900,30 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
           </div>
         )}
       </div>
+
+      {/* ── Status bar — live readout of active zone ────────────────────────── */}
+      {priceOverlay && priceOverlay.ceiling != null && priceOverlay.floor != null && (() => {
+        const o = priceOverlay
+        return (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 0, background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 5 }}>
+            {[
+              { label: 'IN ZONE', value: `$${f2(o.floor)} to $${f2(o.ceiling)}`, color: '#aaa' },
+              { label: 'POSITION', value: `${o.positionPct}% off floor`, color: '#aaa' },
+              { label: 'TO CEILING', value: `+$${f2(o.toCeiling)}`, color: ABOVE_TEXT },
+              { label: 'TO FLOOR', value: `−$${f2(o.toFloor)}`, color: BELOW_TEXT },
+            ].map((col, i) => (
+              <div key={col.label} style={{
+                padding: '10px 14px',
+                borderLeft: i > 0 ? '1px solid #161616' : 'none',
+                display: 'flex', flexDirection: 'column', gap: 3,
+              }}>
+                <span style={{ fontSize: 9, fontFamily: MONO, color: '#555', textTransform: 'uppercase', letterSpacing: '1px' }}>{col.label}</span>
+                <span style={{ fontSize: 13, fontFamily: MONO, color: col.color, fontWeight: 600 }}>{col.value}</span>
+              </div>
+            ))}
+          </div>
+        )
+      })()}
 
       {/* Multi-Timeframe Alignment Score card */}
       {mtfAlignment && mtfAlignment.score > 0 && (() => {
