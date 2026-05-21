@@ -6,6 +6,7 @@ import { computeMTF, alignmentScore } from './lib/structure.js'
 import Command from './components/Command.jsx'
 import Levels from './components/Levels.jsx'
 import ChartTab from './components/Chart.jsx'
+import CheckTab from './components/Check.jsx'
 import CalendarTab from './components/Calendar.jsx'
 import Playbook from './components/Playbook.jsx'
 import ShortThesis from './components/ShortThesis.jsx'
@@ -25,6 +26,7 @@ const TABS = [
   { id: 'command', label: 'Command', desc: 'Session center' },
   { id: 'calendar', label: 'Calendar', desc: 'Events & catalysts' },
   { id: 'levels', label: 'Levels', desc: 'Live level map', accent: true },
+  { id: 'check', label: 'Check', desc: 'Pre-flight rules', accent: true },
   { id: 'chart', label: 'Chart', desc: 'Live price chart', accent: true },
   { id: 'orb', label: 'ORB', desc: 'Opening range' },
   { id: 'iv', label: 'IV', desc: 'Options pricing' },
@@ -475,6 +477,17 @@ export default function App() {
               onSettingsChange={setSettings}
               mtfAlignment={mtfAlignment}
               putThesis={putTheses[(prep.ticker || 'QQQ').toUpperCase()]}
+            />
+          </ErrorBoundary>
+        )}
+
+        {activeTab === 'check' && (
+          <ErrorBoundary label="Check tab">
+            <CheckTab
+              liveData={liveData}
+              levelMap={fullLevelMap}
+              mtfAlignment={mtfAlignment}
+              ticker={prep.ticker || 'QQQ'}
             />
           </ErrorBoundary>
         )}
