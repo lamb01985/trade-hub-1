@@ -36,23 +36,80 @@ const CL_ITEMS_STOCK = [
   { id: 'c12', text: 'I know my exact exit — stop AND target — on the share price', required: true },
 ]
 
-export function ORBTab({ settings, onSendToCalc, prepFill, liveData }) {
+// Tunable: how far OR HIGH or OR LOW can drift from the current price before
+// we assume the values belong to a different ticker and lock the ORB tab.
+export const SANITY_THRESHOLD = 0.05
+
+export function ORBTab({ settings, onSendToCalc, prepFill, liveData, savedPreps }) {
   const [ticker, setTicker] = useState('')
   const [orbH, setOrbH] = useState('')
   const [orbL, setOrbL] = useState('')
+  const [orbStamps, setOrbStamps] = useState(null)  // { high: ISO, low: ISO } for current ticker
+  const [loadingTicker, setLoadingTicker] = useState(false)
   const [dir, setDir] = useState('long')
   const [es, setEs] = useState('retest')
   const [checks, setChecks] = useState({})
+  const lastLoadedTickerRef = useRef('')
 
+  // Initial pre-fill from Prep
   useEffect(() => {
     if (!prepFill) return
     if (prepFill.ticker) setTicker(prepFill.ticker)
     if (prepFill.orbHigh) setOrbH(prepFill.orbHigh)
     if (prepFill.orbLow) setOrbL(prepFill.orbLow)
+    if (prepFill.orbHigh || prepFill.orbLow) {
+      const ts = prepFill.dateSaved || new Date().toISOString()
+      setOrbStamps({ high: ts, low: ts })
+    }
+    lastLoadedTickerRef.current = (prepFill.ticker || '').toUpperCase()
   }, [prepFill])
+
+  // When ticker changes (and not because prepFill just set it), look up
+  // saved Prep data for that ticker. If none, clear the OR fields rather
+  // than letting stale values from a different ticker stick.
+  useEffect(() => {
+    const t = (ticker || '').trim().toUpperCase()
+    if (!t || t === lastLoadedTickerRef.current) return
+    setLoadingTicker(true)
+    const saved = savedPreps?.[t]
+    if (saved && (saved.orbHigh || saved.orbLow)) {
+      setOrbH(saved.orbHigh || '')
+      setOrbL(saved.orbLow || '')
+      setOrbStamps({ high: saved.dateSaved || null, low: saved.dateSaved || null })
+    } else {
+      setOrbH('')
+      setOrbL('')
+      setOrbStamps(null)
+    }
+    lastLoadedTickerRef.current = t
+    const id = setTimeout(() => setLoadingTicker(false), 250)
+    return () => clearTimeout(id)
+  }, [ticker, savedPreps])
+
+  // Stamp OR fields with "now" when user types into them. We only stamp when
+  // the value transitions from empty to non-empty, or changes meaningfully.
+  function setOrbHWithStamp(v) {
+    setOrbH(v)
+    if (v && v !== orbH) setOrbStamps(s => ({ ...(s || {}), high: new Date().toISOString() }))
+  }
+  function setOrbLWithStamp(v) {
+    setOrbL(v)
+    if (v && v !== orbL) setOrbStamps(s => ({ ...(s || {}), low: new Date().toISOString() }))
+  }
 
   const oh = parseFloat(orbH), ol = parseFloat(orbL)
   const range = !isNaN(oh) && !isNaN(ol) && oh > ol ? oh - ol : null
+
+  // Sanity check: if either OR value differs from current price by more than
+  // SANITY_THRESHOLD (5% default), the values almost certainly belong to a
+  // different ticker. Block downstream calculations.
+  const livePriceForSanity = liveData?.price
+  const sanityFail = (() => {
+    if (livePriceForSanity == null) return null
+    const highBad = !isNaN(oh) && Math.abs(oh - livePriceForSanity) / livePriceForSanity > SANITY_THRESHOLD
+    const lowBad = !isNaN(ol) && Math.abs(ol - livePriceForSanity) / livePriceForSanity > SANITY_THRESHOLD
+    return (highBad || lowBad) ? { highBad, lowBad } : null
+  })()
   const isLong = dir === 'long'
   const entry = range ? (isLong ? (es === 'retest' ? oh : oh + range * 0.03) : (es === 'retest' ? ol : ol - range * 0.03)) : null
   const stop = range ? (isLong ? ol : oh) : null
@@ -80,21 +137,95 @@ export function ORBTab({ settings, onSendToCalc, prepFill, liveData }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <div><SLabel>Opening Range Breakout — Underlying</SLabel><Heading>ORB Calculator</Heading></div>
-      <div style={{ background: '#080d08', border: '1px solid #152015', borderRadius: 5, padding: '12px 16px' }}>
-        <div style={{ fontSize: 11, color: '#3a5030', fontFamily: MONO, lineHeight: 1.8 }}>
-          <span style={{ color: LIME }}>ORB uses underlying (QQQ) prices.</span> Use IV tab to check contract pricing before entering.
+
+      {/* Helper or sanity-fail banner. The red banner replaces the green one
+          and visually dominates whenever OR values look wrong for ticker. */}
+      {sanityFail ? (
+        <div style={{ background: '#1a0505', border: `1px solid ${RED}88`, borderRadius: 5, padding: '14px 18px' }}>
+          <div style={{ fontSize: 12, color: RED, fontFamily: MONO, fontWeight: 700, letterSpacing: '0.08em', marginBottom: 4 }}>
+            WARNING: opening range values look incorrect for {ticker || 'this ticker'}
+          </div>
+          <div style={{ fontSize: 11, color: '#cc8888', fontFamily: MONO, lineHeight: 1.7 }}>
+            Current price ${f2(liveData?.price)}, OR HIGH ${orbH || '—'}, OR LOW ${orbL || '—'}. Difference exceeds {(SANITY_THRESHOLD * 100).toFixed(0)}%. Verify inputs before trading. Trading actions are disabled until resolved.
+          </div>
         </div>
-      </div>
-      {prepFill && <div style={{ fontSize: 11, fontFamily: MONO, color: YELLOW, background: '#0f0d04', border: '1px solid #252010', borderRadius: 4, padding: '10px 16px' }}>Levels pre-loaded from Prep. Verify against live chart.</div>}
+      ) : (
+        <div style={{ background: '#080d08', border: '1px solid #152015', borderRadius: 5, padding: '12px 16px' }}>
+          <div style={{ fontSize: 11, color: '#3a5030', fontFamily: MONO, lineHeight: 1.8 }}>
+            <span style={{ color: LIME }}>ORB uses underlying ({(ticker || 'QQQ').toUpperCase()}) prices.</span> Use IV tab to check contract pricing before entering.
+          </div>
+        </div>
+      )}
+      {prepFill && !sanityFail && <div style={{ fontSize: 11, fontFamily: MONO, color: YELLOW, background: '#0f0d04', border: '1px solid #252010', borderRadius: 4, padding: '10px 16px' }}>Levels pre-loaded from Prep. Verify against live chart.</div>}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12 }}>
         <Fld label="Ticker" value={ticker} onChange={setTicker} type="text" placeholder="QQQ" mono />
-        <Fld label="OR High" value={orbH} onChange={setOrbH} placeholder="714.00" prefix="$" />
-        <Fld label="OR Low" value={orbL} onChange={setOrbL} placeholder="711.50" prefix="$" />
+        <div>
+          <Fld label="OR High" value={orbH} onChange={setOrbHWithStamp} placeholder="714.00" prefix="$" />
+          {(() => {
+            const stamp = orbStamps?.high
+            const stampDate = stamp ? new Date(stamp) : null
+            const today = new Date(); today.setHours(0, 0, 0, 0)
+            const isPriorDay = stampDate && stampDate.getTime() < today.getTime()
+            const label = loadingTicker ? 'Loading...' : stampDate
+              ? `${isPriorDay ? 'Stale, last updated' : 'Updated'} ${stampDate.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`
+              : 'No timestamp'
+            return <div style={{ fontSize: 9, fontFamily: MONO, color: isPriorDay ? RED : '#555', marginTop: 4 }}>{label}</div>
+          })()}
+        </div>
+        <div>
+          <Fld label="OR Low" value={orbL} onChange={setOrbLWithStamp} placeholder="711.50" prefix="$" />
+          {(() => {
+            const stamp = orbStamps?.low
+            const stampDate = stamp ? new Date(stamp) : null
+            const today = new Date(); today.setHours(0, 0, 0, 0)
+            const isPriorDay = stampDate && stampDate.getTime() < today.getTime()
+            const label = loadingTicker ? 'Loading...' : stampDate
+              ? `${isPriorDay ? 'Stale, last updated' : 'Updated'} ${stampDate.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`
+              : 'No timestamp'
+            return <div style={{ fontSize: 9, fontFamily: MONO, color: isPriorDay ? RED : '#555', marginTop: 4 }}>{label}</div>
+          })()}
+        </div>
         <Sel label="Direction" value={dir} onChange={setDir} options={[{ value: 'long', label: '↑ Long — Buy Call' }, { value: 'short', label: '↓ Short — Buy Put' }]} />
       </div>
+
+      {/* Refetch from chart: re-derive OR HIGH/LOW from live intraday bars
+          covering 8:30-8:45 CT (first 15 min of the session). */}
+      {(() => {
+        const bars = liveData?.intradayBars || []
+        const canFetch = bars.length > 0
+        function refetchFromChart() {
+          if (!canFetch) return
+          // Filter to today's session in ET, 9:30-9:45 (570-585 minutes from
+          // midnight ET = first 15 min of regular session)
+          const first15 = bars.filter(b => {
+            const d = new Date(b.t)
+            const et = d.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false, hour: '2-digit', minute: '2-digit' })
+            const [h, m] = et.split(':').map(Number)
+            const mins = h * 60 + m
+            return mins >= 570 && mins < 585
+          })
+          if (!first15.length) return
+          const hi = Math.max(...first15.map(b => b.h))
+          const lo = Math.min(...first15.map(b => b.l))
+          setOrbH(f2(hi))
+          setOrbL(f2(lo))
+          const now = new Date().toISOString()
+          setOrbStamps({ high: now, low: now })
+        }
+        return (
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <button onClick={refetchFromChart} disabled={!canFetch} style={{
+              background: 'transparent', border: `1px solid ${BORDER}`,
+              color: canFetch ? '#aaa' : '#444',
+              fontFamily: MONO, fontSize: 10, padding: '5px 12px', borderRadius: 3,
+              cursor: canFetch ? 'pointer' : 'not-allowed', letterSpacing: '0.1em', textTransform: 'uppercase',
+            }}>Refetch from chart</button>
+          </div>
+        )
+      })()}
       <Sel label="Entry Style" value={es} onChange={setEs} options={[{ value: 'retest', label: 'Retest Entry — wait for pullback to OR level (recommended)' }, { value: 'break', label: 'Breakout Entry — enter on first close above/below' }]} />
       {range && (
-        <>
+        <div style={{ pointerEvents: sanityFail ? 'none' : 'auto', opacity: sanityFail ? 0.3 : 1, filter: sanityFail ? 'grayscale(1)' : 'none', transition: 'opacity 0.2s' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
             <Tile compact label="OR Range" value={`$${f2(range)}`} sub="underlying" />
             <Tile compact label={isLong ? 'Call Entry' : 'Put Entry'} value={`$${f2(entry)}`} sub="underlying trigger" color={isLong ? LIME : RED} />
@@ -147,7 +278,7 @@ export function ORBTab({ settings, onSendToCalc, prepFill, liveData }) {
               </div>
             ))}
           </Card>
-        </>
+        </div>
       )}
       <Card>
         <SLabel>ORB Pre-Entry Checklist</SLabel>

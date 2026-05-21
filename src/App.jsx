@@ -513,6 +513,7 @@ export default function App() {
             onSendToCalc={fill => { setCalcPrefill(fill); setActiveTab('calc') }}
             prepFill={orbPrefill}
             liveData={liveData}
+            savedPreps={savedPreps}
           />
         )}
 
