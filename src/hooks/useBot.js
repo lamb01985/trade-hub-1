@@ -28,7 +28,10 @@ import {
   resetSession as engineResetSession,
   createRule,
   validateRule,
-} from "../lib/bot.js";
+} from "../lib/_archive/bot.legacy.js";
+// TODO Phase 5: rewrite this hook to import from "../lib/bot.js" (the new
+// coach engine). Pointing at the legacy file keeps the build green while
+// Phase 3 lands the new engine alongside the old one.
 
 // >>> Adjust these two imports to match your repo if needed:
 import { Sounds, notify } from "../lib/alerts.js";

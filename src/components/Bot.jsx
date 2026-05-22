@@ -12,7 +12,10 @@ import {
   TRIGGER_TYPES,
   ACTION_TYPES,
   sessionStats,
-} from "../lib/bot.js";
+} from "../lib/_archive/bot.legacy.js";
+// TODO Phase 6: rewrite this UI on top of the new coach engine in bot.js.
+// Pointing at the legacy file keeps the existing rules-engine UI rendering
+// while Phase 3 ships the new state-machine engine alongside it.
 
 // Levels arrive via the useBot hook (adapted from buildLevelMap in App).
 // The original template imported computeLevels(ticker) from levels.js;
