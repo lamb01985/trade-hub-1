@@ -6,7 +6,7 @@ import { computeMTF, alignmentScore } from './lib/structure.js'
 import Command from './components/Command.jsx'
 import Levels from './components/Levels.jsx'
 import ChartTab from './components/Chart.jsx'
-import CheckTab from './components/Check.jsx'
+import InlineCheckGate from './components/InlineCheckGate.jsx'
 import CalendarTab from './components/Calendar.jsx'
 import Playbook from './components/Playbook.jsx'
 import ShortThesis from './components/ShortThesis.jsx'
@@ -14,36 +14,32 @@ import Bot from './components/Bot.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
 import { getAllEvents, highImpactToday } from './lib/calendar.js'
 import { exchangeCode, refreshTokens, getAccountNumbers, getAccountSummary, getTodaysFilledOrders, countDayTrades, SCHWAB_BLUE } from './lib/schwab.js'
-import { ORBTab, IVAnalyzerTab, CalculatorTab, ChecklistTab, StatsTab, WatchlistTab, PrepTab } from './components/tabs.jsx'
+import { ORBTab, IVAnalyzerTab, CalculatorTab, StatsTab, WatchlistTab, PrepTab } from './components/tabs.jsx'
 import Journal from './components/Journal.jsx'
 import QuickLog from './components/QuickLog.jsx'
 import GlossaryModal from './components/Glossary.jsx'
-import { LIME, RED, YELLOW, MONO, SANS, DARK, BORDER, todayStr, uid, getSession, f2 } from './constants.js'
+import { LIME, RED, YELLOW, MONO, SANS, DARK, BORDER, PANEL, todayStr, uid, getSession, f2 } from './constants.js'
 
 const TABS = [
-  { id: 'watchlist', label: 'Watchlist', desc: 'Stocks to watch' },
-  { id: 'prep', label: 'Prep', desc: 'Morning game plan' },
-  { id: 'playbook', label: 'Playbook', desc: 'Daily system' },
-  { id: 'command', label: 'Command', desc: 'Session center' },
-  { id: 'calendar', label: 'Calendar', desc: 'Events & catalysts' },
-  { id: 'levels', label: 'Levels', desc: 'Live level map', accent: true },
-  { id: 'check', label: 'Check', desc: 'Pre-flight rules', accent: true },
-  { id: 'chart', label: 'Chart', desc: 'Live price chart', accent: true },
-  { id: 'orb', label: 'ORB', desc: 'Opening range' },
-  { id: 'iv', label: 'IV', desc: 'Options pricing' },
-  { id: 'checklist', label: 'Checklist', desc: 'Discipline gate' },
-  { id: 'calc', label: 'Calculator', desc: 'R:R + trade size' },
-  { id: 'journal', label: 'Journal', desc: 'Trade log' },
-  { id: 'stats', label: 'Stats', desc: 'Performance' },
-  { id: 'shortthesis', label: 'Short Thesis', desc: 'Put candidates' },
-  { id: 'bot', label: 'Bot', desc: 'Auto trigger rules' },
+  { id: 'plan', label: 'Plan', desc: 'Pre-market game plan' },
+  { id: 'trade', label: 'Trade', desc: 'Live session workspace', accent: true },
+  { id: 'review', label: 'Review', desc: 'Post-market log' },
 ]
+
+// Initial tab based on ET session. Pre-market opens PLAN, regular session
+// opens TRADE, everything else (after-hours, weekend, holiday) opens REVIEW.
+function defaultTabForSession() {
+  const s = getSession()
+  if (s === 'pre-market') return 'plan'
+  if (s === 'open' || s === 'chop' || s === 'power-hour') return 'trade'
+  return 'review'
+}
 
 const defaultSettings = { dailyLossLimit: 500, maxTradesPerDay: 5, orPeriod: '15', alertsEnabled: false }
 const defaultPrep = { ticker: 'QQQ', orPeriod: '15', orbHigh: '', orbLow: '', keyLevel: '', plannedStrike: '', plannedDTE: '1', ivNote: '', gamePlan: '', avoidNotes: '', dayReview: '', marketEvents: '', instrument: 'options' }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('command')
+  const [activeTab, setActiveTab] = useState(defaultTabForSession)
   const [apiKey, setApiKey] = useLocalStorage('th-apikey', '')
   const [anthropicKey, setAnthropicKey] = useLocalStorage('th-anthropic-key', '')
   const [trades, setTrades] = useLocalStorage('th-trades', [])
@@ -52,7 +48,6 @@ export default function App() {
   const [savedPreps, setSavedPreps] = useLocalStorage('th-saved-preps', {})
   const [orbPrefill, setOrbPrefill] = useState(null)
   const [calcPrefill, setCalcPrefill] = useState(null)
-  const [checklistPassed, setChecklistPassed] = useState(false)
   const [manualFibs, setManualFibs] = useState(null)
   const [customLevels, setCustomLevels] = useState([])
   const [showGlossary, setShowGlossary] = useState(false)
@@ -104,7 +99,7 @@ export default function App() {
         setSchwabAccount({ hash: acctHash, number: acctNum })
         setSchwabToast('Schwab connected successfully ✓')
         setTimeout(() => setSchwabToast(''), 4500)
-        setActiveTab('command')
+        setActiveTab('trade')
         window.history.replaceState({}, '', '/')
       })
       .catch(err => {
@@ -228,7 +223,7 @@ export default function App() {
 
   function handleLogTrade(trade) {
     setTrades(prev => [...prev, trade])
-    setActiveTab('journal')
+    setActiveTab('review')
   }
 
   // Opt-in paper write from the Bot coach. Stays out of Stats by default
@@ -302,13 +297,13 @@ export default function App() {
               <span style={{ fontSize: 9, color: RED, fontFamily: MONO, border: `1px solid ${RED}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.1em' }}>LOCKED</span>
             )}
             {fullLevelMap.setupQuality === 'ON LEVEL' && (
-              <button onClick={() => setActiveTab('levels')} title="Jump to Levels tab" style={{ fontSize: 9, color: LIME, fontFamily: MONO, background: 'transparent', border: `1px solid ${LIME}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.1em', animation: 'hdrpulse 1.5s infinite', cursor: 'pointer' }}>ON LEVEL →</button>
+              <button onClick={() => setActiveTab('trade')} title="Jump to Trade" style={{ fontSize: 9, color: LIME, fontFamily: MONO, background: 'transparent', border: `1px solid ${LIME}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.1em', animation: 'hdrpulse 1.5s infinite', cursor: 'pointer' }}>ON LEVEL →</button>
             )}
             {fullLevelMap.setupQuality === 'APPROACHING' && (
-              <button onClick={() => setActiveTab('levels')} title="Jump to Levels tab" style={{ fontSize: 9, color: YELLOW, fontFamily: MONO, background: 'transparent', border: `1px solid ${YELLOW}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.1em', cursor: 'pointer' }}>APPROACHING →</button>
+              <button onClick={() => setActiveTab('trade')} title="Jump to Trade" style={{ fontSize: 9, color: YELLOW, fontFamily: MONO, background: 'transparent', border: `1px solid ${YELLOW}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.1em', cursor: 'pointer' }}>APPROACHING →</button>
             )}
             {headerOpenSummary && headerOpenAny && (
-              <button onClick={() => setActiveTab('journal')} title="Jump to Journal" style={{ fontSize: 9, color: headerOpenPnl >= 0 ? LIME : RED, fontFamily: MONO, background: 'transparent', border: `1px solid ${(headerOpenPnl >= 0 ? LIME : RED)}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.06em', cursor: 'pointer', fontWeight: 700 }}>
+              <button onClick={() => setActiveTab('review')} title="Jump to Review (Journal)" style={{ fontSize: 9, color: headerOpenPnl >= 0 ? LIME : RED, fontFamily: MONO, background: 'transparent', border: `1px solid ${(headerOpenPnl >= 0 ? LIME : RED)}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.06em', cursor: 'pointer', fontWeight: 700 }}>
                 {headerOpenSummary} {headerOpenPnl >= 0 ? '+' : ''}${Math.abs(headerOpenPnl).toFixed(0)}
               </button>
             )}
@@ -320,7 +315,7 @@ export default function App() {
               const triggered = liveData.price <= thesis.trigger
               if (!near && !triggered) return null
               return (
-                <button onClick={() => setActiveTab('shortthesis')} title="Active put thesis trigger" style={{ fontSize: 9, color: RED, fontFamily: MONO, background: 'transparent', border: `1px solid ${RED}55`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.08em', cursor: 'pointer', fontWeight: 700, animation: triggered ? 'hdrpulse 1.5s infinite' : 'none' }}>
+                <button onClick={() => setActiveTab('plan')} title="Active put thesis trigger (Plan tab)" style={{ fontSize: 9, color: RED, fontFamily: MONO, background: 'transparent', border: `1px solid ${RED}55`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.08em', cursor: 'pointer', fontWeight: 700, animation: triggered ? 'hdrpulse 1.5s infinite' : 'none' }}>
                   PUT {triggered ? 'TRIGGER' : 'NEAR'}: {curT} ↓${f2(thesis.trigger)}
                 </button>
               )
@@ -336,7 +331,7 @@ export default function App() {
             {mtfAlignment.score > 0 && (() => {
               const c = mtfAlignment.score >= 85 ? LIME : mtfAlignment.score >= 70 ? LIME : mtfAlignment.score >= 55 ? YELLOW : mtfAlignment.score >= 40 ? '#F97316' : RED
               return (
-                <button onClick={() => setActiveTab('chart')} title={`${mtfAlignment.label} — jump to Chart`} style={{ fontSize: 9, color: c, fontFamily: MONO, background: 'transparent', border: `1px solid ${c}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.1em', cursor: 'pointer' }}>ALIGN: {mtfAlignment.score} →</button>
+                <button onClick={() => setActiveTab('trade')} title={`${mtfAlignment.label} — jump to Trade`} style={{ fontSize: 9, color: c, fontFamily: MONO, background: 'transparent', border: `1px solid ${c}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.1em', cursor: 'pointer' }}>ALIGN: {mtfAlignment.score} →</button>
               )
             })()}
           </div>
@@ -347,13 +342,13 @@ export default function App() {
           <div style={{ background: '#0c1408', borderTop: `1px solid ${LIME}22`, borderBottom: `1px solid ${LIME}22` }}>
             <div style={{ maxWidth: 960, margin: '0 auto', padding: '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
               <span style={{ fontSize: 11, fontFamily: MONO, color: '#7a9a6a' }}>
-                ↳ Add your Massive API key in the <strong style={{ color: LIME }}>Command</strong> tab to activate live price, VWAP, and level intelligence.
+                ↳ Add your Massive API key in the <strong style={{ color: LIME }}>Trade</strong> tab (Command section) to activate live price, VWAP, and level intelligence.
               </span>
               <button
-                onClick={() => setActiveTab('command')}
+                onClick={() => setActiveTab('trade')}
                 style={{ background: LIME, color: '#000', border: 'none', borderRadius: 3, padding: '5px 14px', fontFamily: MONO, fontSize: 10, fontWeight: 900, letterSpacing: '0.1em', cursor: 'pointer', whiteSpace: 'nowrap' }}
               >
-                Go to Command →
+                Go to Trade →
               </button>
             </div>
           </div>
@@ -388,7 +383,7 @@ export default function App() {
                 }}
               >
                 <span>{tab.label}
-                  {tab.id === 'levels' && fullLevelMap.setupQuality === 'ON LEVEL' && (
+                  {tab.id === 'trade' && fullLevelMap.setupQuality === 'ON LEVEL' && (
                     <span style={{ marginLeft: 5, width: 5, height: 5, borderRadius: '50%', background: LIME, display: 'inline-block', boxShadow: `0 0 6px ${LIME}`, verticalAlign: 'middle' }} />
                   )}
                 </span>
@@ -408,7 +403,7 @@ export default function App() {
             <span style={{ fontSize: 10, color: '#c8a030', flex: 1 }}>
               {todayHighImpact.map(e => `${e.name}${e.time ? ` at ${e.time} CT` : ''}`).join(' · ')}
             </span>
-            <button onClick={() => setActiveTab('calendar')} style={{ background: 'transparent', border: `1px solid ${YELLOW}44`, color: YELLOW, fontFamily: MONO, fontSize: 9, padding: '3px 9px', borderRadius: 3, cursor: 'pointer', letterSpacing: '0.1em', textTransform: 'uppercase' }}>View Calendar →</button>
+            <button onClick={() => setActiveTab('plan')} style={{ background: 'transparent', border: `1px solid ${YELLOW}44`, color: YELLOW, fontFamily: MONO, fontSize: 9, padding: '3px 9px', borderRadius: 3, cursor: 'pointer', letterSpacing: '0.1em', textTransform: 'uppercase' }}>View Calendar →</button>
           </div>
         </div>
       )}
@@ -425,188 +420,169 @@ export default function App() {
         button:hover { opacity: 0.85; }
       `}</style>
 
-      {/* Content */}
-      <div style={{ maxWidth: activeTab === 'chart' ? '100%' : 960, margin: '0 auto', padding: activeTab === 'chart' ? '20px 24px 40px' : '28px 20px 60px' }}>
-        {activeTab === 'shortthesis' && (
-          <ErrorBoundary label="Short Thesis tab">
-            <ShortThesis apiKey={apiKey} anthropicKey={anthropicKey} theses={putTheses} onThesesChange={setPutTheses} />
-          </ErrorBoundary>
-        )}
+      {/* Content. TRADE gets a wider container so the chart has room. */}
+      <div style={{ maxWidth: activeTab === 'trade' ? 1200 : 960, margin: '0 auto', padding: '28px 20px 60px' }}>
 
-        {activeTab === 'bot' && (
-          <ErrorBoundary label="Bot tab">
-            <Bot
-              activeTicker={(prep.ticker || 'QQQ').toUpperCase()}
-              livePrice={liveData?.price ?? null}
-              intradayBars={liveData?.intradayBars || []}
+        {activeTab === 'plan' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+            <PreMarketSummarySection liveData={liveData} ticker={prep.ticker || 'QQQ'} />
+
+            <WatchlistTab
+              apiKey={apiKey}
+              savedPreps={savedPreps}
+              onSendToPrep={entry => { setPrep(p => ({ ...p, ticker: entry.ticker, orbHigh: entry.priorHigh || '', orbLow: entry.priorLow || '', plannedStrike: entry.plannedStrike || '', plannedDTE: entry.plannedDTE || '', ivNote: entry.ivNote || '' })) }}
+              onLoadSavedPrep={saved => { const { dateSaved, ...data } = saved; setPrep(p => ({ ...p, ...data })) }}
+            />
+
+            <PrepTab
+              prep={prep}
+              onPrepChange={setPrep}
+              onSendToORB={fill => { setOrbPrefill(fill); setActiveTab('trade') }}
+              settings={settings}
+              liveData={liveData}
+              anthropicKey={anthropicKey}
+              savedPreps={savedPreps}
+              onSavedPrepsChange={setSavedPreps}
               levelMap={fullLevelMap}
               mtfAlignment={mtfAlignment}
-              prevDay={liveData?.prevDay || null}
-              rvol={liveData?.rvol ?? null}
-              checklistComplete={checklistComplete}
-              onPaperTrade={handleBotPaperTrade}
             />
-          </ErrorBoundary>
+
+            <ErrorBoundary label="Levels">
+              <Levels
+                liveData={{ ...liveData, lastAlerts: liveData.lastAlerts }}
+                orbHigh={orbPrefill?.orbHigh || prep.orbHigh}
+                orbLow={orbPrefill?.orbLow || prep.orbLow}
+                settings={settings}
+                onSettingsChange={setSettings}
+                mtfAlignment={mtfAlignment}
+                putThesis={putTheses[(prep.ticker || 'QQQ').toUpperCase()]}
+              />
+            </ErrorBoundary>
+
+            <ErrorBoundary label="Calendar">
+              <CalendarTab putTheses={putTheses} apiKey={apiKey} />
+            </ErrorBoundary>
+
+            <ErrorBoundary label="Playbook">
+              <Playbook trades={trades} settings={settings} lockedOut={lockedOut} prep={prep} />
+            </ErrorBoundary>
+
+            <ErrorBoundary label="Short Thesis">
+              <ShortThesis apiKey={apiKey} anthropicKey={anthropicKey} theses={putTheses} onThesesChange={setPutTheses} />
+            </ErrorBoundary>
+          </div>
         )}
 
-        {activeTab === 'watchlist' && (
-          <WatchlistTab
-            apiKey={apiKey}
-            savedPreps={savedPreps}
-            onSendToPrep={entry => { setPrep(p => ({ ...p, ticker: entry.ticker, orbHigh: entry.priorHigh || '', orbLow: entry.priorLow || '', plannedStrike: entry.plannedStrike || '', plannedDTE: entry.plannedDTE || '', ivNote: entry.ivNote || '' })); setActiveTab('prep') }}
-            onLoadSavedPrep={saved => { const { dateSaved, ...data } = saved; setPrep(p => ({ ...p, ...data })); setActiveTab('prep') }}
-          />
-        )}
+        {activeTab === 'trade' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+            <ErrorBoundary label="Check gate">
+              <InlineCheckGate
+                liveData={liveData}
+                levelMap={fullLevelMap}
+                mtfAlignment={mtfAlignment}
+                ticker={prep.ticker || 'QQQ'}
+              />
+            </ErrorBoundary>
 
-        {activeTab === 'prep' && (
-          <PrepTab
-            prep={prep}
-            onPrepChange={setPrep}
-            onSendToORB={fill => { setOrbPrefill(fill); setActiveTab('orb') }}
-            settings={settings}
-            liveData={liveData}
-            anthropicKey={anthropicKey}
-            savedPreps={savedPreps}
-            onSavedPrepsChange={setSavedPreps}
-            levelMap={fullLevelMap}
-            mtfAlignment={mtfAlignment}
-          />
-        )}
+            <ErrorBoundary label="Chart">
+              <ChartTab
+                liveData={liveData}
+                levelMap={fullLevelMap}
+                trades={trades}
+                ticker={prep.ticker || 'QQQ'}
+                customLevels={customLevels}
+                onCustomLevelsChange={setCustomLevels}
+                mtfAlignment={mtfAlignment}
+                putThesis={putTheses[(prep.ticker || 'QQQ').toUpperCase()]}
+              />
+            </ErrorBoundary>
 
-        {activeTab === 'playbook' && (
-          <ErrorBoundary label="Playbook tab">
-            <Playbook trades={trades} settings={settings} lockedOut={lockedOut} prep={prep} />
-          </ErrorBoundary>
-        )}
+            <ErrorBoundary label="Bot">
+              <Bot
+                activeTicker={(prep.ticker || 'QQQ').toUpperCase()}
+                livePrice={liveData?.price ?? null}
+                intradayBars={liveData?.intradayBars || []}
+                levelMap={fullLevelMap}
+                mtfAlignment={mtfAlignment}
+                prevDay={liveData?.prevDay || null}
+                rvol={liveData?.rvol ?? null}
+                checklistComplete={checklistComplete}
+                onPaperTrade={handleBotPaperTrade}
+              />
+            </ErrorBoundary>
 
-        {activeTab === 'command' && (
-          <Command
-            trades={trades}
-            settings={settings}
-            onSettingsChange={setSettings}
-            lockedOut={lockedOut}
-            onUnlock={() => setSettings(s => ({ ...s, dailyLossLimit: 0 }))}
-            apiKey={apiKey}
-            onApiKeyChange={setApiKey}
-            anthropicKey={anthropicKey}
-            onAnthropicKeyChange={setAnthropicKey}
-            liveData={liveData}
-            marketEvents={prep.marketEvents}
-            instrument={prep.instrument || 'options'}
-            ticker={prep.ticker || 'QQQ'}
-            levelMap={fullLevelMap}
-            todayEvents={todayHighImpact}
-            schwabCreds={schwabCreds}
-            onSchwabCredsChange={setSchwabCreds}
-            schwabToken={schwabToken}
-            onSchwabTokenChange={setSchwabToken}
-            schwabAccount={schwabAccount}
-            schwabAcctInfo={schwabAcctInfo}
-            schwabDayTrades={schwabDayTrades}
-            schwabConnectError={schwabConnectError}
-          />
-        )}
+            <ORBTab
+              settings={settings}
+              onSendToCalc={fill => { setCalcPrefill(fill) }}
+              prepFill={orbPrefill}
+              liveData={liveData}
+              savedPreps={savedPreps}
+            />
 
-        {activeTab === 'calendar' && (
-          <ErrorBoundary label="Calendar tab">
-            <CalendarTab putTheses={putTheses} apiKey={apiKey} />
-          </ErrorBoundary>
-        )}
-
-        {activeTab === 'levels' && (
-          <ErrorBoundary label="Levels tab">
-            <Levels
-              liveData={{ ...liveData, lastAlerts: liveData.lastAlerts }}
-              orbHigh={orbPrefill?.orbHigh || prep.orbHigh}
-              orbLow={orbPrefill?.orbLow || prep.orbLow}
+            <Command
+              trades={trades}
               settings={settings}
               onSettingsChange={setSettings}
-              mtfAlignment={mtfAlignment}
-              putThesis={putTheses[(prep.ticker || 'QQQ').toUpperCase()]}
-            />
-          </ErrorBoundary>
-        )}
-
-        {activeTab === 'check' && (
-          <ErrorBoundary label="Check tab">
-            <CheckTab
-              liveData={liveData}
-              levelMap={fullLevelMap}
-              mtfAlignment={mtfAlignment}
-              ticker={prep.ticker || 'QQQ'}
-            />
-          </ErrorBoundary>
-        )}
-
-        {activeTab === 'chart' && (
-          <ErrorBoundary label="Chart tab">
-            <ChartTab
-              liveData={liveData}
-              levelMap={fullLevelMap}
-              trades={trades}
-              ticker={prep.ticker || 'QQQ'}
-              customLevels={customLevels}
-              onCustomLevelsChange={setCustomLevels}
-              mtfAlignment={mtfAlignment}
-              putThesis={putTheses[(prep.ticker || 'QQQ').toUpperCase()]}
-            />
-          </ErrorBoundary>
-        )}
-
-        {activeTab === 'orb' && (
-          <ORBTab
-            settings={settings}
-            onSendToCalc={fill => { setCalcPrefill(fill); setActiveTab('calc') }}
-            prepFill={orbPrefill}
-            liveData={liveData}
-            savedPreps={savedPreps}
-          />
-        )}
-
-        {activeTab === 'iv' && (
-          <IVAnalyzerTab apiKey={apiKey} instrument={prep.instrument || 'options'} />
-        )}
-
-        {activeTab === 'checklist' && (
-          <ChecklistTab onPass={() => { setChecklistPassed(true); setActiveTab('calc') }} instrument={prep.instrument || 'options'} setupQuality={fullLevelMap.setupQuality} alignmentScore={mtfAlignment.score} schwabConnected={!!schwabToken?.access_token} schwabDayTrades={schwabDayTrades} plannedDTE={parseInt(prep.plannedDTE) || 0} />
-        )}
-
-        {activeTab === 'calc' && (
-          <CalculatorTab
-            prefill={calcPrefill}
-            onLogTrade={handleLogTrade}
-            checklistPassed={checklistPassed}
-            lockedOut={lockedOut}
-            maxTradesReached={maxTradesReached}
-            apiKey={apiKey}
-            instrument={prep.instrument || 'options'}
-            schwabToken={schwabToken}
-            schwabAccount={schwabAccount}
-            schwabAcctInfo={schwabAcctInfo}
-            prep={prep}
-            liveData={liveData}
-          />
-        )}
-
-        {activeTab === 'journal' && (
-          <ErrorBoundary label="Journal tab">
-            <Journal
-              trades={trades}
-              onUpdate={handleUpdateTrade}
-              onDelete={handleDeleteTrade}
-              onEdit={openQuickLog}
-              onOpenQuickLog={openQuickLog}
+              lockedOut={lockedOut}
+              onUnlock={() => setSettings(s => ({ ...s, dailyLossLimit: 0 }))}
+              apiKey={apiKey}
+              onApiKeyChange={setApiKey}
               anthropicKey={anthropicKey}
-              prep={prep}
+              onAnthropicKeyChange={setAnthropicKey}
+              liveData={liveData}
+              marketEvents={prep.marketEvents}
+              instrument={prep.instrument || 'options'}
+              ticker={prep.ticker || 'QQQ'}
+              levelMap={fullLevelMap}
+              todayEvents={todayHighImpact}
+              schwabCreds={schwabCreds}
+              onSchwabCredsChange={setSchwabCreds}
+              schwabToken={schwabToken}
+              onSchwabTokenChange={setSchwabToken}
+              schwabAccount={schwabAccount}
+              schwabAcctInfo={schwabAcctInfo}
+              schwabDayTrades={schwabDayTrades}
+              schwabConnectError={schwabConnectError}
+            />
+
+            <CalculatorTab
+              prefill={calcPrefill}
+              onLogTrade={handleLogTrade}
+              checklistPassed={checklistComplete}
+              lockedOut={lockedOut}
+              maxTradesReached={maxTradesReached}
+              apiKey={apiKey}
+              instrument={prep.instrument || 'options'}
               schwabToken={schwabToken}
               schwabAccount={schwabAccount}
-              onAddTrades={list => setTrades(prev => [...prev, ...list])}
+              schwabAcctInfo={schwabAcctInfo}
+              prep={prep}
+              liveData={liveData}
             />
-          </ErrorBoundary>
+
+            <IVAnalyzerTab apiKey={apiKey} instrument={prep.instrument || 'options'} />
+          </div>
         )}
 
-        {activeTab === 'stats' && (
-          <StatsTab trades={trades} />
+        {activeTab === 'review' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+            <ErrorBoundary label="Journal">
+              <Journal
+                trades={trades}
+                onUpdate={handleUpdateTrade}
+                onDelete={handleDeleteTrade}
+                onEdit={openQuickLog}
+                onOpenQuickLog={openQuickLog}
+                anthropicKey={anthropicKey}
+                prep={prep}
+                schwabToken={schwabToken}
+                schwabAccount={schwabAccount}
+                onAddTrades={list => setTrades(prev => [...prev, ...list])}
+              />
+            </ErrorBoundary>
+
+            <StatsTab trades={trades} />
+          </div>
         )}
       </div>
 
@@ -645,6 +621,55 @@ export default function App() {
           {schwabToast}
         </div>
       )}
+    </div>
+  )
+}
+
+// Top section of PLAN. Shows the active ticker's pre-market H/L, gap, trend,
+// volume. Phase 2 keeps it single-ticker (sourced from liveData.preMarket);
+// the multi-ticker QQQ/SPY/TQQQ aggregator is Phase 4 polish.
+function PreMarketSummarySection({ liveData, ticker }) {
+  const pm = liveData?.preMarket
+  const prevDay = liveData?.prevDay
+  const cardStyle = { background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 6, padding: '16px 20px' }
+  const labelStyle = { fontSize: 10, fontFamily: MONO, color: '#666', letterSpacing: '0.14em', textTransform: 'uppercase' }
+
+  if (!pm?.active) {
+    return (
+      <div style={cardStyle}>
+        <div style={{ ...labelStyle, marginBottom: 8 }}>Overnight & Pre-Market</div>
+        <div style={{ fontSize: 11, fontFamily: MONO, color: '#555' }}>
+          No pre-market data yet for {ticker}. Live data activates after the 4:00 ET pre-market open with your Massive API key connected.
+        </div>
+      </div>
+    )
+  }
+
+  const gapColor = pm.gapPct == null ? '#888' : pm.gapPct > 0 ? LIME : pm.gapPct < 0 ? RED : '#888'
+  const gapLabel = pm.gap == null ? '—'
+    : `${pm.gap >= 0 ? '+' : '-'}$${Math.abs(pm.gap).toFixed(2)} (${pm.gapPct >= 0 ? '+' : ''}${pm.gapPct.toFixed(2)}%)`
+  const trendColor = pm.trend === 'trending up' ? LIME : pm.trend === 'trending down' ? RED : YELLOW
+
+  const Stat = ({ label, value, color = '#e8e8e8' }) => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+      <span style={labelStyle}>{label}</span>
+      <span style={{ fontSize: 15, fontFamily: MONO, color, fontWeight: 800 }}>{value}</span>
+    </div>
+  )
+
+  return (
+    <div style={cardStyle}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <div style={labelStyle}>Overnight & Pre-Market, {ticker}</div>
+        <div style={{ fontSize: 10, fontFamily: MONO, color: trendColor, letterSpacing: '0.12em', textTransform: 'uppercase' }}>{pm.trend}</div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 18 }}>
+        <Stat label="PM High" value={pm.high == null ? '—' : `$${pm.high.toFixed(2)}`} />
+        <Stat label="PM Low" value={pm.low == null ? '—' : `$${pm.low.toFixed(2)}`} />
+        <Stat label="Last" value={pm.last == null ? '—' : `$${pm.last.toFixed(2)}`} />
+        <Stat label={prevDay?.close ? `Gap vs $${prevDay.close.toFixed(2)}` : 'Gap'} value={gapLabel} color={gapColor} />
+        <Stat label="PM Vol" value={pm.vol ? pm.vol.toLocaleString() : '—'} />
+      </div>
     </div>
   )
 }

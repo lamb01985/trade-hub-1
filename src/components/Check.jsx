@@ -147,7 +147,7 @@ function RuleRow({ n, title, body, pass }) {
 
 // ── Main component ──────────────────────────────────────────────────────────
 
-export default function CheckTab({ liveData, levelMap, mtfAlignment, ticker = 'QQQ' }) {
+export default function CheckTab({ liveData, levelMap, mtfAlignment, ticker = 'QQQ', inline = false }) {
   const [direction, setDirection] = useState(null)        // 'LONG' | 'SHORT' | null
   const [r5Checked, setR5Checked] = useState(false)
   const [r5Text, setR5Text] = useState('')
@@ -302,13 +302,15 @@ export default function CheckTab({ liveData, levelMap, mtfAlignment, ticker = 'Q
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <div>
-        <SLabel>Pre-flight Check</SLabel>
-        <Heading>CHECK</Heading>
-        <div style={{ fontSize: 11, fontFamily: MONO, color: '#555', marginTop: 4 }}>
-          {ticker}, active timeframe: {ACTIVE_TF_MINUTES}M
+      {!inline && (
+        <div>
+          <SLabel>Pre-flight Check</SLabel>
+          <Heading>CHECK</Heading>
+          <div style={{ fontSize: 11, fontFamily: MONO, color: '#555', marginTop: 4 }}>
+            {ticker}, active timeframe: {ACTIVE_TF_MINUTES}M
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Direction toggle */}
       <div style={{ display: 'flex', gap: 8 }}>
