@@ -91,6 +91,25 @@ export default function Bot({
           <span style={{ fontSize: 11, color: DIM, fontFamily: MONO, letterSpacing: '0.14em' }}>
             {activeTicker} {livePrice != null ? <span style={{ color: FG, fontWeight: 800 }}>${Number(livePrice).toFixed(2)}</span> : <span style={{ color: MUTED }}>no live data</span>}
           </span>
+          {import.meta.env.DEV && (
+            <button
+              onClick={bot.onDevTriggerTestSetup}
+              title="Dev only. Injects a synthetic GO signal so the full state machine can be exercised without live market conditions."
+              style={{
+                background: 'transparent',
+                color: '#C084FC',
+                border: '1px solid #C084FC55',
+                borderRadius: 3,
+                padding: '5px 10px',
+                fontFamily: MONO,
+                fontSize: 9,
+                fontWeight: 800,
+                letterSpacing: '0.14em',
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+              }}
+            >Dev: trigger GO</button>
+          )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 22 }}>
           <HeaderStat label="Taken" value={today.taken} />

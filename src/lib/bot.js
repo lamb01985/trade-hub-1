@@ -656,6 +656,41 @@ export function setChecklistComplete(state, complete) {
   return { ...state, checklistComplete: complete }
 }
 
+// Dev-only helper. Forces a synthetic GO signal so the user can exercise the
+// full state machine (GO -> IN_TRADE -> CLOSED) without waiting for live
+// market conditions. Skips the playbook entirely. Caller is responsible for
+// gating this behind a dev-only build flag.
+export function devInjectTestSetup(state, ticker = 'QQQ', currentPrice = 590) {
+  const now = Date.now()
+  const synthetic = {
+    setupId: 'dev_test',
+    setupName: 'Dev test setup',
+    direction: 'long',
+    confidence: 10,
+    entry: currentPrice,
+    stop: currentPrice - 0.40,
+    target: currentPrice + 1.50,
+    why: 'Synthetic GO injected for testing. This bypasses the playbook.',
+    level: { name: 'TEST', price: currentPrice },
+    optionDirection: 'call',
+    optionStrikeRule: 'atm',
+  }
+  const record = recordSetup(synthetic, 'pending', etMinutesOf(new Date()), now)
+  return {
+    state: {
+      ...state,
+      state: 'GO',
+      activeSetup: { ...synthetic, recordId: record.id },
+      goExpiresAt: now + GO_WINDOW_MS,
+      watchEnteredAt: null,
+      todaysSetups: [...state.todaysSetups, record],
+      sessionDate: state.sessionDate || ymdET(new Date()),
+      sessionStartedAt: state.sessionStartedAt || now,
+    },
+    events: [{ type: 'go', setup: synthetic, message: `GO LONG: Dev test setup at ${currentPrice.toFixed(2)}, confluence 10/10.` }],
+  }
+}
+
 // ── Session rollover ────────────────────────────────────────────────────────
 
 function rollOverSession(state, dateStr) {

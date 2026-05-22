@@ -34,6 +34,7 @@ import {
   patternsByActivity,
   disciplineStreak,
   skipQuality,
+  devInjectTestSetup,
 } from '../lib/bot.js'
 import {
   notify,
@@ -321,6 +322,18 @@ export function useBot({
     dispatch({ type: 'REPLACE', state: next })
   }, [])
 
+  // Dev-only convenience. Bot.jsx hides the button outside import.meta.env.DEV
+  // so this can never be invoked in a production build's UI. Kept exposed
+  // unconditionally on the hook so the engine helper remains a single import.
+  const onDevTriggerTestSetup = useCallback(() => {
+    const price = livePrice ?? 590
+    const ticker = (activeTicker || 'QQQ').toUpperCase()
+    const { state: ns, events } = devInjectTestSetup(stateRef.current, ticker, Number(price))
+    dispatch({ type: 'REPLACE', state: ns })
+    for (const e of events) handleEvent(e, ticker)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTicker, livePrice])
+
   // ── Exposed UI surface ────────────────────────────────────────────────────
   // currentCard is the data driving the BotRightNowCard. Everything the card
   // needs to render any of the six sub-states is here, with the active ticker
@@ -357,5 +370,6 @@ export function useBot({
     onUnlock,
     onResetSession,
     onUpdateSettings,
+    onDevTriggerTestSetup,
   }
 }
