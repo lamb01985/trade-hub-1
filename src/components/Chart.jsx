@@ -4,6 +4,60 @@ import { Pill } from './ui.jsx'
 import { LIME, RED, YELLOW, BLUE, PURPLE, ORANGE, MONO, BORDER, PANEL, f2 } from '../constants.js'
 import { fullAnalysis } from '../lib/structure.js'
 import { isPreMarketBar, isRegularSessionBar } from '../lib/premarket.js'
+const DEFAULT_VOLUME_THRESHOLD = 50000
+
+// Format a share count for the volume readout. 67200 -> "67.2k", 1430000 -> "1.43M".
+function humanVol(n) {
+  if (n == null || isNaN(n)) return '—'
+  const v = Math.abs(n)
+  if (v >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`
+  if (v >= 1_000) return `${(n / 1_000).toFixed(1)}k`
+  return String(Math.round(n))
+}
+
+// Parse a user-typed threshold like "50k", "1.2M", "75000" into a raw share count.
+// Returns null if unparseable.
+function parseThreshold(input) {
+  if (input == null) return null
+  const s = String(input).trim().toLowerCase().replace(/[, ]/g, '')
+  if (!s) return null
+  const m = s.match(/^([0-9]*\.?[0-9]+)([km]?)$/)
+  if (!m) return null
+  const num = parseFloat(m[1])
+  if (isNaN(num)) return null
+  const mult = m[2] === 'k' ? 1000 : m[2] === 'm' ? 1_000_000 : 1
+  return Math.round(num * mult)
+}
+
+// Inline SVG sparkline of the last N candle volumes. Bars above the threshold
+// render in lime; below in dim gray. Height scales to the largest bar in the
+// window so unusually large bars stand out visually.
+function VolumeSparkline({ values, threshold, width = 84, height = 16 }) {
+  const vals = (values || []).filter(v => v != null)
+  if (!vals.length) {
+    return <span style={{ display: 'inline-block', width, height }} />
+  }
+  const peak = Math.max(...vals, threshold || 0, 1)
+  const barW = width / vals.length
+  const gap = Math.max(0.5, barW * 0.15)
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: 'inline-block' }}>
+      {vals.map((v, i) => {
+        const h = Math.max(1, (v / peak) * height)
+        const x = i * barW + gap / 2
+        const y = height - h
+        const above = threshold > 0 && v >= threshold
+        return (
+          <rect key={i} x={x} y={y} width={Math.max(1, barW - gap)} height={h} fill={above ? LIME : '#555'} />
+        )
+      })}
+      {threshold > 0 && (() => {
+        const ty = height - Math.min(height - 1, (threshold / peak) * height)
+        return <line x1={0} x2={width} y1={ty} y2={ty} stroke="#888" strokeWidth={0.5} strokeDasharray="2 2" />
+      })()}
+    </svg>
+  )
+}
 
 const TIMEFRAMES = [
   { id: '1m', mins: 1, label: '1m' },
@@ -149,7 +203,7 @@ function detectConfluences(levels, threshold = 0.30) {
   })
 }
 
-export default function ChartTab({ liveData, levelMap, trades, ticker, customLevels = [], onCustomLevelsChange, mtfAlignment, putThesis }) {
+export default function ChartTab({ liveData, levelMap, trades, ticker, customLevels = [], onCustomLevelsChange, mtfAlignment, putThesis, volumeThresholds = {}, onVolumeThresholdsChange }) {
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 768)
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -174,6 +228,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
   const candleRef = useRef(null)
   const volumeRef = useRef(null)
   const avgVolLineRef = useRef(null)
+  const thresholdLineRef = useRef(null)
   const linesRef = useRef([])
   const tradeLinesRef = useRef([])
   const markersRef = useRef(null)
@@ -191,6 +246,24 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
   const [newLabel, setNewLabel] = useState('')
   const [newPrice, setNewPrice] = useState('')
 
+  // Per-ticker volume threshold. The map lives in App so PrepTab's AI brief
+  // generator can write into it (and the chart reacts in the same session).
+  // Defaults to 50k for any unset ticker.
+  const tickerKey = (ticker || 'QQQ').toUpperCase()
+  const currentThreshold = volumeThresholds?.[tickerKey] ?? DEFAULT_VOLUME_THRESHOLD
+  const [thresholdDraft, setThresholdDraft] = useState('')
+  // Keep the input synced with the stored value when ticker changes or external
+  // writes happen (e.g. AI brief sets a new threshold).
+  useEffect(() => { setThresholdDraft(humanVol(currentThreshold)) }, [currentThreshold])
+  function commitThreshold() {
+    const parsed = parseThreshold(thresholdDraft)
+    if (parsed == null || parsed <= 0) {
+      setThresholdDraft(humanVol(currentThreshold))
+      return
+    }
+    onVolumeThresholdsChange?.(prev => ({ ...(prev || {}), [tickerKey]: parsed }))
+  }
+
   // ── Structure analysis (current timeframe) ─────────────────────────────────
   // Multi-TF comes from App via the mtfAlignment prop so the score stays
   // consistent across header / Levels / Checklist / AI brief.
@@ -198,6 +271,15 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
     const mins = TIMEFRAMES.find(t => t.id === timeframe)?.mins || 5
     const agg = aggregateBars(liveData?.intradayBars || [], mins)
     return fullAnalysis(agg)
+  }, [liveData?.intradayBars, timeframe])
+
+  // Current candle volume + last 10 candles' volumes for the readout + sparkline.
+  const volumeState = useMemo(() => {
+    const mins = TIMEFRAMES.find(t => t.id === timeframe)?.mins || 5
+    const agg = aggregateBars(liveData?.intradayBars || [], mins)
+    const lastN = agg.slice(-10).map(b => b?.v || 0)
+    const current = agg.length ? (agg[agg.length - 1].v || 0) : 0
+    return { current, lastN }
   }, [liveData?.intradayBars, timeframe])
 
   const mtfAnalysis = mtfAlignment?.mtf || null
@@ -258,6 +340,18 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
       crosshairMarkerVisible: false,
     })
 
+    // Per-ticker volume threshold line. Color updated reactively (gray below,
+    // lime when current candle volume is at or above the threshold).
+    const thresholdLine = chart.addSeries(LineSeries, {
+      priceScaleId: 'vol',
+      color: '#666',
+      lineWidth: 2,
+      lineStyle: LineStyle.Dashed,
+      lastValueVisible: false,
+      priceLineVisible: false,
+      crosshairMarkerVisible: false,
+    })
+
     const swingHighLine = chart.addSeries(LineSeries, {
       color: '#888', lineWidth: 1, lineStyle: LineStyle.Dotted,
       lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
@@ -271,6 +365,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
     candleRef.current = candle
     volumeRef.current = volume
     avgVolLineRef.current = avgVolLine
+    thresholdLineRef.current = thresholdLine
     swingHighLineRef.current = swingHighLine
     swingLowLineRef.current = swingLowLine
 
@@ -287,6 +382,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
       candleRef.current = null
       volumeRef.current = null
       avgVolLineRef.current = null
+      thresholdLineRef.current = null
       swingHighLineRef.current = null
       swingLowLineRef.current = null
       bosLineRef.current = null
@@ -347,6 +443,29 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
       ? { time: Math.floor(last.t / 1000), open: last.o, high: last.h, low: last.l, close: last.c }
       : null
   }, [liveData?.intradayBars, liveData?.avgDayVol, timeframe])
+
+  // ── Volume threshold line: spans the visible bars, color tracks whether the
+  // current candle's volume is at or above the threshold. Lives on the 'vol'
+  // price scale (same as volume bars and avgVolLine).
+  useEffect(() => {
+    const tline = thresholdLineRef.current
+    if (!tline) return
+    const mins = TIMEFRAMES.find(t => t.id === timeframe)?.mins || 5
+    const aggregated = aggregateBars(liveData?.intradayBars || [], mins)
+    if (aggregated.length < 2 || !currentThreshold || currentThreshold <= 0) {
+      tline.setData([])
+      return
+    }
+    const firstTime = Math.floor(aggregated[0].t / 1000)
+    const lastTime = Math.floor(aggregated[aggregated.length - 1].t / 1000)
+    const lastVol = aggregated[aggregated.length - 1].v || 0
+    const above = lastVol >= currentThreshold
+    tline.applyOptions({ color: above ? LIME : '#666' })
+    tline.setData([
+      { time: firstTime, value: currentThreshold },
+      { time: lastTime, value: currentThreshold },
+    ])
+  }, [liveData?.intradayBars, timeframe, currentThreshold])
 
   // ── Real-time price tick: update current candle (only when not on fallback) ─
   useEffect(() => {
@@ -776,6 +895,53 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
           }}>Cancel</button>
         </div>
       )}
+
+      {/* ── Volume threshold readout ───────────────────────────────────────── */}
+      {(() => {
+        const above = volumeState.current >= currentThreshold && currentThreshold > 0
+        const statusColor = above ? LIME : RED
+        const statusGlyph = above ? '✓' : '✗'
+        return (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+            background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 4,
+            padding: '8px 12px',
+          }}>
+            <span style={{ fontSize: 9, color: '#666', fontFamily: MONO, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+              Vol Threshold, {tickerKey}
+            </span>
+            <span style={{ fontSize: 13, fontFamily: MONO, fontWeight: 800, color: statusColor }}>
+              {humanVol(volumeState.current)}
+            </span>
+            <span style={{ fontSize: 11, fontFamily: MONO, color: '#666' }}>/</span>
+            <input
+              type="text"
+              value={thresholdDraft}
+              onChange={e => setThresholdDraft(e.target.value)}
+              onBlur={commitThreshold}
+              onKeyDown={e => { if (e.key === 'Enter') { commitThreshold(); e.currentTarget.blur() } }}
+              placeholder="50k"
+              title="Threshold for the active ticker. Accepts 50000, 50k, 1.2M."
+              style={{
+                width: 64, background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 3,
+                color: '#e8e8e8', fontFamily: MONO, fontSize: 12, padding: '4px 8px', outline: 'none',
+                textAlign: 'right',
+              }}
+            />
+            <span style={{
+              fontSize: 12, fontFamily: MONO, fontWeight: 800, color: statusColor,
+              border: `1px solid ${statusColor}55`, borderRadius: 3, padding: '2px 8px',
+              letterSpacing: '0.08em',
+            }}>
+              {statusGlyph} {above ? 'ABOVE' : 'BELOW'}
+            </span>
+            <VolumeSparkline values={volumeState.lastN} threshold={currentThreshold} />
+            <span style={{ fontSize: 9, color: '#444', fontFamily: MONO, letterSpacing: '0.08em' }}>
+              last 10 {timeframe} candles
+            </span>
+          </div>
+        )
+      })()}
 
       <div style={{ position: 'relative', width: '100%', height: '70vh', minHeight: 480, background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 5 }}>
         <div ref={wrapRef} style={{ width: '100%', height: '100%' }} />
