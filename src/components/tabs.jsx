@@ -1539,7 +1539,7 @@ const ROUTINE = [
   { time: '10:30 CT', label: 'Chop starts. No new entries. Trailing winner? Decide now: trail stop or close. Do not hold through chop.' },
 ]
 
-export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, anthropicKey, savedPreps, onSavedPrepsChange, levelMap, mtfAlignment }) {
+export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, anthropicKey, savedPreps, onSavedPrepsChange, levelMap, mtfAlignment, onVolumeThresholdsChange }) {
   const [rc, setRc] = useState({})
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState('')
@@ -1646,7 +1646,10 @@ PROBABILITY ASSESSMENT
 STAND ASIDE IF
 [3 specific conditions that kill today's setup. Be concrete.]
 
-Only use the levels provided. No generic advice.`
+Only use the levels provided. No generic advice.
+
+---
+STRUCTURED (parsing block, do not modify the format): output exactly one JSON object on its own line at the very end of your response, after all prose sections above. The JSON must contain a single field "volume_threshold", an integer share count for the break-candle volume that confirms the primary setup. Estimate from the ticker's typical 5-min volume if not stated. Example: {"volume_threshold": 50000}`
       : `You are a professional options day trader assistant. Generate a pre-market game plan for 0DTE ${prep.ticker || 'QQQ'} options.
 
 Market context:
@@ -1689,7 +1692,10 @@ PROBABILITY ASSESSMENT
 STAND ASIDE IF
 [3 specific conditions that kill today's setup. Be concrete.]
 
-Only use the levels provided. No generic advice.`
+Only use the levels provided. No generic advice.
+
+---
+STRUCTURED (parsing block, do not modify the format): output exactly one JSON object on its own line at the very end of your response, after all prose sections above. The JSON must contain a single field "volume_threshold", an integer share count for the break-candle volume that confirms the primary setup. Estimate from the ticker's typical 5-min volume if not stated. Example: {"volume_threshold": 50000}`
 
     try {
       const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -1708,9 +1714,29 @@ Only use the levels provided. No generic advice.`
       })
       const data = await res.json()
       if (data.content?.[0]?.text) {
-        upd('gamePlan', data.content[0].text)
+        const raw = data.content[0].text
+        // Extract the trailing STRUCTURED JSON block, write threshold for the
+        // active ticker, and strip the block from the visible brief text.
+        let visible = raw
+        try {
+          const match = raw.match(/\{[^{}]*"volume_threshold"\s*:\s*([0-9]+)[^{}]*\}\s*$/m)
+          if (match) {
+            const threshold = parseInt(match[1], 10)
+            if (!isNaN(threshold) && threshold > 0 && onVolumeThresholdsChange) {
+              const tickerKey = (prep.ticker || 'QQQ').toUpperCase()
+              onVolumeThresholdsChange(prev => ({ ...(prev || {}), [tickerKey]: threshold }))
+            }
+            // Strip the structured block (and the preceding "---" separator
+            // and STRUCTURED preamble if present) from the saved text.
+            visible = raw
+              .replace(/\n*---\s*\n+STRUCTURED[^\n]*\n+\{[^{}]*"volume_threshold"[^{}]*\}\s*$/m, '')
+              .replace(/\n*\{[^{}]*"volume_threshold"[^{}]*\}\s*$/m, '')
+              .trimEnd()
+          }
+        } catch {}
+        upd('gamePlan', visible)
       } else {
-        setAiError(data.error?.message || 'Generation failed — check your Claude API key in Command tab')
+        setAiError(data.error?.message || 'Generation failed, check your Claude API key in Command tab')
       }
     } catch (e) {
       setAiError('Network error: ' + e.message)

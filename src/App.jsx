@@ -67,6 +67,10 @@ export default function App() {
   const [schwabToast, setSchwabToast] = useState('')
   const [schwabConnectError, setSchwabConnectError] = useState('')
   const [putTheses, setPutTheses] = useLocalStorage('th-short-theses', {})
+  // Per-ticker volume thresholds for the chart overlay. Lifted to App so the
+  // AI brief generator in PrepTab can write into it and the Chart reacts in
+  // the same session. Defaults to 50k when a ticker has no entry (Chart-side).
+  const [volumeThresholds, setVolumeThresholds] = useLocalStorage('tradeHub.chart.volumeThreshold.v1', {})
   const [_priceTick, setPriceTick] = useState(0)
   useEffect(() => { const id = setInterval(() => setPriceTick(t => t + 1), 5000); return () => clearInterval(id) }, [])
 
@@ -468,6 +472,7 @@ export default function App() {
                 onSavedPrepsChange={setSavedPreps}
                 levelMap={fullLevelMap}
                 mtfAlignment={mtfAlignment}
+                onVolumeThresholdsChange={setVolumeThresholds}
               />
             </div>
 
@@ -531,6 +536,8 @@ export default function App() {
                   onCustomLevelsChange={setCustomLevels}
                   mtfAlignment={mtfAlignment}
                   putThesis={putTheses[(prep.ticker || 'QQQ').toUpperCase()]}
+                  volumeThresholds={volumeThresholds}
+                  onVolumeThresholdsChange={setVolumeThresholds}
                 />
               </ErrorBoundary>
             </div>
