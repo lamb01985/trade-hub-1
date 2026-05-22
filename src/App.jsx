@@ -199,6 +199,27 @@ export default function App() {
   const calendarEvents = useMemo(() => getAllEvents(new Date(), 14), [])
   const todayHighImpact = useMemo(() => highImpactToday(calendarEvents), [calendarEvents])
 
+  // Checklist completion gate for the bot coach. Reads the same checkLog
+  // localStorage Check.jsx writes; verdict TRADE or TRADE_FORCED logged on
+  // today's ET date counts as complete. Re-evaluates every 5s via _priceTick.
+  const checklistComplete = useMemo(() => {
+    if (typeof window === 'undefined') return false
+    try {
+      const raw = localStorage.getItem('checkLog')
+      if (!raw) return false
+      const log = JSON.parse(raw)
+      if (!Array.isArray(log)) return false
+      const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' })
+      const todayET = fmt.format(new Date())
+      return log.some(e => {
+        if (!e?.timestamp) return false
+        if (e.verdict !== 'TRADE' && e.verdict !== 'TRADE_FORCED') return false
+        return fmt.format(new Date(e.timestamp)) === todayET
+      })
+    } catch { return false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [_priceTick])
+
   // Loss limit lockout
   const todayTrades = trades.filter(t => t.date?.slice(0, 10) === todayStr())
   const todayPnl = todayTrades.reduce((a, t) => a + (t.pnl || 0), 0)
@@ -208,6 +229,13 @@ export default function App() {
   function handleLogTrade(trade) {
     setTrades(prev => [...prev, trade])
     setActiveTab('journal')
+  }
+
+  // Opt-in paper write from the Bot coach. Stays out of Stats by default
+  // (StatsTab filters paper: true unless the user toggles "Include paper").
+  function handleBotPaperTrade(trade) {
+    if (!trade) return
+    setTrades(prev => [...prev, trade])
   }
 
   function openQuickLog(trade = null) {
@@ -410,7 +438,13 @@ export default function App() {
             <Bot
               activeTicker={(prep.ticker || 'QQQ').toUpperCase()}
               livePrice={liveData?.price ?? null}
+              intradayBars={liveData?.intradayBars || []}
               levelMap={fullLevelMap}
+              mtfAlignment={mtfAlignment}
+              prevDay={liveData?.prevDay || null}
+              rvol={liveData?.rvol ?? null}
+              checklistComplete={checklistComplete}
+              onPaperTrade={handleBotPaperTrade}
             />
           </ErrorBoundary>
         )}
