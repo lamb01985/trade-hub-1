@@ -59,9 +59,13 @@ export const Sounds = {
   },
 }
 
-// Browser notification
-export async function notify(title, body, tag = 'trade-hub') {
-  if (!('Notification' in window)) return
+// Browser notification.
+// Signature: notify(title, body, urgency = 'normal', tag = 'trade-hub')
+// urgency 'high' sets requireInteraction:true so the notification persists
+// until the user dismisses it. 'normal' and 'low' auto-dismiss after the
+// browser default timeout.
+export async function notify(title, body, urgency = 'normal', tag = 'trade-hub') {
+  if (typeof window === 'undefined' || !('Notification' in window)) return
   if (Notification.permission === 'denied') return
 
   if (Notification.permission !== 'granted') {
@@ -74,7 +78,8 @@ export async function notify(title, body, tag = 'trade-hub') {
       body,
       tag,
       icon: '/favicon.ico',
-      requireInteraction: false,
+      requireInteraction: urgency === 'high',
+      silent: urgency === 'low',
     })
   } catch (e) {
     console.warn('Notification error:', e)
@@ -90,7 +95,7 @@ export function fireAlert(id, title, body, soundFn, cooldownMs = 30000) {
   if (last && now - last < cooldownMs) return false
 
   recentAlerts.set(id, now)
-  notify(title, body, id)
+  notify(title, body, 'normal', id)
   soundFn?.()
   return true
 }
@@ -142,4 +147,151 @@ export function checkLevelAlerts(price, levels, settings = {}) {
 
   prevPrice = price
   return fired
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Coach engine sound generators
+//
+// Each function below is a distinct audible cue mapped to a specific bot state
+// transition. All synthesized via OscillatorNode in the existing audioCtx, no
+// audio files required.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Schedule a tone with a custom attack and release envelope. Used by the
+// coach sounds that need a softer fade than playTone's exponential ramp.
+function scheduleTone({ freq, startOffset = 0, duration = 0.15, type = 'sine', volume = 0.3, attack = 0.005, release = null }) {
+  try {
+    const ctx = getAudioCtx()
+    const t0 = ctx.currentTime + startOffset
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.type = type
+    osc.frequency.setValueAtTime(freq, t0)
+    gain.gain.setValueAtTime(0, t0)
+    gain.gain.linearRampToValueAtTime(volume, t0 + attack)
+    const releaseTime = release ?? Math.max(0.01, duration * 0.3)
+    gain.gain.setValueAtTime(volume, t0 + duration - releaseTime)
+    gain.gain.exponentialRampToValueAtTime(0.001, t0 + duration)
+    osc.start(t0)
+    osc.stop(t0 + duration + 0.01)
+  } catch (e) {
+    console.warn('Audio error:', e)
+  }
+}
+
+// Schedule a frequency glide (sine ramp from f0 to f1 over duration).
+function scheduleGlide({ f0, f1, startOffset = 0, duration = 0.4, type = 'sine', volume = 0.3 }) {
+  try {
+    const ctx = getAudioCtx()
+    const t0 = ctx.currentTime + startOffset
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.type = type
+    osc.frequency.setValueAtTime(f0, t0)
+    osc.frequency.linearRampToValueAtTime(f1, t0 + duration)
+    gain.gain.setValueAtTime(0, t0)
+    gain.gain.linearRampToValueAtTime(volume, t0 + 0.01)
+    gain.gain.setValueAtTime(volume, t0 + duration * 0.7)
+    gain.gain.exponentialRampToValueAtTime(0.001, t0 + duration)
+    osc.start(t0)
+    osc.stop(t0 + duration + 0.01)
+  } catch (e) {
+    console.warn('Audio error:', e)
+  }
+}
+
+// WAIT to WATCH transition. Gentle, single sine wave, easy to overhear.
+export function playSetupForming() {
+  scheduleTone({ freq: 440, duration: 0.2, type: 'sine', volume: 0.25, attack: 0.02, release: 0.12 })
+}
+
+// WATCH to GO transition. Three ascending square-wave tones, loud and
+// distinct so it cuts through other tabs.
+export function playGoLive() {
+  scheduleTone({ freq: 660, startOffset: 0.00, duration: 0.15, type: 'square', volume: 0.45 })
+  scheduleTone({ freq: 880, startOffset: 0.20, duration: 0.15, type: 'square', volume: 0.45 })
+  scheduleTone({ freq: 1100, startOffset: 0.40, duration: 0.15, type: 'square', volume: 0.45 })
+}
+
+// GO to IN_TRADE transition. Single short click.
+export function playPositionOpened() {
+  scheduleTone({ freq: 660, duration: 0.08, type: 'sine', volume: 0.35, attack: 0.002, release: 0.04 })
+}
+
+// IN_TRADE to CLOSED (win). Four-note ascending arpeggio across 800ms total.
+// Notes: C5 523, E5 659, G5 784, C6 1047.
+export function playWin() {
+  scheduleTone({ freq: 523, startOffset: 0.00, duration: 0.20, type: 'sine', volume: 0.35 })
+  scheduleTone({ freq: 659, startOffset: 0.20, duration: 0.20, type: 'sine', volume: 0.35 })
+  scheduleTone({ freq: 784, startOffset: 0.40, duration: 0.20, type: 'sine', volume: 0.35 })
+  scheduleTone({ freq: 1047, startOffset: 0.60, duration: 0.20, type: 'sine', volume: 0.35 })
+}
+
+// IN_TRADE to CLOSED (loss). Single descending sine glide 400Hz to 220Hz
+// over 400ms. Firm, not punitive.
+export function playLoss() {
+  scheduleGlide({ f0: 400, f1: 220, duration: 0.4, type: 'sine', volume: 0.3 })
+}
+
+// Position price within $X of stop. Two-tone ping at 550Hz.
+export function playStopWarning() {
+  scheduleTone({ freq: 550, startOffset: 0.00, duration: 0.10, type: 'square', volume: 0.35 })
+  scheduleTone({ freq: 550, startOffset: 0.20, duration: 0.10, type: 'square', volume: 0.35 })
+}
+
+// any to LOCKED. Low sustained tone, signals the day is done.
+export function playLockout() {
+  scheduleTone({ freq: 200, duration: 0.6, type: 'sine', volume: 0.4, attack: 0.04, release: 0.25 })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Document title state indicator
+//
+// updateTabTitle(state, summary) prefixes document.title with a state-aware
+// indicator so the user can see the bot state without focusing the tab.
+// Restores the original title when state is WAIT or CLOSED.
+// ─────────────────────────────────────────────────────────────────────────────
+
+let _originalTitle = null
+
+function ensureOriginalTitle() {
+  if (typeof document === 'undefined') return null
+  if (_originalTitle == null) _originalTitle = document.title || 'Trade Hub'
+  return _originalTitle
+}
+
+export function updateTabTitle(state, summary = {}) {
+  if (typeof document === 'undefined') return
+  const original = ensureOriginalTitle()
+  const ticker = (summary.ticker || 'QQQ').toUpperCase()
+  const direction = (summary.direction || '').toUpperCase()
+  const pl = summary.pl
+
+  let next = original
+  switch (state) {
+    case 'WATCH':
+      next = `[WATCH] ${ticker}`
+      break
+    case 'GO':
+      next = `[GO ${direction || ''}] ${ticker}`.replace(/\s+/g, ' ').trim()
+      break
+    case 'IN_TRADE': {
+      const sign = pl != null && pl >= 0 ? '+' : '-'
+      const abs = pl != null ? Math.abs(pl).toFixed(0) : '?'
+      next = `${sign}$${abs} ${ticker}`
+      break
+    }
+    case 'LOCKED':
+      next = `[LOCKED] ${original}`
+      break
+    case 'WAIT':
+    case 'CLOSED':
+    default:
+      next = original
+  }
+  if (document.title !== next) document.title = next
 }
