@@ -96,6 +96,38 @@ function adaptAlignment(mtf) {
   }
 }
 
+// Build a Journal-shaped trade record from a closed engine position. Used
+// when the bot's writePaperTrades setting is on; the parent supplies the
+// callback and is responsible for actually pushing to the trades store.
+// The shape mirrors what QuickLog writes: status 'win'/'loss' (not 'closed'),
+// pnl in dollars, optType 'call'/'put', entryTime/exitTime as HH:MM strings.
+function buildPaperTrade(position, ticker) {
+  const id = `paper_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+  const hhmm = (ms) => {
+    const d = new Date(ms)
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  }
+  const today = new Date().toISOString().slice(0, 10)
+  return {
+    id,
+    date: new Date(position.closedAt || Date.now()).toISOString(),
+    ticker: (ticker || 'QQQ').toUpperCase(),
+    optType: position.optionDirection || (position.direction === 'long' ? 'call' : 'put'),
+    strike: position.optionStrike ?? null,
+    expiry: today,
+    contracts: position.contracts || 1,
+    entry: position.premiumPaid ?? 0,
+    exitPrice: position.exitPremium ?? 0,
+    entryTime: hhmm(position.openedAt || Date.now()),
+    exitTime: hhmm(position.closedAt || Date.now()),
+    setupType: position.setupName || 'Bot coach',
+    status: (position.realizedPL ?? 0) >= 0 ? 'win' : 'loss',
+    pnl: position.realizedPL ?? 0,
+    notes: `Bot coach paper (${position.exitReason || 'manual'})`,
+    paper: true,
+  }
+}
+
 // Compute today's opening range from intradayBars. Polygon timestamps are UTC
 // ms. Regular session opens at 9:30 ET = 570 minutes from midnight ET; the
 // first 15 minutes (9:30 to 9:45) define the ORB. Returns null until 9:45 ET
@@ -125,6 +157,7 @@ export function useBot({
   prevDay = null,
   rvol = null,
   checklistComplete = false,
+  onPaperTrade = null,
 } = {}) {
   const [state, dispatch] = useReducer(reducer, null, createInitialState)
   const hydratedRef = useRef(false)
@@ -217,6 +250,11 @@ export function useBot({
         const isWin = (e.position?.realizedPL ?? 0) >= 0
         if (isWin) playWin(); else playLoss()
         notify(isWin ? 'Win' : 'Loss', e.message || `${ticker}: position closed`, isWin ? 'normal' : 'high')
+        // Opt-in journal write: only if the Bot settings drawer has it on.
+        const settings = stateRef.current?.settings || {}
+        if (settings.writePaperTrades && onPaperTrade && e.position) {
+          try { onPaperTrade(buildPaperTrade(e.position, ticker)) } catch (_) {}
+        }
         break
       }
       case 'lockout':

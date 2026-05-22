@@ -109,6 +109,10 @@ export default function BotSettingsDrawer({ settings, onUpdateSettings, onResetS
             <Toggle checked={!!settings.requireChecklist} onChange={v => patch('requireChecklist', v)} />
           </Row>
 
+          <Row label="Write paper trades to Journal" hint="When a coach paper position closes, append a paper trade to the Journal. Paper trades are excluded from Stats by default.">
+            <Toggle checked={!!settings.writePaperTrades} onChange={v => patch('writePaperTrades', v)} />
+          </Row>
+
           <Row label="Live mode" hint="Off means paper P/L only. Live mode is a label, the bot never places orders.">
             {settings.liveMode ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

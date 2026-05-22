@@ -63,6 +63,7 @@ export function createInitialState() {
       confluenceThreshold: DEFAULT_CONFLUENCE_THRESHOLD,
       liveMode: false,
       requireChecklist: true,
+      writePaperTrades: false,
     },
     checklistComplete: false,    // populated by parent (App) before each tick
     wasLockedToday: false,       // set when LOCKED transitions to anything

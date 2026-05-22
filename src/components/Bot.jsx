@@ -61,6 +61,7 @@ export default function Bot({
   prevDay = null,
   rvol = null,
   checklistComplete = false,
+  onPaperTrade = null,
 }) {
   const bot = useBot({
     activeTicker,
@@ -71,6 +72,7 @@ export default function Bot({
     prevDay,
     rvol,
     checklistComplete,
+    onPaperTrade,
   })
 
   const { currentCard, todaysSetups, patterns, state } = bot

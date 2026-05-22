@@ -231,6 +231,13 @@ export default function App() {
     setActiveTab('journal')
   }
 
+  // Opt-in paper write from the Bot coach. Stays out of Stats by default
+  // (StatsTab filters paper: true unless the user toggles "Include paper").
+  function handleBotPaperTrade(trade) {
+    if (!trade) return
+    setTrades(prev => [...prev, trade])
+  }
+
   function openQuickLog(trade = null) {
     setEditingTrade(trade)
     setQuickLogOpen(true)
@@ -437,6 +444,7 @@ export default function App() {
               prevDay={liveData?.prevDay || null}
               rvol={liveData?.rvol ?? null}
               checklistComplete={checklistComplete}
+              onPaperTrade={handleBotPaperTrade}
             />
           </ErrorBoundary>
         )}

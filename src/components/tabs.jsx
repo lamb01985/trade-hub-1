@@ -862,8 +862,14 @@ export function ChecklistTab({ onPass, instrument, setupQuality, alignmentScore,
 }
 
 // ── Stats Tab ─────────────────────────────────────────────────────────────────
-export function StatsTab({ trades }) {
+export function StatsTab({ trades: allTrades }) {
   const [eodNotes] = useLocalStorage('th-eod-notes', {})
+  // Paper trades are written by the Bot coach when the writePaperTrades setting
+  // is on. Default behavior here is to exclude them from performance metrics so
+  // real-money stats stay clean. User can flip the toggle to include them.
+  const [includePaper, setIncludePaper] = useLocalStorage('th-stats-include-paper', false)
+  const paperCount = (allTrades || []).filter(t => t.paper).length
+  const trades = includePaper ? allTrades : (allTrades || []).filter(t => !t.paper)
   const closed = trades.filter(t => t.status === 'win' || t.status === 'loss')
   const wins = trades.filter(t => t.status === 'win'), losses = trades.filter(t => t.status === 'loss')
   const winRate = closed.length ? (wins.length / closed.length) * 100 : null
@@ -880,7 +886,30 @@ export function StatsTab({ trades }) {
   if (closed.length === 0) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-        <div><SLabel>Options Performance</SLabel><Heading>Stats</Heading></div>
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
+          <div><SLabel>Options Performance</SLabel><Heading>Stats</Heading></div>
+          {paperCount > 0 && (
+            <button
+              onClick={() => setIncludePaper(v => !v)}
+              title={includePaper ? 'Paper trades are included in these stats' : 'Paper trades are hidden from these stats'}
+              style={{
+                background: includePaper ? `${PURPLE}22` : 'transparent',
+                color: includePaper ? PURPLE : '#666',
+                border: `1px solid ${includePaper ? PURPLE : BORDER}`,
+                borderRadius: 4,
+                padding: '6px 12px',
+                fontFamily: MONO,
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: '0.12em',
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+              }}
+            >
+              {includePaper ? `Paper on (${paperCount})` : `Paper off (${paperCount})`}
+            </button>
+          )}
+        </div>
         <div style={{ padding: '40px 24px', background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 5 }}>
           <div style={{ fontSize: 11, fontFamily: MONO, color: '#2a2a2a', marginBottom: 8 }}>No closed trades yet.</div>
           <div style={{ fontSize: 10, fontFamily: MONO, color: '#1e1e1e', lineHeight: 1.8 }}>

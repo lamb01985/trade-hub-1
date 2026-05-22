@@ -170,7 +170,10 @@ function TradeRow({ trade, onUpdate, onEdit, onDelete }) {
         <span style={{ color: '#aaa' }}>{trade.exitPrice != null ? `$${f2(trade.exitPrice)}` : '—'}</span>
         <span style={{ color: trade.pnl != null ? (trade.pnl >= 0 ? LIME : RED) : '#666', fontWeight: 700 }}>{trade.pnl != null ? fmtD(trade.pnl) : '—'}</span>
         <span style={{ color: '#666', fontSize: 10 }}>{trade.rr ? `1:${f2(trade.rr)}` : '—'}</span>
-        <span style={{ color: '#555', fontSize: 10, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{trade.setupType || '—'}</span>
+        <span style={{ color: '#555', fontSize: 10, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: 5 }}>
+          {trade.paper && <span title="Bot coach paper trade" style={{ display: 'inline-block', padding: '1px 5px', borderRadius: 2, background: '#1d1230', color: '#C084FC', fontSize: 8, fontWeight: 800, letterSpacing: '0.12em' }}>PAPER</span>}
+          <span style={{ overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{trade.setupType || '—'}</span>
+        </span>
         <button onClick={e => { e.stopPropagation(); onEdit(trade) }} style={{ background: 'transparent', border: 'none', color: '#444', cursor: 'pointer', fontFamily: MONO, fontSize: 14 }}>✎</button>
       </div>
       {open && (
