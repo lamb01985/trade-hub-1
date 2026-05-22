@@ -1,21 +1,22 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// useBot.js — coach engine hook
+// useBot.js — multi-ticker coach engine hook
 //
-// Owns no data of its own. Receives the active ticker, the live price stream,
-// the multi-timeframe alignment object, the level map, intraday bars, and a
-// checklist-complete flag from the parent (App.jsx via the Bot component).
+// Receives a watchlist of tickers plus a liveDataMulti map. On each tick,
+// iterates the watchlist, builds per-ticker context, calls the engine's
+// evaluateContext for that ticker. The engine's state is per-ticker indexed
+// in state.byTicker[TICKER]; a single global lockout flag governs new-setup
+// suppression across all tickers.
 //
-// Each render builds the market context, calls evaluateContext from the new
-// bot engine, and dispatches sound + notification + tab title side effects
-// based on the events the engine returns.
+// Concurrent positions are allowed: each ticker has its own state machine and
+// can be IN_TRADE independently.
 //
-// The engine is the source of truth for state. This hook only mirrors it
-// into React via useReducer so the UI re-renders when the engine returns
-// a new state object.
+// The hook still mirrors engine state via useReducer so the UI re-renders on
+// changes. The "primary" ticker (highest priority) drives the Right Now card;
+// remaining active tickers surface in pendingCards.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useMemo, useReducer, useRef, useCallback } from 'react'
-import { aggregateBars } from '../lib/structure.js'
+import { aggregateBars, computeMTF, alignmentScore } from '../lib/structure.js'
 import { getETMins } from '../constants.js'
 import {
   createInitialState,
@@ -35,6 +36,9 @@ import {
   disciplineStreak,
   skipQuality,
   devInjectTestSetup,
+  tickerSlice,
+  totalRealizedPL,
+  perTickerPLBreakdown,
 } from '../lib/bot.js'
 import {
   notify,
@@ -56,31 +60,29 @@ function reducer(_state, action) {
   }
 }
 
-// ── Adapters: convert App-level shapes into the engine's expected shapes ────
+// ── Per-ticker adapters: bundle (from useLiveDataMulti) -> engine ctx ──────
 
-// Engine wants levels keyed by { VWAP, P, R1, R2, R3, S1, S2, S3, PDH, PDL, PDC }.
-// App provides fullLevelMap.levels as an array of { label, price, type } plus
-// prevDay = { high, low, close } from useLiveData.
-function adaptLevels(levelMap, prevDay) {
+// Extract the small set of levels the engine consumes from a per-ticker bundle.
+function adaptLevelsFromBundle(bundle) {
   const out = {}
-  for (const lvl of levelMap?.levels || []) {
-    if (lvl.price == null || isNaN(lvl.price)) continue
-    if (lvl.label === 'VWAP') out.VWAP = lvl.price
-    else if (lvl.label === 'Pivot') out.P = lvl.price
-    else if (['R1', 'R2', 'R3', 'S1', 'S2', 'S3'].includes(lvl.label)) out[lvl.label] = lvl.price
-  }
-  // Prior day comes from useLiveData directly because the level map labels
-  // them as 'Prev Day High' / 'Prev Day Low' / 'Prev Day Close' and we want
-  // the canonical short names PDH / PDL / PDC.
-  if (prevDay?.high != null) out.PDH = prevDay.high
-  if (prevDay?.low != null) out.PDL = prevDay.low
-  if (prevDay?.close != null) out.PDC = prevDay.close
+  if (bundle?.vwapData?.vwap != null) out.VWAP = bundle.vwapData.vwap
+  const p = bundle?.pivots
+  if (p?.pp != null) out.P = p.pp
+  if (p?.r1 != null) out.R1 = p.r1
+  if (p?.r2 != null) out.R2 = p.r2
+  if (p?.r3 != null) out.R3 = p.r3
+  if (p?.s1 != null) out.S1 = p.s1
+  if (p?.s2 != null) out.S2 = p.s2
+  if (p?.s3 != null) out.S3 = p.s3
+  const pd = bundle?.prevDay
+  if (pd?.high != null) out.PDH = pd.high
+  if (pd?.low != null) out.PDL = pd.low
+  if (pd?.close != null) out.PDC = pd.close
   return out
 }
 
-// Map App's mtfAlignment.mtf states (BULLISH / BEARISH / RANGING / TRANSITION)
-// to the engine's vocabulary (trending_up / trending_down / ranging / transition).
-function adaptAlignment(mtf) {
+// Map an alignmentScore mtf object to engine vocabulary.
+function adaptAlignmentMtf(mtf) {
   if (!mtf) return {}
   const m = (state) => {
     if (state === 'BULLISH') return 'trending_up'
@@ -97,11 +99,22 @@ function adaptAlignment(mtf) {
   }
 }
 
-// Build a Journal-shaped trade record from a closed engine position. Used
-// when the bot's writePaperTrades setting is on; the parent supplies the
-// callback and is responsible for actually pushing to the trades store.
-// The shape mirrors what QuickLog writes: status 'win'/'loss' (not 'closed'),
-// pnl in dollars, optType 'call'/'put', entryTime/exitTime as HH:MM strings.
+// Compute the today's opening range from intradayBars (9:30-9:45 ET window).
+function computeOrb(intradayBars) {
+  if (!intradayBars?.length) return null
+  const inWindow = intradayBars.filter((b) => {
+    const et = new Date(b.t).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false, hour: '2-digit', minute: '2-digit' })
+    const [h, m] = et.split(':').map(Number)
+    const mins = h * 60 + m
+    return mins >= 570 && mins < 585
+  })
+  if (!inWindow.length) return null
+  const high = Math.max(...inWindow.map(b => b.h))
+  const low = Math.min(...inWindow.map(b => b.l))
+  return { high, low, mid: (high + low) / 2 }
+}
+
+// Build a Journal-shaped trade record from a closed engine position.
 function buildPaperTrade(position, ticker) {
   const id = `paper_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
   const hhmm = (ms) => {
@@ -112,7 +125,7 @@ function buildPaperTrade(position, ticker) {
   return {
     id,
     date: new Date(position.closedAt || Date.now()).toISOString(),
-    ticker: (ticker || 'QQQ').toUpperCase(),
+    ticker: (ticker || position.ticker || 'QQQ').toUpperCase(),
     optType: position.optionDirection || (position.direction === 'long' ? 'call' : 'put'),
     strike: position.optionStrike ?? null,
     expiry: today,
@@ -129,44 +142,77 @@ function buildPaperTrade(position, ticker) {
   }
 }
 
-// Compute today's opening range from intradayBars. Polygon timestamps are UTC
-// ms. Regular session opens at 9:30 ET = 570 minutes from midnight ET; the
-// first 15 minutes (9:30 to 9:45) define the ORB. Returns null until 9:45 ET
-// has passed or until at least one bar lands in the window.
-function computeOrb(intradayBars) {
-  if (!intradayBars?.length) return null
-  const inWindow = intradayBars.filter((b) => {
-    const et = new Date(b.t).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false, hour: '2-digit', minute: '2-digit' })
-    const [h, m] = et.split(':').map(Number)
-    const mins = h * 60 + m
-    return mins >= 570 && mins < 585
+// ── Priority ranking ────────────────────────────────────────────────────────
+// State priority order. Higher index = higher priority for the right-now card.
+const STATE_PRIORITY = {
+  'WAIT': 0,
+  'CLOSED': 1,
+  'WATCH': 2,
+  'IN_TRADE': 3,
+  'GO': 4,
+}
+
+function rankSlot(slot, ticker, activeTicker) {
+  const statePri = STATE_PRIORITY[slot?.state] ?? 0
+  const confluence = slot?.activeSetup?.confidence ?? 0
+  // Final tiebreaker: prefer the user's currently-active app ticker.
+  const isActive = activeTicker && String(activeTicker).toUpperCase() === ticker ? 1 : 0
+  return statePri * 1_000_000 + confluence * 1_000 + isActive
+}
+
+function deriveTickerOrder(state, watchlist, activeTicker) {
+  const tickers = (watchlist || []).map(t => String(t).toUpperCase()).filter(Boolean)
+  if (!tickers.length) return { primaryTicker: null, pendingTickers: [], sorted: [] }
+  const sorted = [...tickers].sort((a, b) => {
+    const sa = tickerSlice(state, a)
+    const sb = tickerSlice(state, b)
+    return rankSlot(sb, b, activeTicker) - rankSlot(sa, a, activeTicker)
   })
-  if (!inWindow.length) return null
-  const high = Math.max(...inWindow.map(b => b.h))
-  const low = Math.min(...inWindow.map(b => b.l))
-  return { high, low, mid: (high + low) / 2 }
+  const primaryTicker = sorted[0] || null
+  // Pending = the remaining tickers in WATCH/GO/IN_TRADE only.
+  const pendingTickers = sorted
+    .slice(1)
+    .filter(t => {
+      const s = tickerSlice(state, t)
+      return s.state === 'GO' || s.state === 'WATCH' || s.state === 'IN_TRADE'
+    })
+  return { primaryTicker, pendingTickers, sorted }
 }
 
 // ── Hook ────────────────────────────────────────────────────────────────────
 
 export function useBot({
-  activeTicker = 'QQQ',
-  livePrice = null,
-  intradayBars = [],
-  levelMap = null,
-  mtfAlignment = null,
-  prevDay = null,
-  rvol = null,
+  watchlist = [],
+  liveDataMulti = {},
+  activeTicker = null,
   checklistComplete = false,
   onPaperTrade = null,
 } = {}) {
   const [state, dispatch] = useReducer(reducer, null, createInitialState)
   const hydratedRef = useRef(false)
   const stateRef = useRef(state)
-  const lastPriceRef = useRef(null)
+  // Track last-tick price per ticker so the engine has lastPrice for breakout
+  // detection on the next tick.
+  const lastPriceRef = useRef({})
   stateRef.current = state
 
-  // One-time hydrate from localStorage
+  // Normalize watchlist for stable iteration.
+  const tickers = useMemo(() => {
+    const seen = new Set()
+    const out = []
+    for (const t of watchlist || []) {
+      if (!t) continue
+      const T = String(t).toUpperCase()
+      if (seen.has(T)) continue
+      seen.add(T)
+      out.push(T)
+    }
+    return out
+  }, [watchlist])
+  const tickersKey = tickers.join('|')
+
+  // One-time hydrate from localStorage. Engine's loadState migrates legacy
+  // single-ticker payloads into byTicker[QQQ].
   useEffect(() => {
     if (hydratedRef.current) return
     hydratedRef.current = true
@@ -179,58 +225,71 @@ export function useBot({
     if (hydratedRef.current) saveState(state)
   }, [state])
 
-  // ── Adapt inputs into the engine's expected shapes ────────────────────────
-  const levels = useMemo(() => adaptLevels(levelMap, prevDay), [levelMap, prevDay])
-  const alignment = useMemo(() => adaptAlignment(mtfAlignment?.mtf), [mtfAlignment])
-  const bars5m = useMemo(() => aggregateBars(intradayBars, 5), [intradayBars])
-  const orb = useMemo(() => computeOrb(intradayBars), [intradayBars])
-
-  // ── Main tick: build context and let the engine evaluate ─────────────────
+  // ── Main tick: iterate watchlist, evaluate per ticker, batch dispatch ─────
   useEffect(() => {
     if (!hydratedRef.current) return
-    if (livePrice == null || !activeTicker) return
-
-    const ticker = activeTicker.toUpperCase()
-    const etMinutes = getETMins()
-    const ctx = {
-      ticker,
-      currentPrice: livePrice,
-      lastPrice: lastPriceRef.current,
-      bars5m,
-      levels,
-      alignment,
-      etMinutes,
-      rvol,
-      orb,
-      checklistComplete,
-    }
+    if (tickers.length === 0) return
 
     let working = stateRef.current
-    // Sync checklist flag into engine state if it changed
     working = setChecklistComplete(working, !!checklistComplete)
 
-    const { state: nextState, events } = evaluateContext(ctx, working)
+    const etMinutes = getETMins()
+    const eventsToFire = []  // [{ticker, event}]
 
-    if (nextState !== working) {
-      dispatch({ type: 'REPLACE', state: nextState })
+    for (const ticker of tickers) {
+      const bundle = liveDataMulti[ticker]
+      if (!bundle || bundle.price == null) continue
+
+      const intradayBars = bundle.intradayBars || []
+      const bars5m = aggregateBars(intradayBars, 5)
+      const mtf = computeMTF(intradayBars)
+      const aScore = mtf ? alignmentScore(mtf, bundle.rvol ?? null) : null
+      const alignment = adaptAlignmentMtf(aScore?.mtf || mtf)
+      const levels = adaptLevelsFromBundle(bundle)
+      const orb = computeOrb(intradayBars)
+
+      const ctx = {
+        ticker,
+        currentPrice: bundle.price,
+        lastPrice: lastPriceRef.current[ticker] ?? null,
+        bars5m,
+        levels,
+        alignment,
+        etMinutes,
+        rvol: bundle.rvol ?? null,
+        orb,
+        checklistComplete,
+      }
+
+      const { state: ns, events } = evaluateContext(ctx, working)
+      working = ns
+      for (const e of events) eventsToFire.push({ ticker, event: e })
+
+      lastPriceRef.current[ticker] = bundle.price
     }
 
-    // Side effects per event. The engine only emits transition events, not
-    // sustained-state events, so each event is a single audible cue.
-    for (const e of events) {
-      handleEvent(e, ticker)
+    if (working !== stateRef.current) {
+      dispatch({ type: 'REPLACE', state: working })
     }
 
-    // Tab title reflects current visual state regardless of new events
-    const titleSummary = {
-      ticker,
-      direction: nextState.activeSetup?.direction || nextState.position?.direction,
-      pl: nextState.position?.unrealizedPL ?? nextState.lastClosed?.realizedPL,
-    }
-    updateTabTitle(nextState.state, titleSummary)
+    for (const { ticker, event } of eventsToFire) handleEvent(event, ticker)
 
-    lastPriceRef.current = livePrice
-  }, [livePrice, activeTicker, bars5m, levels, alignment, rvol, orb, checklistComplete])
+    // Tab title reflects the primary ticker's state (or global lockout).
+    const { primaryTicker } = deriveTickerOrder(working, tickers, activeTicker)
+    if (primaryTicker) {
+      const slot = tickerSlice(working, primaryTicker)
+      const visualState = working.lockedAt ? 'LOCKED' : slot.state
+      updateTabTitle(visualState, {
+        ticker: primaryTicker,
+        direction: slot.activeSetup?.direction || slot.position?.direction,
+        pl: slot.position?.unrealizedPL ?? slot.lastClosed?.realizedPL,
+      })
+    }
+  // We intentionally drive this effect off the multi bundle reference plus the
+  // tickers signature. The reference is stable in useLiveDataMulti's useState
+  // and changes only when underlying data ticks.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveDataMulti, tickersKey, activeTicker, checklistComplete])
 
   // ── Event side effects ────────────────────────────────────────────────────
   function handleEvent(e, ticker) {
@@ -251,7 +310,6 @@ export function useBot({
         const isWin = (e.position?.realizedPL ?? 0) >= 0
         if (isWin) playWin(); else playLoss()
         notify(isWin ? 'Win' : 'Loss', e.message || `${ticker}: position closed`, isWin ? 'normal' : 'high')
-        // Opt-in journal write: only if the Bot settings drawer has it on.
         const settings = stateRef.current?.settings || {}
         if (settings.writePaperTrades && onPaperTrade && e.position) {
           try { onPaperTrade(buildPaperTrade(e.position, ticker)) } catch (_) {}
@@ -260,7 +318,7 @@ export function useBot({
       }
       case 'lockout':
         playLockout()
-        notify('Daily lockout', e.message || `${ticker}: daily loss limit hit`, 'high')
+        notify('Daily lockout', e.message || 'Daily loss limit hit', 'high')
         break
       case 'go_expired':
         notify('Setup expired', e.message || `${ticker}: 60s window closed`, 'low')
@@ -269,48 +327,50 @@ export function useBot({
       case 'watch_dropped':
       case 'closed_dismissed':
       case 'unlocked':
-        // Silent transitions, no sound. Title still updates above.
         break
       default:
         break
     }
   }
 
-  // ── User actions ──────────────────────────────────────────────────────────
-  const onTakeIt = useCallback((opts) => {
-    const { state: ns, events } = userTakeIt(stateRef.current, opts || {})
+  // ── User actions (now take a ticker arg) ──────────────────────────────────
+  const onTakeIt = useCallback((ticker, opts) => {
+    const t = String(ticker || activeTicker || '').toUpperCase()
+    if (!t) return
+    const { state: ns, events } = userTakeIt(stateRef.current, t, opts || {})
     if (ns !== stateRef.current) dispatch({ type: 'REPLACE', state: ns })
-    for (const e of events) handleEvent(e, (activeTicker || 'QQQ').toUpperCase())
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    for (const e of events) handleEvent(e, t)
   }, [activeTicker])
 
-  const onSkipIt = useCallback(() => {
-    const { state: ns, events } = userSkipIt(stateRef.current)
+  const onSkipIt = useCallback((ticker) => {
+    const t = String(ticker || activeTicker || '').toUpperCase()
+    if (!t) return
+    const { state: ns, events } = userSkipIt(stateRef.current, t)
     if (ns !== stateRef.current) dispatch({ type: 'REPLACE', state: ns })
-    for (const e of events) handleEvent(e, (activeTicker || 'QQQ').toUpperCase())
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    for (const e of events) handleEvent(e, t)
   }, [activeTicker])
 
-  const onCloseManually = useCallback((exitPremium) => {
-    const { state: ns, events } = userCloseManually(stateRef.current, exitPremium)
+  const onCloseManually = useCallback((ticker, exitPremium) => {
+    const t = String(ticker || activeTicker || '').toUpperCase()
+    if (!t) return
+    const { state: ns, events } = userCloseManually(stateRef.current, t, exitPremium)
     if (ns !== stateRef.current) dispatch({ type: 'REPLACE', state: ns })
-    for (const e of events) handleEvent(e, (activeTicker || 'QQQ').toUpperCase())
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    for (const e of events) handleEvent(e, t)
   }, [activeTicker])
 
-  const onDismissClosed = useCallback(() => {
-    const { state: ns, events } = userDismissClosed(stateRef.current)
+  const onDismissClosed = useCallback((ticker) => {
+    const t = String(ticker || activeTicker || '').toUpperCase()
+    if (!t) return
+    const { state: ns, events } = userDismissClosed(stateRef.current, t)
     if (ns !== stateRef.current) dispatch({ type: 'REPLACE', state: ns })
-    for (const e of events) handleEvent(e, (activeTicker || 'QQQ').toUpperCase())
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    for (const e of events) handleEvent(e, t)
   }, [activeTicker])
 
   const onUnlock = useCallback(() => {
     const { state: ns, events } = userUnlock(stateRef.current)
     if (ns !== stateRef.current) dispatch({ type: 'REPLACE', state: ns })
-    for (const e of events) handleEvent(e, (activeTicker || 'QQQ').toUpperCase())
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTicker])
+    for (const e of events) handleEvent(e, '')
+  }, [])
 
   const onResetSession = useCallback(() => {
     const next = resetSession(stateRef.current)
@@ -322,47 +382,108 @@ export function useBot({
     dispatch({ type: 'REPLACE', state: next })
   }, [])
 
-  // Dev-only convenience. Bot.jsx hides the button outside import.meta.env.DEV
-  // so this can never be invoked in a production build's UI. Kept exposed
-  // unconditionally on the hook so the engine helper remains a single import.
-  const onDevTriggerTestSetup = useCallback(() => {
-    const price = livePrice ?? 590
-    const ticker = (activeTicker || 'QQQ').toUpperCase()
+  const onDevTriggerTestSetup = useCallback((targetTicker) => {
+    const ticker = String(targetTicker || activeTicker || tickers[0] || 'QQQ').toUpperCase()
+    const price = liveDataMulti[ticker]?.price ?? 590
     const { state: ns, events } = devInjectTestSetup(stateRef.current, ticker, Number(price))
     dispatch({ type: 'REPLACE', state: ns })
     for (const e of events) handleEvent(e, ticker)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTicker, livePrice])
+  }, [activeTicker, tickers, liveDataMulti])
 
-  // ── Exposed UI surface ────────────────────────────────────────────────────
-  // currentCard is the data driving the BotRightNowCard. Everything the card
-  // needs to render any of the six sub-states is here, with the active ticker
-  // included so the UI does not need its own copy.
-  const currentCard = useMemo(() => ({
-    state: state.state,
-    setup: state.activeSetup,
-    position: state.position,
-    lastClosed: state.lastClosed,
-    goExpiresAt: state.goExpiresAt,
-    lockout: state.state === 'LOCKED' ? { lockedAt: state.lockedAt } : null,
-    checklistRequired: state.settings?.requireChecklist && !checklistComplete,
-    ticker: (activeTicker || 'QQQ').toUpperCase(),
-    settings: state.settings,
-  }), [state, activeTicker, checklistComplete])
+  // ── Derived: primary ticker + pending list ────────────────────────────────
+  const { primaryTicker, pendingTickers, sorted } = useMemo(() => {
+    return deriveTickerOrder(state, tickers, activeTicker)
+  }, [state, tickersKey, activeTicker])
 
-  const todaysSetups = state.todaysSetups || []
+  // ── currentCard: drives the right-now card for the primary ticker ────────
+  const currentCard = useMemo(() => {
+    if (!primaryTicker) {
+      return {
+        state: state.lockedAt ? 'LOCKED' : 'WAIT',
+        ticker: '',
+        setup: null,
+        position: null,
+        lastClosed: null,
+        goExpiresAt: null,
+        lockout: state.lockedAt ? { lockedAt: state.lockedAt } : null,
+        checklistRequired: state.settings?.requireChecklist && !checklistComplete,
+        settings: state.settings,
+      }
+    }
+    const slot = tickerSlice(state, primaryTicker)
+    return {
+      state: state.lockedAt ? 'LOCKED' : slot.state,
+      setup: slot.activeSetup,
+      position: slot.position,
+      lastClosed: slot.lastClosed,
+      goExpiresAt: slot.goExpiresAt,
+      lockout: state.lockedAt ? { lockedAt: state.lockedAt } : null,
+      checklistRequired: state.settings?.requireChecklist && !checklistComplete,
+      ticker: primaryTicker,
+      settings: state.settings,
+    }
+  }, [state, primaryTicker, checklistComplete])
+
+  // ── pendingCards: the "Also live" queue (max 3 by priority) ──────────────
+  const pendingCards = useMemo(() => {
+    return pendingTickers.slice(0, 3).map(t => {
+      const slot = tickerSlice(state, t)
+      return {
+        ticker: t,
+        state: slot.state,
+        setup: slot.activeSetup,
+        position: slot.position,
+        confluence: slot.activeSetup?.confidence ?? 0,
+      }
+    })
+  }, [state, pendingTickers])
+
+  // ── Per-ticker chip data for the watchlist UI ─────────────────────────────
+  const tickerChips = useMemo(() => {
+    return tickers.map(t => {
+      const slot = tickerSlice(state, t)
+      const bundle = liveDataMulti[t] || {}
+      return {
+        ticker: t,
+        state: state.lockedAt ? 'LOCKED' : slot.state,
+        price: bundle.price ?? null,
+        setup: slot.activeSetup,
+        position: slot.position,
+        realizedPL: slot.realizedPL || 0,
+        unrealizedPL: slot.position?.unrealizedPL ?? 0,
+      }
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, tickersKey, liveDataMulti])
+
+  // ── Aggregate today's setups across tickers for the today panel ──────────
+  const todaysSetups = useMemo(() => {
+    const out = []
+    for (const slot of Object.values(state.byTicker || {})) {
+      for (const r of slot.todaysSetups || []) out.push(r)
+    }
+    out.sort((a, b) => (b.surfaceTs || 0) - (a.surfaceTs || 0))
+    return out
+  }, [state])
+
   const patterns = useMemo(() => ({
     bySetup: patternsByActivity(state, 20),
     skip: skipQuality(state),
     disciplineStreak: disciplineStreak(state),
     today: sessionStats(state),
+    perTicker: perTickerPLBreakdown(state),
   }), [state])
 
   return {
     state,
     currentCard,
+    pendingCards,
+    tickerChips,
+    primaryTicker,
+    sortedTickers: sorted,
     todaysSetups,
     patterns,
+    realizedPL: totalRealizedPL(state),
     onTakeIt,
     onSkipIt,
     onCloseManually,

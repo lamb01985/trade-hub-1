@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useLocalStorage } from './hooks/useStore.js'
 import { useLiveData } from './hooks/useLiveData.js'
+import { useLiveDataMulti } from './hooks/useLiveDataMulti.js'
 import { buildLevelMap } from './lib/levels.js'
 import { computeMTF, alignmentScore } from './lib/structure.js'
 import Command from './components/Command.jsx'
@@ -71,6 +72,9 @@ export default function App() {
   // AI brief generator in PrepTab can write into it and the Chart reacts in
   // the same session. Defaults to 50k when a ticker has no entry (Chart-side).
   const [volumeThresholds, setVolumeThresholds] = useLocalStorage('tradeHub.chart.volumeThreshold.v1', {})
+  // Bot multi-ticker watchlist. Capped at MAX_BOT_WATCHLIST in setters.
+  // Default 3 liquid index/leveraged ETFs.
+  const [botWatchlist, setBotWatchlist] = useLocalStorage('tradeHub.bot.watchlist.v1', ['QQQ', 'TQQQ', 'SPY'])
   const [_priceTick, setPriceTick] = useState(0)
   useEffect(() => { const id = setInterval(() => setPriceTick(t => t + 1), 5000); return () => clearInterval(id) }, [])
 
@@ -168,6 +172,10 @@ export default function App() {
   }), [orbPrefill, prep])
 
   const liveData = useLiveData(apiKey, prep.ticker || 'QQQ', null, settings)
+
+  // Multi-ticker bundle for the bot's watchlist. Independent of the active
+  // ticker (the active ticker is in liveData above).
+  const liveDataMulti = useLiveDataMulti(apiKey, botWatchlist)
 
   // Merge pre-market H/L into custom levels so they show in the level map
   const enrichedCustomLevels = useMemo(() => {
@@ -562,6 +570,9 @@ export default function App() {
                   rvol={liveData?.rvol ?? null}
                   checklistComplete={checklistComplete}
                   onPaperTrade={handleBotPaperTrade}
+                  watchlist={botWatchlist}
+                  onWatchlistChange={setBotWatchlist}
+                  liveDataMulti={liveDataMulti?.data || {}}
                 />
               </ErrorBoundary>
             </div>
