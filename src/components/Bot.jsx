@@ -6,7 +6,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useMemo } from "react";
-import { useBot } from "../hooks/useBot.js";
+import { useBot } from "../hooks/_archive/useBot.legacy.js";
+// TODO Phase 6: rewrite this UI on top of the new coach engine using the new
+// useBot hook in ../hooks/useBot.js. Pointing at the archived legacy hook
+// keeps the existing rules-engine UI rendering between Phase 5 and Phase 6.
 import {
   LEVEL_TYPES,
   TRIGGER_TYPES,
