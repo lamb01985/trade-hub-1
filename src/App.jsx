@@ -10,6 +10,7 @@ import CheckTab from './components/Check.jsx'
 import CalendarTab from './components/Calendar.jsx'
 import Playbook from './components/Playbook.jsx'
 import ShortThesis from './components/ShortThesis.jsx'
+import Bot from './components/Bot.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
 import { getAllEvents, highImpactToday } from './lib/calendar.js'
 import { exchangeCode, refreshTokens, getAccountNumbers, getAccountSummary, getTodaysFilledOrders, countDayTrades, SCHWAB_BLUE } from './lib/schwab.js'
@@ -35,6 +36,7 @@ const TABS = [
   { id: 'journal', label: 'Journal', desc: 'Trade log' },
   { id: 'stats', label: 'Stats', desc: 'Performance' },
   { id: 'shortthesis', label: 'Short Thesis', desc: 'Put candidates' },
+  { id: 'bot', label: 'Bot', desc: 'Auto trigger rules' },
 ]
 
 const defaultSettings = { dailyLossLimit: 500, maxTradesPerDay: 5, orPeriod: '15', alertsEnabled: false }
@@ -400,6 +402,16 @@ export default function App() {
         {activeTab === 'shortthesis' && (
           <ErrorBoundary label="Short Thesis tab">
             <ShortThesis apiKey={apiKey} anthropicKey={anthropicKey} theses={putTheses} onThesesChange={setPutTheses} />
+          </ErrorBoundary>
+        )}
+
+        {activeTab === 'bot' && (
+          <ErrorBoundary label="Bot tab">
+            <Bot
+              activeTicker={(prep.ticker || 'QQQ').toUpperCase()}
+              livePrice={liveData?.price ?? null}
+              levelMap={fullLevelMap}
+            />
           </ErrorBoundary>
         )}
 
