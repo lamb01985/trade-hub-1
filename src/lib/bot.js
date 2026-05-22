@@ -1,23 +1,33 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// bot.js — Trade Hub coach engine (rebuild, v2)
+// bot.js — Trade Hub coach engine (multi-ticker, v3)
 //
 // State machine, not a rules engine. Pure logic, no React.
 //
-// States:  WAIT, WATCH, GO, IN_TRADE, CLOSED, LOCKED
+// Per-ticker state machine slices live in state.byTicker[TICKER]:
+//   WAIT, WATCH, GO, IN_TRADE, CLOSED   (per ticker)
 //
-// Transitions:
+// Global state:
+//   lockedAt / wasLockedToday           (global lockout, fires on aggregate P/L)
+//   sessionDate, sessionStartedAt, sessionHistory, settings, checklistComplete
+//
+// Transitions (per ticker):
 //   WAIT     -> WATCH      (setup forming, price near a tradeable level)
 //   WAIT     -> GO         (high-confluence signal detected this tick)
-//   WATCH    -> GO         (signal confirmed by candle close, same or better)
-//   WATCH    -> WAIT       (price moved away, setup invalidated)
+//   WATCH    -> GO         (signal confirmed)
+//   WATCH    -> WAIT       (price moved away)
 //   GO       -> IN_TRADE   (user pressed "I took it")
 //   GO       -> WAIT       (user pressed "I skipped" or 60s auto-expire)
-//   IN_TRADE -> CLOSED     (target or stop hit on underlying, or manual close)
-//   CLOSED   -> WAIT       (auto after 30s or on dismiss)
-//   any      -> LOCKED     (realized + unrealized P/L crosses daily lockout)
-//   LOCKED   -> WAIT       (user unlock with friction)
+//   IN_TRADE -> CLOSED     (target or stop on underlying, or manual)
+//   CLOSED   -> WAIT       (auto after 30s, on dismiss)
 //
-// Storage key intentionally fresh: tradeHub.bot.coach.v1
+// Global lockout (state.lockedAt set):
+//   - Fires when aggregate realizedPL across tickers crosses the daily limit.
+//   - Blocks new WATCH/GO transitions for every ticker.
+//   - Open positions continue to mark-to-market and may hit stop/target.
+//   - User clears with userUnlock(state); per-ticker states are untouched.
+//
+// Storage key (legacy): tradeHub.bot.coach.v1
+// loadState() migrates a pre-v3 single-ticker payload into byTicker[QQQ].
 //
 // Position MTM uses a delta approximation because Massive's equity tier does
 // not expose option chains. Default delta 0.5 for ATM, configurable on the
@@ -42,22 +52,30 @@ export const SESSION_HISTORY_CAP = 20              // last N sessions retained
 
 // ── State factory ───────────────────────────────────────────────────────────
 
-export function createInitialState() {
+// Per-ticker slice. Each watchlist ticker gets its own state machine.
+export function createTickerState() {
   return {
     state: 'WAIT',
-    activeSetup: null,           // playbook signal currently in WATCH or GO
-    position: null,              // open position when IN_TRADE
-    lastClosed: null,            // most recent closed position, shown during CLOSED
-    goExpiresAt: null,           // timestamp ms when GO auto-expires
-    watchEnteredAt: null,        // when current WATCH started
-    closedEnteredAt: null,       // when current CLOSED state started
-    lockedAt: null,              // timestamp when LOCKED triggered
-    sessionStartedAt: null,      // first tick of current session
-    sessionDate: null,           // YYYY-MM-DD for session bucketing
-    realizedPL: 0,               // session-realized P/L
-    todaysSetups: [],            // every setup surfaced today
-    pendingWouldHaveWon: [],     // skipped/expired setups still tracking outcome
-    sessionHistory: [],          // rolled-up past sessions, capped
+    activeSetup: null,
+    position: null,
+    lastClosed: null,
+    goExpiresAt: null,
+    watchEnteredAt: null,
+    closedEnteredAt: null,
+    todaysSetups: [],          // setups surfaced today for this ticker
+    pendingWouldHaveWon: [],   // skipped/expired setups still tracking outcome
+    realizedPL: 0,             // realized P/L for this ticker today
+  }
+}
+
+export function createInitialState() {
+  return {
+    byTicker: {},                // { [TICKER]: createTickerState() }
+    sessionStartedAt: null,
+    sessionDate: null,
+    sessionHistory: [],
+    lockedAt: null,              // global lockout (set when aggregate P/L crosses limit)
+    wasLockedToday: false,
     settings: {
       dailyLossLimit: DEFAULT_DAILY_LOSS_LIMIT,
       confluenceThreshold: DEFAULT_CONFLUENCE_THRESHOLD,
@@ -66,8 +84,43 @@ export function createInitialState() {
       writePaperTrades: false,
     },
     checklistComplete: false,    // populated by parent (App) before each tick
-    wasLockedToday: false,       // set when LOCKED transitions to anything
   }
+}
+
+// Return state with byTicker[TICKER] guaranteed to exist (defaults to a fresh
+// per-ticker slice). Returns the same state if already present.
+export function ensureTicker(state, ticker) {
+  const t = (ticker || '').toUpperCase()
+  if (!t) return state
+  if (state.byTicker?.[t]) return state
+  return {
+    ...state,
+    byTicker: { ...(state.byTicker || {}), [t]: createTickerState() },
+  }
+}
+
+// Convenience: get a per-ticker slice or a fresh empty one (without mutating).
+export function tickerSlice(state, ticker) {
+  const t = (ticker || '').toUpperCase()
+  return state.byTicker?.[t] || createTickerState()
+}
+
+// Aggregate realized P/L across all per-ticker slices.
+export function totalRealizedPL(state) {
+  let sum = 0
+  for (const t of Object.values(state.byTicker || {})) {
+    sum += t.realizedPL || 0
+  }
+  return sum
+}
+
+// Aggregate unrealized P/L across all open positions.
+export function totalUnrealizedPL(state) {
+  let sum = 0
+  for (const t of Object.values(state.byTicker || {})) {
+    if (t.position?.unrealizedPL != null) sum += t.position.unrealizedPL
+  }
+  return sum
 }
 
 // ── localStorage I/O ────────────────────────────────────────────────────────
@@ -81,14 +134,54 @@ export function saveState(state) {
   }
 }
 
+// Detect a legacy (single-ticker) save and migrate it into byTicker[QQQ].
+// The pre-v3 shape kept state/activeSetup/position/etc at the top level.
+function migrateLegacy(parsed) {
+  if (!parsed || typeof parsed !== 'object') return null
+  if (parsed.byTicker) return null // already v3
+  const looksLegacy = 'state' in parsed || 'activeSetup' in parsed || 'position' in parsed || 'todaysSetups' in parsed
+  if (!looksLegacy) return null
+
+  const legacyWasLocked = parsed.state === 'LOCKED'
+  const tickerSlot = {
+    state: legacyWasLocked ? 'WAIT' : (parsed.state || 'WAIT'),
+    activeSetup: legacyWasLocked ? null : (parsed.activeSetup ?? null),
+    position: parsed.position ?? null,
+    lastClosed: parsed.lastClosed ?? null,
+    goExpiresAt: parsed.goExpiresAt ?? null,
+    watchEnteredAt: parsed.watchEnteredAt ?? null,
+    closedEnteredAt: parsed.closedEnteredAt ?? null,
+    todaysSetups: Array.isArray(parsed.todaysSetups) ? parsed.todaysSetups : [],
+    pendingWouldHaveWon: Array.isArray(parsed.pendingWouldHaveWon) ? parsed.pendingWouldHaveWon : [],
+    realizedPL: typeof parsed.realizedPL === 'number' ? parsed.realizedPL : 0,
+  }
+  return {
+    byTicker: { QQQ: tickerSlot },
+    sessionStartedAt: parsed.sessionStartedAt ?? null,
+    sessionDate: parsed.sessionDate ?? null,
+    sessionHistory: Array.isArray(parsed.sessionHistory) ? parsed.sessionHistory : [],
+    lockedAt: legacyWasLocked ? (parsed.lockedAt || Date.now()) : (parsed.lockedAt ?? null),
+    wasLockedToday: !!parsed.wasLockedToday || legacyWasLocked,
+    settings: parsed.settings || {},
+    checklistComplete: !!parsed.checklistComplete,
+  }
+}
+
 export function loadState() {
   if (typeof window === 'undefined') return createInitialState()
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return createInitialState()
     const parsed = JSON.parse(raw)
+    const migrated = migrateLegacy(parsed) || parsed
     // Merge defaults so older saves missing keys still load cleanly.
-    return { ...createInitialState(), ...parsed, settings: { ...createInitialState().settings, ...(parsed.settings || {}) } }
+    const base = createInitialState()
+    return {
+      ...base,
+      ...migrated,
+      byTicker: { ...(migrated.byTicker || {}) },
+      settings: { ...base.settings, ...(migrated.settings || {}) },
+    }
   } catch (_) {
     return createInitialState()
   }
@@ -158,10 +251,12 @@ export function closePosition(position, exitUnderlying, exitReason, now, exitPre
   }
 }
 
-// Build a todaysSetups record for a setup that just transitioned states.
-function recordSetup(signal, status, atMinute, ts, extras = {}) {
+// Build a todaysSetups record for a setup that just transitioned states. The
+// ticker is captured so per-ticker breakdowns (P/L grouping, etc.) work.
+function recordSetup(signal, status, atMinute, ts, ticker = null, extras = {}) {
   return {
     id: uid('setup'),
+    ticker: ticker ? String(ticker).toUpperCase() : null,
     setupId: signal.setupId,
     setupName: signal.setupName,
     direction: signal.direction,
@@ -247,12 +342,13 @@ function findWatchCandidate(ctx) {
   return null
 }
 
-// Run pending "would have won" tracking for skipped / expired setups.
-function trackPendingOutcomes(state, currentPrice, etMinutes) {
-  if (!state.pendingWouldHaveWon?.length) return state
+// Run pending "would have won" tracking for skipped / expired setups on a
+// single per-ticker slice. Returns the updated slice.
+function trackPendingOutcomes(slot, currentPrice, etMinutes) {
+  if (!slot.pendingWouldHaveWon?.length) return slot
   const stillPending = []
   const resolved = []
-  for (const p of state.pendingWouldHaveWon) {
+  for (const p of slot.pendingWouldHaveWon) {
     const dir = p.signal.direction
     const target = p.signal.target
     const stop = p.signal.stop
@@ -271,19 +367,28 @@ function trackPendingOutcomes(state, currentPrice, etMinutes) {
       resolved.push({ setupRecordId: p.setupRecordId, wouldHaveWon: outcome })
     }
   }
-  if (!resolved.length) return state
-  const todaysSetups = state.todaysSetups.map(r => {
+  if (!resolved.length) return slot
+  const todaysSetups = slot.todaysSetups.map(r => {
     const match = resolved.find(rr => rr.setupRecordId === r.id)
     return match ? { ...r, wouldHaveWon: match.wouldHaveWon } : r
   })
-  return { ...state, todaysSetups, pendingWouldHaveWon: stillPending }
+  return { ...slot, todaysSetups, pendingWouldHaveWon: stillPending }
 }
 
-// Daily lockout check. Returns true if realized + unrealized P/L is at or
-// past the configured loss limit.
-export function isLockedOut(state, unrealized = 0) {
+// Replace a per-ticker slice immutably.
+function setSlot(state, ticker, slot) {
+  const t = String(ticker || '').toUpperCase()
+  return { ...state, byTicker: { ...(state.byTicker || {}), [t]: slot } }
+}
+
+// Daily lockout check. Aggregates realized P/L across all per-ticker slices
+// (plus an optional extra unrealized delta the caller may pass for a fresh
+// projected close). Returns true if aggregate is at or past the configured
+// loss limit.
+export function isLockedOut(state, extraUnrealized = 0) {
   const limit = state.settings?.dailyLossLimit ?? DEFAULT_DAILY_LOSS_LIMIT
-  return (state.realizedPL + unrealized) <= -limit
+  const realized = totalRealizedPL(state)
+  return (realized + extraUnrealized) <= -limit
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -301,6 +406,9 @@ export function evaluateContext(ctx, state) {
   const events = []
   let nextState = state
 
+  const ticker = String(ctx.ticker || '').toUpperCase()
+  if (!ticker) return { state: nextState, events }
+
   // Bucket session date. If date changed since last persist, archive yesterday
   // into sessionHistory and reset session counters.
   if (state.sessionDate && state.sessionDate !== today) {
@@ -310,90 +418,92 @@ export function evaluateContext(ctx, state) {
     nextState = { ...nextState, sessionDate: today, sessionStartedAt: nextState.sessionStartedAt || now }
   }
 
+  // Ensure this ticker has a state slot, then operate on it.
+  nextState = ensureTicker(nextState, ticker)
+  let slot = nextState.byTicker[ticker]
+
   // Track pending would-have-won outcomes for previously skipped / expired
-  nextState = trackPendingOutcomes(nextState, ctx.currentPrice, etMin)
+  slot = trackPendingOutcomes(slot, ctx.currentPrice, etMin)
+  nextState = setSlot(nextState, ticker, slot)
 
-  // ── Branch by current state ──────────────────────────────────────────────
+  const globallyLocked = !!nextState.lockedAt
 
-  switch (nextState.state) {
+  // ── Branch by per-ticker state ────────────────────────────────────────────
 
-    case 'LOCKED': {
-      // Locked stays locked until explicit unlock. No setups process.
-      return { state: nextState, events }
-    }
+  switch (slot.state) {
 
     case 'CLOSED': {
-      // Auto return to WAIT after CLOSED_LINGER_MS
-      if (nextState.closedEnteredAt && now - nextState.closedEnteredAt >= CLOSED_LINGER_MS) {
-        // Check lockout before going back to WAIT
-        if (isLockedOut(nextState, 0)) {
-          nextState = { ...nextState, state: 'LOCKED', lockedAt: now, wasLockedToday: true, lastClosed: null, closedEnteredAt: null }
-          events.push({ type: 'lockout', message: 'Daily loss limit hit, bot locked.' })
-        } else {
-          nextState = { ...nextState, state: 'WAIT', lastClosed: null, closedEnteredAt: null, activeSetup: null }
-          events.push({ type: 'closed_dismissed' })
-        }
+      // Auto return to WAIT after CLOSED_LINGER_MS. Global lockout state is
+      // unchanged here; the slot just returns to WAIT regardless.
+      if (slot.closedEnteredAt && now - slot.closedEnteredAt >= CLOSED_LINGER_MS) {
+        slot = { ...slot, state: 'WAIT', lastClosed: null, closedEnteredAt: null, activeSetup: null }
+        nextState = setSlot(nextState, ticker, slot)
+        events.push({ type: 'closed_dismissed' })
       }
       return { state: nextState, events }
     }
 
     case 'IN_TRADE': {
-      if (!nextState.position) {
+      if (!slot.position) {
         // Defensive: position lost, return to WAIT
-        nextState = { ...nextState, state: 'WAIT', position: null }
+        slot = { ...slot, state: 'WAIT', position: null }
+        nextState = setSlot(nextState, ticker, slot)
         return { state: nextState, events }
       }
       // Mark-to-market
-      const marked = markPosition(nextState.position, ctx.currentPrice)
-      nextState = { ...nextState, position: marked }
+      const marked = markPosition(slot.position, ctx.currentPrice)
+      slot = { ...slot, position: marked }
       // Check exit
       const reason = checkExit(marked, ctx.currentPrice)
       if (reason) {
         const closed = closePosition(marked, ctx.currentPrice, reason, now)
-        const realizedPL = nextState.realizedPL + closed.realizedPL
-        // Update the matching todaysSetups record
-        const todaysSetups = nextState.todaysSetups.map(r =>
-          r.id === nextState.position.setupRecordId
+        const newSlotRealizedPL = slot.realizedPL + closed.realizedPL
+        const todaysSetups = slot.todaysSetups.map(r =>
+          r.id === slot.position.setupRecordId
             ? { ...r, status: closed.realizedPL >= 0 ? 'win' : 'loss', closeData: { realizedPL: closed.realizedPL, exitUnderlying: closed.exitUnderlying, exitReason: closed.exitReason, closedAt: closed.closedAt } }
             : r
         )
-        nextState = {
-          ...nextState,
+        slot = {
+          ...slot,
           state: 'CLOSED',
           position: null,
           lastClosed: closed,
           closedEnteredAt: now,
-          realizedPL,
+          realizedPL: newSlotRealizedPL,
           todaysSetups,
         }
+        nextState = setSlot(nextState, ticker, slot)
         events.push({
           type: 'position_closed',
           position: closed,
           message: `${closed.direction.toUpperCase()} ${closed.setupName} closed at ${ctx.currentPrice.toFixed(2)} (${reason}), P/L $${closed.realizedPL.toFixed(2)}`,
         })
-        // Immediate lockout check after realized loss
-        if (isLockedOut(nextState, 0)) {
-          nextState = { ...nextState, state: 'LOCKED', lockedAt: now, wasLockedToday: true, closedEnteredAt: null, lastClosed: null }
+        // Immediate global lockout check after realized loss
+        if (!nextState.lockedAt && isLockedOut(nextState, 0)) {
+          nextState = { ...nextState, lockedAt: now, wasLockedToday: true }
           events.push({ type: 'lockout', message: 'Daily loss limit hit, bot locked.' })
         }
+      } else {
+        nextState = setSlot(nextState, ticker, slot)
       }
       return { state: nextState, events }
     }
 
     case 'GO': {
       // 60-second auto-expire
-      if (nextState.goExpiresAt && now >= nextState.goExpiresAt) {
-        const record = nextState.activeSetup ? recordSetup(nextState.activeSetup, 'expired', etMin, now) : null
-        const todaysSetups = record ? [...nextState.todaysSetups, record] : nextState.todaysSetups
-        const pendingWouldHaveWon = record ? [...nextState.pendingWouldHaveWon, { setupRecordId: record.id, signal: nextState.activeSetup }] : nextState.pendingWouldHaveWon
-        nextState = {
-          ...nextState,
+      if (slot.goExpiresAt && now >= slot.goExpiresAt) {
+        const record = slot.activeSetup ? recordSetup(slot.activeSetup, 'expired', etMin, now, ticker) : null
+        const todaysSetups = record ? [...slot.todaysSetups, record] : slot.todaysSetups
+        const pendingWouldHaveWon = record ? [...slot.pendingWouldHaveWon, { setupRecordId: record.id, signal: slot.activeSetup }] : slot.pendingWouldHaveWon
+        slot = {
+          ...slot,
           state: 'WAIT',
           activeSetup: null,
           goExpiresAt: null,
           todaysSetups,
           pendingWouldHaveWon,
         }
+        nextState = setSlot(nextState, ticker, slot)
         events.push({ type: 'go_expired', message: `${record?.setupName || 'Setup'} expired, no entry within 60s.` })
       }
       return { state: nextState, events }
@@ -401,31 +511,40 @@ export function evaluateContext(ctx, state) {
 
     case 'WATCH':
     case 'WAIT': {
+      // Global lockout: stay in WAIT, no new setups process.
+      if (globallyLocked) {
+        if (slot.state !== 'WAIT') {
+          slot = { ...slot, state: 'WAIT', activeSetup: null, watchEnteredAt: null }
+          nextState = setSlot(nextState, ticker, slot)
+        }
+        return { state: nextState, events }
+      }
+
       // Arming gate: checklist required
       if (nextState.settings.requireChecklist && !ctx.checklistComplete) {
-        // Stay in WAIT, no setups process
-        if (nextState.state !== 'WAIT') {
-          nextState = { ...nextState, state: 'WAIT', activeSetup: null, watchEnteredAt: null }
+        if (slot.state !== 'WAIT') {
+          slot = { ...slot, state: 'WAIT', activeSetup: null, watchEnteredAt: null }
+          nextState = setSlot(nextState, ticker, slot)
         }
         return { state: nextState, events }
       }
 
       // Evaluate playbook for full GO signals
       const threshold = nextState.settings.confluenceThreshold ?? DEFAULT_CONFLUENCE_THRESHOLD
-      const goSignals = evaluatePlaybook(buildPlaybookCtx(ctx, nextState), threshold)
+      const goSignals = evaluatePlaybook(buildPlaybookCtx(ctx, slot), threshold)
       if (goSignals.length > 0) {
         const winner = goSignals[0]
-        // Record the surfacing
-        const record = recordSetup(winner, 'pending', etMin, now)
-        const todaysSetups = [...nextState.todaysSetups, record]
-        nextState = {
-          ...nextState,
+        const record = recordSetup(winner, 'pending', etMin, now, ticker)
+        const todaysSetups = [...slot.todaysSetups, record]
+        slot = {
+          ...slot,
           state: 'GO',
           activeSetup: { ...winner, recordId: record.id },
           goExpiresAt: now + GO_WINDOW_MS,
           watchEnteredAt: null,
           todaysSetups,
         }
+        nextState = setSlot(nextState, ticker, slot)
         events.push({
           type: 'go',
           setup: winner,
@@ -437,16 +556,17 @@ export function evaluateContext(ctx, state) {
       // No GO signal: check for WATCH conditions
       const watching = findWatchCandidate(ctx)
       if (watching) {
-        const isSameWatch = nextState.state === 'WATCH'
-          && nextState.activeSetup?.level?.name === watching.level.name
-          && nextState.activeSetup?.setupId === watching.setupId
+        const isSameWatch = slot.state === 'WATCH'
+          && slot.activeSetup?.level?.name === watching.level.name
+          && slot.activeSetup?.setupId === watching.setupId
         if (!isSameWatch) {
-          nextState = {
-            ...nextState,
+          slot = {
+            ...slot,
             state: 'WATCH',
             activeSetup: watching,
             watchEnteredAt: now,
           }
+          nextState = setSlot(nextState, ticker, slot)
           events.push({
             type: 'watch',
             setup: watching,
@@ -456,11 +576,12 @@ export function evaluateContext(ctx, state) {
         return { state: nextState, events }
       }
 
-      // No setup at all: if we were in WATCH and price moved away, drop to WAIT
-      if (nextState.state === 'WATCH' && nextState.activeSetup) {
-        const dist = Math.abs(nextState.activeSetup.level.price - ctx.currentPrice)
+      // No setup at all: if WATCH and price moved away, drop to WAIT
+      if (slot.state === 'WATCH' && slot.activeSetup) {
+        const dist = Math.abs(slot.activeSetup.level.price - ctx.currentPrice)
         if (dist > WATCH_DROP_DISTANCE) {
-          nextState = { ...nextState, state: 'WAIT', activeSetup: null, watchEnteredAt: null }
+          slot = { ...slot, state: 'WAIT', activeSetup: null, watchEnteredAt: null }
+          nextState = setSlot(nextState, ticker, slot)
           events.push({ type: 'watch_dropped', message: 'Price moved away from watched level.' })
         }
       }
@@ -472,9 +593,9 @@ export function evaluateContext(ctx, state) {
   }
 }
 
-// Build the playbook's market-context shape from the engine's broader context.
-// Engine ctx carries everything; the playbook only needs a subset.
-function buildPlaybookCtx(ctx, state) {
+// Build the playbook's market-context shape. Takes the per-ticker slice so
+// prevSignals only counts this ticker's prior setups (not cross-ticker noise).
+function buildPlaybookCtx(ctx, slot) {
   return {
     ticker: ctx.ticker,
     currentPrice: ctx.currentPrice,
@@ -484,7 +605,7 @@ function buildPlaybookCtx(ctx, state) {
     alignment: ctx.alignment || {},
     etMinutes: ctx.etMinutes,
     rvol: ctx.rvol ?? null,
-    prevSignals: state.todaysSetups.map(r => ({
+    prevSignals: (slot.todaysSetups || []).map(r => ({
       setupId: r.setupId,
       levelName: r.level?.name,
       outcome: r.status === 'win' ? 'win' : r.status === 'loss' ? 'loss' : 'pending',
@@ -498,13 +619,18 @@ function buildPlaybookCtx(ctx, state) {
 // USER ACTIONS — transitions driven by UI
 // ─────────────────────────────────────────────────────────────────────────────
 
-// User pressed "I took it". Opens a paper position.
-export function userTakeIt(state, { strike, premium, contracts = DEFAULT_CONTRACTS, delta = DEFAULT_OPTION_DELTA }) {
-  if (state.state !== 'GO' || !state.activeSetup) return { state, events: [] }
+// User pressed "I took it" on the GO card for `ticker`. Opens a paper position
+// in that ticker's slot. Other tickers' positions are untouched (concurrent
+// positions are allowed).
+export function userTakeIt(state, ticker, { strike, premium, contracts = DEFAULT_CONTRACTS, delta = DEFAULT_OPTION_DELTA } = {}) {
+  const t = String(ticker || '').toUpperCase()
+  const slot = state.byTicker?.[t]
+  if (!slot || slot.state !== 'GO' || !slot.activeSetup) return { state, events: [] }
   const now = Date.now()
-  const sig = state.activeSetup
+  const sig = slot.activeSetup
   const position = {
     id: uid('pos'),
+    ticker: t,
     setupRecordId: sig.recordId,
     setupId: sig.setupId,
     setupName: sig.setupName,
@@ -522,124 +648,115 @@ export function userTakeIt(state, { strike, premium, contracts = DEFAULT_CONTRAC
     unrealizedPL: 0,
     status: 'open',
   }
-  // Update todaysSetups record to "taken" pending outcome
-  const todaysSetups = state.todaysSetups.map(r =>
+  const todaysSetups = slot.todaysSetups.map(r =>
     r.id === sig.recordId ? { ...r, status: 'taken', position: { strike, premium, contracts } } : r
   )
+  const nextSlot = {
+    ...slot,
+    state: 'IN_TRADE',
+    activeSetup: null,
+    goExpiresAt: null,
+    position,
+    todaysSetups,
+  }
   return {
-    state: {
-      ...state,
-      state: 'IN_TRADE',
-      activeSetup: null,
-      goExpiresAt: null,
-      position,
-      todaysSetups,
-    },
+    state: setSlot(state, t, nextSlot),
     events: [{
       type: 'position_opened',
       position,
-      message: `${sig.direction.toUpperCase()} ${sig.setupName}, opened at ${sig.entry.toFixed(2)}.`,
+      message: `${sig.direction.toUpperCase()} ${sig.setupName} on ${t}, opened at ${sig.entry.toFixed(2)}.`,
     }],
   }
 }
 
-// User pressed "I skipped". Logs skip and returns to WAIT. Schedules a
-// would-have-won tracker so we can grade the skip later.
-export function userSkipIt(state) {
-  if (state.state !== 'GO' || !state.activeSetup) return { state, events: [] }
-  const sig = state.activeSetup
-  const todaysSetups = state.todaysSetups.map(r =>
+// User pressed "I skipped" on a per-ticker GO card.
+export function userSkipIt(state, ticker) {
+  const t = String(ticker || '').toUpperCase()
+  const slot = state.byTicker?.[t]
+  if (!slot || slot.state !== 'GO' || !slot.activeSetup) return { state, events: [] }
+  const sig = slot.activeSetup
+  const todaysSetups = slot.todaysSetups.map(r =>
     r.id === sig.recordId ? { ...r, status: 'skipped' } : r
   )
-  const pendingWouldHaveWon = [...state.pendingWouldHaveWon, { setupRecordId: sig.recordId, signal: sig }]
+  const pendingWouldHaveWon = [...slot.pendingWouldHaveWon, { setupRecordId: sig.recordId, signal: sig }]
+  const nextSlot = {
+    ...slot,
+    state: 'WAIT',
+    activeSetup: null,
+    goExpiresAt: null,
+    todaysSetups,
+    pendingWouldHaveWon,
+  }
   return {
-    state: {
-      ...state,
-      state: 'WAIT',
-      activeSetup: null,
-      goExpiresAt: null,
-      todaysSetups,
-      pendingWouldHaveWon,
-    },
-    events: [{ type: 'skipped', message: `Skipped ${sig.setupName}.` }],
+    state: setSlot(state, t, nextSlot),
+    events: [{ type: 'skipped', message: `Skipped ${sig.setupName} on ${t}.` }],
   }
 }
 
-// User closed an open position manually. exitPremium is required (the user
-// reports what they actually got out at, since we cannot fetch option price).
-export function userCloseManually(state, exitPremium) {
-  if (state.state !== 'IN_TRADE' || !state.position) return { state, events: [] }
+// User closed a per-ticker open position manually. exitPremium is what they
+// actually got out at (option-side, since we cannot fetch live option price).
+export function userCloseManually(state, ticker, exitPremium) {
+  const t = String(ticker || '').toUpperCase()
+  const slot = state.byTicker?.[t]
+  if (!slot || slot.state !== 'IN_TRADE' || !slot.position) return { state, events: [] }
   const now = Date.now()
-  const closed = closePosition(state.position, state.position.currentUnderlying, 'manual', now, Number(exitPremium))
-  const realizedPL = state.realizedPL + closed.realizedPL
-  const todaysSetups = state.todaysSetups.map(r =>
-    r.id === state.position.setupRecordId
+  const closed = closePosition(slot.position, slot.position.currentUnderlying, 'manual', now, Number(exitPremium))
+  const newSlotRealizedPL = slot.realizedPL + closed.realizedPL
+  const todaysSetups = slot.todaysSetups.map(r =>
+    r.id === slot.position.setupRecordId
       ? { ...r, status: closed.realizedPL >= 0 ? 'win' : 'loss', closeData: { realizedPL: closed.realizedPL, exitUnderlying: closed.exitUnderlying, exitReason: 'manual', closedAt: closed.closedAt } }
       : r
   )
-  let nextState = {
-    ...state,
+  const nextSlot = {
+    ...slot,
     state: 'CLOSED',
     position: null,
     lastClosed: closed,
     closedEnteredAt: now,
-    realizedPL,
+    realizedPL: newSlotRealizedPL,
     todaysSetups,
   }
+  let nextState = setSlot(state, t, nextSlot)
   const events = [{
     type: 'position_closed',
     position: closed,
-    message: `Manual close: ${closed.direction.toUpperCase()} ${closed.setupName}, P/L $${closed.realizedPL.toFixed(2)}`,
+    message: `Manual close: ${closed.direction.toUpperCase()} ${closed.setupName} (${t}), P/L $${closed.realizedPL.toFixed(2)}`,
   }]
-  if (isLockedOut(nextState, 0)) {
-    nextState = { ...nextState, state: 'LOCKED', lockedAt: now, wasLockedToday: true, lastClosed: null, closedEnteredAt: null }
+  if (!nextState.lockedAt && isLockedOut(nextState, 0)) {
+    nextState = { ...nextState, lockedAt: now, wasLockedToday: true }
     events.push({ type: 'lockout', message: 'Daily loss limit hit, bot locked.' })
   }
   return { state: nextState, events }
 }
 
-// User dismissed the CLOSED card before the auto-timer.
-export function userDismissClosed(state) {
-  if (state.state !== 'CLOSED') return { state, events: [] }
-  let nextState = { ...state, state: 'WAIT', lastClosed: null, closedEnteredAt: null, activeSetup: null }
-  const events = []
-  if (isLockedOut(nextState, 0)) {
-    const now = Date.now()
-    nextState = { ...nextState, state: 'LOCKED', lockedAt: now, wasLockedToday: true }
-    events.push({ type: 'lockout', message: 'Daily loss limit hit, bot locked.' })
-  }
-  return { state: nextState, events }
+// User dismissed the CLOSED card for a specific ticker before its auto-timer.
+export function userDismissClosed(state, ticker) {
+  const t = String(ticker || '').toUpperCase()
+  const slot = state.byTicker?.[t]
+  if (!slot || slot.state !== 'CLOSED') return { state, events: [] }
+  const nextSlot = { ...slot, state: 'WAIT', lastClosed: null, closedEnteredAt: null, activeSetup: null }
+  return { state: setSlot(state, t, nextSlot), events: [] }
 }
 
-// User unlocked the bot after lockout. UI is responsible for the friction
-// (typing UNLOCK confirmation); this just clears the state.
+// User unlocked the bot after a global lockout. Friction (typing UNLOCK) is
+// the UI's responsibility; this just clears the global flag.
 export function userUnlock(state) {
-  if (state.state !== 'LOCKED') return { state, events: [] }
+  if (!state.lockedAt) return { state, events: [] }
   return {
-    state: { ...state, state: 'WAIT', lockedAt: null, activeSetup: null },
+    state: { ...state, lockedAt: null },
     events: [{ type: 'unlocked', message: 'Bot unlocked. Trade carefully.' }],
   }
 }
 
-// User reset the session. Rolls today's stats into history, clears today.
+// Reset the session across all tickers. Rolls today's stats into history.
 export function resetSession(state) {
   const archived = rollOverSession(state, state.sessionDate || ymdET(new Date()))
-  // Reset today's bucket but keep settings + history
   return {
     ...archived,
-    state: 'WAIT',
-    activeSetup: null,
-    position: null,
-    lastClosed: null,
-    goExpiresAt: null,
-    watchEnteredAt: null,
-    closedEnteredAt: null,
+    byTicker: {},
     lockedAt: null,
     sessionStartedAt: Date.now(),
     sessionDate: ymdET(new Date()),
-    realizedPL: 0,
-    todaysSetups: [],
-    pendingWouldHaveWon: [],
     wasLockedToday: false,
   }
 }
@@ -656,11 +773,10 @@ export function setChecklistComplete(state, complete) {
   return { ...state, checklistComplete: complete }
 }
 
-// Dev-only helper. Forces a synthetic GO signal so the user can exercise the
-// full state machine (GO -> IN_TRADE -> CLOSED) without waiting for live
-// market conditions. Skips the playbook entirely. Caller is responsible for
-// gating this behind a dev-only build flag.
+// Dev-only helper. Forces a synthetic GO signal on a specific ticker so the
+// user can exercise the full state machine without waiting for live conditions.
 export function devInjectTestSetup(state, ticker = 'QQQ', currentPrice = 590) {
+  const t = String(ticker || 'QQQ').toUpperCase()
   const now = Date.now()
   const synthetic = {
     setupId: 'dev_test',
@@ -675,19 +791,26 @@ export function devInjectTestSetup(state, ticker = 'QQQ', currentPrice = 590) {
     optionDirection: 'call',
     optionStrikeRule: 'atm',
   }
-  const record = recordSetup(synthetic, 'pending', etMinutesOf(new Date()), now)
+  const record = recordSetup(synthetic, 'pending', etMinutesOf(new Date()), now, t)
+  let nextState = ensureTicker(state, t)
+  const slot = nextState.byTicker[t]
+  const nextSlot = {
+    ...slot,
+    state: 'GO',
+    activeSetup: { ...synthetic, recordId: record.id },
+    goExpiresAt: now + GO_WINDOW_MS,
+    watchEnteredAt: null,
+    todaysSetups: [...slot.todaysSetups, record],
+  }
+  nextState = setSlot(nextState, t, nextSlot)
+  nextState = {
+    ...nextState,
+    sessionDate: nextState.sessionDate || ymdET(new Date()),
+    sessionStartedAt: nextState.sessionStartedAt || now,
+  }
   return {
-    state: {
-      ...state,
-      state: 'GO',
-      activeSetup: { ...synthetic, recordId: record.id },
-      goExpiresAt: now + GO_WINDOW_MS,
-      watchEnteredAt: null,
-      todaysSetups: [...state.todaysSetups, record],
-      sessionDate: state.sessionDate || ymdET(new Date()),
-      sessionStartedAt: state.sessionStartedAt || now,
-    },
-    events: [{ type: 'go', setup: synthetic, message: `GO LONG: Dev test setup at ${currentPrice.toFixed(2)}, confluence 10/10.` }],
+    state: nextState,
+    events: [{ type: 'go', setup: synthetic, message: `GO LONG ${t}: Dev test setup at ${currentPrice.toFixed(2)}, confluence 10/10.` }],
   }
 }
 
@@ -695,16 +818,26 @@ export function devInjectTestSetup(state, ticker = 'QQQ', currentPrice = 590) {
 
 function rollOverSession(state, dateStr) {
   if (!dateStr) return state
-  if (!state.todaysSetups?.length && state.realizedPL === 0) {
-    return state  // nothing to archive
+  // Flatten today's records across all per-ticker slots.
+  const allRecords = []
+  let realizedPL = 0
+  const perTickerPL = {}
+  for (const [tk, slot] of Object.entries(state.byTicker || {})) {
+    for (const r of slot.todaysSetups || []) allRecords.push({ ...r, ticker: r.ticker || tk })
+    realizedPL += slot.realizedPL || 0
+    if ((slot.todaysSetups?.length || 0) > 0 || (slot.realizedPL || 0) !== 0) {
+      perTickerPL[tk] = slot.realizedPL || 0
+    }
   }
-  const taken = state.todaysSetups.filter(r => r.status === 'taken' || r.status === 'win' || r.status === 'loss')
-  const wins = state.todaysSetups.filter(r => r.status === 'win').length
-  const losses = state.todaysSetups.filter(r => r.status === 'loss').length
-  const skipped = state.todaysSetups.filter(r => r.status === 'skipped').length
-  const expired = state.todaysSetups.filter(r => r.status === 'expired').length
+  if (allRecords.length === 0 && realizedPL === 0) return state // nothing to archive
+
+  const taken = allRecords.filter(r => r.status === 'taken' || r.status === 'win' || r.status === 'loss')
+  const wins = allRecords.filter(r => r.status === 'win').length
+  const losses = allRecords.filter(r => r.status === 'loss').length
+  const skipped = allRecords.filter(r => r.status === 'skipped').length
+  const expired = allRecords.filter(r => r.status === 'expired').length
   const perSetupCounts = {}
-  for (const r of state.todaysSetups) {
+  for (const r of allRecords) {
     const k = r.setupId
     if (!perSetupCounts[k]) perSetupCounts[k] = { taken: 0, won: 0, lost: 0, skipped: 0, expired: 0, wouldHaveWon: 0 }
     if (r.status === 'taken') perSetupCounts[k].taken++
@@ -718,13 +851,14 @@ function rollOverSession(state, dateStr) {
     date: dateStr,
     sessionStartedAt: state.sessionStartedAt,
     sessionEndedAt: Date.now(),
-    setupsSurfaced: state.todaysSetups.length,
+    setupsSurfaced: allRecords.length,
     taken: taken.length,
     skipped,
     expired,
     wins,
     losses,
-    realizedPL: state.realizedPL,
+    realizedPL,
+    perTickerPL,
     lockoutActivated: !!state.wasLockedToday,
     perSetupCounts,
   }
@@ -736,24 +870,48 @@ function rollOverSession(state, dateStr) {
 // Stats and patterns helpers consumed by the UI.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Flatten today's setups across all per-ticker slices into one array.
+function allTodaysSetups(state) {
+  const out = []
+  for (const slot of Object.values(state.byTicker || {})) {
+    for (const r of slot.todaysSetups || []) out.push(r)
+  }
+  return out
+}
+
 export function sessionStats(state) {
-  const t = state.todaysSetups || []
+  const t = allTodaysSetups(state)
   const taken = t.filter(r => r.status === 'taken' || r.status === 'win' || r.status === 'loss').length
   const wins = t.filter(r => r.status === 'win').length
   const losses = t.filter(r => r.status === 'loss').length
   const skipped = t.filter(r => r.status === 'skipped').length
   const expired = t.filter(r => r.status === 'expired').length
   const wouldHaveWonSkips = t.filter(r => (r.status === 'skipped' || r.status === 'expired') && r.wouldHaveWon === true).length
-  return { surfaced: t.length, taken, wins, losses, skipped, expired, wouldHaveWonSkips, realizedPL: state.realizedPL }
+  return { surfaced: t.length, taken, wins, losses, skipped, expired, wouldHaveWonSkips, realizedPL: totalRealizedPL(state) }
+}
+
+// Per-ticker breakdown of today's realized + unrealized P/L for the lockout
+// banner (Phase 5). Returns a sorted array, largest absolute first.
+export function perTickerPLBreakdown(state) {
+  const out = []
+  for (const [t, slot] of Object.entries(state.byTicker || {})) {
+    const realized = slot.realizedPL || 0
+    const unrealized = slot.position?.unrealizedPL || 0
+    const taken = (slot.todaysSetups || []).filter(r => ['taken', 'win', 'loss'].includes(r.status)).length
+    if (realized === 0 && unrealized === 0 && taken === 0) continue
+    out.push({ ticker: t, realized, unrealized, taken })
+  }
+  out.sort((a, b) => Math.abs(b.realized + b.unrealized) - Math.abs(a.realized + a.unrealized))
+  return out
 }
 
 // Aggregate per-setup performance across last N sessions plus today.
+// Today's bucket is synthesized from all per-ticker todaysSetups.
 export function patternsByActivity(state, lookback = 20) {
   const sessions = (state.sessionHistory || []).slice(0, lookback)
   const agg = {}
-  // Include today's bucket synthesized live
   const todaysPerSetup = {}
-  for (const r of state.todaysSetups || []) {
+  for (const r of allTodaysSetups(state)) {
     const k = r.setupId
     if (!todaysPerSetup[k]) todaysPerSetup[k] = { taken: 0, won: 0, lost: 0, skipped: 0, expired: 0, wouldHaveWon: 0 }
     if (r.status === 'taken') todaysPerSetup[k].taken++
@@ -795,7 +953,7 @@ export function disciplineStreak(state) {
 // sessions? Sums wouldHaveWon * average_taken_PL (rough estimate).
 export function skipQuality(state) {
   let skipped = 0, wouldHaveWon = 0
-  for (const r of state.todaysSetups || []) {
+  for (const r of allTodaysSetups(state)) {
     if (r.status === 'skipped' || r.status === 'expired') {
       skipped++
       if (r.wouldHaveWon === true) wouldHaveWon++
@@ -803,7 +961,6 @@ export function skipQuality(state) {
   }
   for (const s of state.sessionHistory || []) {
     skipped += (s.skipped || 0) + (s.expired || 0)
-    // wouldHaveWon counts roll up via perSetupCounts
     for (const v of Object.values(s.perSetupCounts || {})) wouldHaveWon += v.wouldHaveWon || 0
   }
   const wouldHaveLost = skipped - wouldHaveWon

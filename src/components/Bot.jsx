@@ -1,9 +1,12 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Bot.jsx — thin composer for the coach.
+// Bot.jsx — multi-ticker coach composer.
 //
-// Drives the new useBot hook. No state of its own. Lays out the right-now hero
-// card, today's chronological strip, the patterns panel, and the settings
-// drawer. Header pulls live session stats from the hook's `patterns.today`.
+// Drives the multi-ticker useBot hook. Lays out the header (with watchlist
+// status counts), the right-now hero card for the primary ticker, the today's
+// strip, the patterns panel, and the settings drawer.
+//
+// Sub-phase 2c only wires the engine to the watchlist. The watchlist editor
+// chips + "Also live" pending queue land in sub-phases 3 and 4.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useBot } from '../hooks/useBot.js'
@@ -54,32 +57,31 @@ const STATE_LABEL = {
 
 export default function Bot({
   activeTicker = 'QQQ',
-  livePrice = null,
-  intradayBars = [],
-  levelMap = null,
-  mtfAlignment = null,
-  prevDay = null,
-  rvol = null,
   checklistComplete = false,
   onPaperTrade = null,
+  watchlist = [],
+  onWatchlistChange = null,
+  liveDataMulti = {},
 }) {
   const bot = useBot({
+    watchlist,
+    liveDataMulti,
     activeTicker,
-    livePrice,
-    intradayBars,
-    levelMap,
-    mtfAlignment,
-    prevDay,
-    rvol,
     checklistComplete,
     onPaperTrade,
   })
 
-  const { currentCard, todaysSetups, patterns, state } = bot
+  const { currentCard, pendingCards, tickerChips, todaysSetups, patterns, realizedPL, primaryTicker } = bot
   const stateColor = STATE_COLOR[currentCard?.state] || DIM
   const stateLabel = STATE_LABEL[currentCard?.state] || 'Waiting'
   const today = patterns?.today || { taken: 0, wins: 0, losses: 0, realizedPL: 0, skipped: 0, expired: 0 }
-  const realizedPL = state?.realizedPL ?? 0
+
+  // Pre-bind the primary ticker into the user-action handlers so the existing
+  // BotRightNowCard interface (no ticker arg) keeps working.
+  const onTakeIt = (opts) => bot.onTakeIt(currentCard?.ticker, opts)
+  const onSkipIt = () => bot.onSkipIt(currentCard?.ticker)
+  const onCloseManually = (premium) => bot.onCloseManually(currentCard?.ticker, premium)
+  const onDismissClosed = () => bot.onDismissClosed(currentCard?.ticker)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, fontFamily: SANS }}>
@@ -89,12 +91,19 @@ export default function Bot({
         <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
           <StateChip label={stateLabel} color={stateColor} />
           <span style={{ fontSize: 11, color: DIM, fontFamily: MONO, letterSpacing: '0.14em' }}>
-            {activeTicker} {livePrice != null ? <span style={{ color: FG, fontWeight: 800 }}>${Number(livePrice).toFixed(2)}</span> : <span style={{ color: MUTED }}>no live data</span>}
+            {primaryTicker || activeTicker} {currentCard?.position?.entryUnderlying != null
+              ? <span style={{ color: FG, fontWeight: 800 }}>${Number(currentCard.position.currentUnderlying ?? currentCard.position.entryUnderlying).toFixed(2)}</span>
+              : (tickerChips.find(c => c.ticker === (primaryTicker || activeTicker))?.price != null
+                ? <span style={{ color: FG, fontWeight: 800 }}>${Number(tickerChips.find(c => c.ticker === (primaryTicker || activeTicker)).price).toFixed(2)}</span>
+                : <span style={{ color: MUTED }}>no live data</span>)}
+          </span>
+          <span style={{ fontSize: 9, color: MUTED, fontFamily: MONO, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+            Watchlist: {tickerChips.length}
           </span>
           {import.meta.env.DEV && (
             <button
-              onClick={bot.onDevTriggerTestSetup}
-              title="Dev only. Injects a synthetic GO signal so the full state machine can be exercised without live market conditions."
+              onClick={() => bot.onDevTriggerTestSetup()}
+              title="Dev only. Injects a synthetic GO signal on the primary ticker."
               style={{
                 background: 'transparent',
                 color: '#C084FC',
@@ -120,18 +129,18 @@ export default function Bot({
         </div>
       </div>
 
-      {/* Hero card */}
+      {/* Hero card for the primary ticker */}
       <BotRightNowCard
         currentCard={currentCard}
         realizedPL={realizedPL}
-        onTakeIt={bot.onTakeIt}
-        onSkipIt={bot.onSkipIt}
-        onCloseManually={bot.onCloseManually}
-        onDismissClosed={bot.onDismissClosed}
+        onTakeIt={onTakeIt}
+        onSkipIt={onSkipIt}
+        onCloseManually={onCloseManually}
+        onDismissClosed={onDismissClosed}
         onUnlock={bot.onUnlock}
       />
 
-      {/* Today strip */}
+      {/* Today strip, flat list across all tickers */}
       <BotTodayPanel setups={todaysSetups} />
 
       {/* Patterns */}
@@ -139,7 +148,7 @@ export default function Bot({
 
       {/* Settings */}
       <BotSettingsDrawer
-        settings={state?.settings}
+        settings={bot.state?.settings}
         onUpdateSettings={bot.onUpdateSettings}
         onResetSession={bot.onResetSession}
       />
