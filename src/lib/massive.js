@@ -94,8 +94,8 @@ export async function getPremarketBars(apiKey, ticker) {
   return d.ticker ?? null
 }
 
-export async function getOptionChain(apiKey, ticker, expiry, strike, type) {
-  const params = { limit: '10' }
+export async function getOptionChain(apiKey, ticker, expiry, strike, type, limit = 10) {
+  const params = { limit: String(Math.max(1, Math.min(250, limit))) }
   if (expiry) params.expiration_date = expiry
   if (strike) params.strike_price = strike
   if (type) params.contract_type = type

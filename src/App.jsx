@@ -76,6 +76,8 @@ export default function App() {
   // Bot multi-ticker watchlist. Capped at MAX_BOT_WATCHLIST in setters.
   // Default 3 liquid index/leveraged ETFs.
   const [botWatchlist, setBotWatchlist] = useLocalStorage('tradeHub.bot.watchlist.v1', ['QQQ', 'TQQQ', 'SPY'])
+  // Wheel scanner watchlist. Default 9 quality names with active option chains.
+  const [wheelWatchlist, setWheelWatchlist] = useLocalStorage('tradeHub.wheel.watchlist.v1', ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'AMD', 'COST', 'SPY', 'QQQ'])
   const [_priceTick, setPriceTick] = useState(0)
   useEffect(() => { const id = setInterval(() => setPriceTick(t => t + 1), 5000); return () => clearInterval(id) }, [])
 
@@ -177,6 +179,9 @@ export default function App() {
   // Multi-ticker bundle for the bot's watchlist. Independent of the active
   // ticker (the active ticker is in liveData above).
   const liveDataMulti = useLiveDataMulti(apiKey, botWatchlist)
+
+  // Multi-ticker bundle for the wheel scanner's watchlist (separate from bot).
+  const wheelDataMulti = useLiveDataMulti(apiKey, wheelWatchlist)
 
   // Merge pre-market H/L into custom levels so they show in the level map
   const enrichedCustomLevels = useMemo(() => {
@@ -472,7 +477,13 @@ export default function App() {
 
             <div style={{ display: planSubTab === 'wheel' ? 'block' : 'none' }}>
               <ErrorBoundary label="Wheel">
-                <WheelScanner anthropicKey={anthropicKey} apiKey={apiKey} />
+                <WheelScanner
+                  watchlist={wheelWatchlist}
+                  onWatchlistChange={setWheelWatchlist}
+                  liveDataMulti={wheelDataMulti?.data || {}}
+                  apiKey={apiKey}
+                  anthropicKey={anthropicKey}
+                />
               </ErrorBoundary>
             </div>
 
