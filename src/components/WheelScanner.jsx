@@ -1,15 +1,17 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // WheelScanner.jsx — options-income scanner for the wheel strategy.
 //
-// Data layer: lives on Trade Hub's existing rails.
-//   - Technicals (price, bars, pivots, prevDay, vwap, rvol, preMarket) come
-//     from useLiveDataMulti via the liveDataMulti prop.
-//   - 52W high/low from getHistoricalBars(apiKey, ticker, 252), cached per scan.
-//   - Options chains from getOptionChain (Polygon snapshot). On 403/empty
-//     results, the scanner falls back to estimated premiums and marks the
-//     candidate "low" confidence.
-//   - One Claude call per scan supplies thesis text per ticker. Scoring is
-//     deterministic JS on real numbers.
+// Data layer: Trade Hub's stock-data Massive plan (no options chain access).
+//   - Technicals (price, prevDay, pivots, rvol, vwap) come from
+//     useLiveDataMulti via the liveDataMulti prop.
+//   - 252-day daily bars from getHistoricalBars(apiKey, ticker, 252) feed
+//     both 52W high/low and the 30-day historical volatility used by the
+//     options estimator (src/lib/wheelOptions.js).
+//   - Options data (strike + premium + delta) is HV-based Black-Scholes,
+//     not real chain quotes. When the Massive options plan is active the
+//     swap point lives inside wheelOptions.js getOptionsData().
+//   - One Claude call per scan supplies thesis text per ticker. Scoring
+//     is deterministic JS on real numbers.
 //
 // Persistence: useLocalStorage under tradeHub.wheel.*.v1 keys.
 // Styling: shared constants (LIME / RED / YELLOW / MONO / DARK / BORDER /
@@ -22,17 +24,12 @@ import {
   AlertCircle, ChevronRight,
 } from 'lucide-react'
 import { useLocalStorage } from '../hooks/useStore.js'
-import { getOptionChain, getHistoricalBars } from '../lib/massive.js'
+import { getHistoricalBars } from '../lib/massive.js'
+import { computeHV30, getOptionsData } from '../lib/wheelOptions.js'
 import { LIME, RED, YELLOW, BLUE, MONO, DARK, BORDER, PANEL, f2 } from '../constants.js'
 
 // ── Tunable thresholds ──────────────────────────────────────────────────────
-const TARGET_DTE = 30                      // target days to expiration (nearest monthly)
-const PUT_STRIKE_MIN_PCT = 0.90            // 10% OTM put strike floor
-const PUT_STRIKE_MAX_PCT = 0.99            // just below current
-const TARGET_DELTA = 0.25                  // absolute delta target for both legs
-const MIN_VOLUME = 50                      // skip illiquid strikes
-const MIN_OPEN_INTEREST = 100              // skip thin OI strikes
-const OPTION_CHAIN_LIMIT = 100             // contracts per chain pull
+const TARGET_DTE = 30                      // target days to expiration
 const ARMED_PUT_SCORE = 70                 // threshold for "ARMED" put phase
 const WATCH_PUT_SCORE = 50                 // threshold for "WATCH" put phase
 const HARVEST_CALL_SCORE = 65              // threshold for "HARVEST" call phase
@@ -74,32 +71,13 @@ function trendFromBars(bars, currentPrice) {
   return 'sideways'
 }
 
-// Pick the nearest monthly expiry (3rd Friday) at least TARGET_DTE days out.
-// Falls forward to the next month if we're already past this month's expiry.
-function nearestMonthlyExpiry(daysOut = TARGET_DTE) {
-  const target = new Date(Date.now() + daysOut * 86400000)
-  let year = target.getUTCFullYear()
-  let month = target.getUTCMonth()
-  const thirdFriday = (y, m) => {
-    const first = new Date(Date.UTC(y, m, 1))
-    const dow = first.getUTCDay() // 0=Sun
-    const offsetToFirstFriday = (5 - dow + 7) % 7
-    return new Date(Date.UTC(y, m, 1 + offsetToFirstFriday + 14))
-  }
-  let expiry = thirdFriday(year, month)
-  if (expiry.getTime() < Date.now()) {
-    month += 1
-    if (month > 11) { month = 0; year += 1 }
-    expiry = thirdFriday(year, month)
-  }
-  return expiry.toISOString().slice(0, 10)
-}
-
-function daysUntil(isoDate) {
-  if (!isoDate) return null
-  const t = Date.parse(isoDate + 'T00:00:00Z')
-  if (isNaN(t)) return null
-  return Math.max(1, Math.round((t - Date.now()) / 86400000))
+// Bucket annualized HV into an IV-environment label.
+function ivEnvFromHV(hv) {
+  if (hv == null) return 'unknown'
+  if (hv < 0.20) return 'low'
+  if (hv < 0.35) return 'normal'
+  if (hv < 0.55) return 'elevated'
+  return 'high'
 }
 
 // Defensive JSON parse: strip markdown fences, slice between first { and last }.
@@ -112,97 +90,34 @@ function parseJsonBlock(text) {
   try { return JSON.parse(cleaned.slice(start, end + 1)) } catch { return null }
 }
 
-// Filter an option chain to the strike window + liquidity threshold, then
-// pick the contract closest to |delta| = TARGET_DELTA. Returns null if no
-// candidate survives the filters.
-function pickContract(contracts, { type, currentPrice, costBasis }) {
-  if (!Array.isArray(contracts) || contracts.length === 0) return null
-  const strikeOk = (s) => {
-    if (s == null) return false
-    if (type === 'put') return s >= currentPrice * PUT_STRIKE_MIN_PCT && s <= currentPrice * PUT_STRIKE_MAX_PCT
-    return s > (costBasis ?? currentPrice)
-  }
-  const inRange = contracts.filter(c => strikeOk(c?.details?.strike_price))
-  if (inRange.length === 0) return null
-  const liquid = inRange.filter(c =>
-    (c?.day?.volume || 0) >= MIN_VOLUME && (c?.open_interest || 0) >= MIN_OPEN_INTEREST
-  )
-  // Prefer liquid; fall back to all in-range if nothing meets liquidity.
-  const pool = liquid.length > 0 ? liquid : inRange
-  pool.sort((a, b) => {
-    const da = Math.abs(Math.abs(a?.greeks?.delta || 0) - TARGET_DELTA)
-    const db = Math.abs(Math.abs(b?.greeks?.delta || 0) - TARGET_DELTA)
-    return da - db
-  })
-  const picked = pool[0]
-  const bid = picked?.last_quote?.bid ?? null
-  const ask = picked?.last_quote?.ask ?? null
-  const mid = (bid != null && ask != null) ? (bid + ask) / 2 : (bid ?? ask ?? null)
-  return {
-    strike: picked?.details?.strike_price,
-    expiry: picked?.details?.expiration_date,
-    bid, ask, mid,
-    iv: picked?.implied_volatility ?? null,
-    delta: picked?.greeks?.delta ?? null,
-    volume: picked?.day?.volume ?? 0,
-    openInterest: picked?.open_interest ?? 0,
-    liquid: liquid.length > 0,
-  }
-}
-
-// Crude premium estimate when the chain isn't available. Uses a fraction-of-
-// underlying heuristic that scales with how far OTM and the DTE. Marks the
-// resulting candidate as "low" confidence in the UI.
-function estimatePut(currentPrice, dte) {
-  if (currentPrice == null) return null
-  const strike = Math.round(currentPrice * 0.95)
-  const baseYieldPct = 0.012 + (dte / 30) * 0.004 // ~1.6% premium at 30 DTE
-  const premium = Math.max(0.05, Math.round(strike * baseYieldPct * 100) / 100)
-  return { strike, mid: premium, bid: null, ask: null, iv: null, delta: -0.20, volume: 0, openInterest: 0, liquid: false, estimated: true }
-}
-
-function estimateCall(costBasis, currentPrice, dte) {
-  const ref = Math.max(currentPrice ?? 0, costBasis ?? 0)
-  if (!ref) return null
-  const strike = Math.round(ref * 1.05)
-  const baseYieldPct = 0.010 + (dte / 30) * 0.003
-  const premium = Math.max(0.05, Math.round(strike * baseYieldPct * 100) / 100)
-  return { strike, mid: premium, bid: null, ask: null, iv: null, delta: 0.20, volume: 0, openInterest: 0, liquid: false, estimated: true }
-}
-
 // ── Scoring (operates on real numbers gathered above) ───────────────────────
 
 function scorePut(analysis) {
   if (!analysis?.putCandidate || analysis.price == null) return 0
   const a = analysis
   let score = 0
-  // RSI oversold bias
   if (a.rsi != null) {
     if (a.rsi < 30) score += 28
     else if (a.rsi < 40) score += 20
     else if (a.rsi < 50) score += 12
     else if (a.rsi > 70) score -= 12
   }
-  // Distance to nearest support (S1 or PDL)
   if (a.support != null) {
     const dist = Math.abs(a.price - a.support) / a.price
     if (dist < 0.02) score += 22
     else if (dist < 0.05) score += 14
     else if (dist < 0.10) score += 6
   }
-  // Annualized yield
-  const yieldPct = (a.putCandidate.mid || 0) / (a.putCandidate.strike || 1) * 100
+  const yieldPct = (a.putCandidate.estPremium || 0) / (a.putCandidate.strike || 1) * 100
   const annualized = yieldPct * (365 / (a.putCandidate.dte || TARGET_DTE))
   if (annualized > 35) score += 28
   else if (annualized > 22) score += 20
   else if (annualized > 12) score += 12
   else score += 4
-  // Trend bias
   if (a.trend === 'uptrend') score += 6
   if (a.trend === 'downtrend') score -= 8
-  // Liquidity gate: penalize illiquid candidates
-  if (a.putCandidate.liquid === false) score -= 8
-  if (a.putCandidate.estimated) score -= 12
+  if (a.ivEnv === 'elevated') score += 4
+  if (a.ivEnv === 'high') score += 8
   return Math.max(0, Math.min(100, Math.round(score)))
 }
 
@@ -221,15 +136,15 @@ function scoreCall(analysis, costBasis) {
     if (dist < 0.02) score += 20
     else if (dist < 0.05) score += 12
   }
-  if (a.callCandidate.strike > costBasis) score += 18
-  else score -= 22 // selling below cost = capping a loss
-  const yieldPct = (a.callCandidate.mid || 0) / (costBasis || 1) * 100
+  if (a.callCandidate.strike >= costBasis) score += 18
+  else score -= 22
+  const yieldPct = (a.callCandidate.estPremium || 0) / (costBasis || 1) * 100
   const annualized = yieldPct * (365 / (a.callCandidate.dte || TARGET_DTE))
   if (annualized > 25) score += 22
   else if (annualized > 15) score += 14
   else score += 4
-  if (a.callCandidate.liquid === false) score -= 8
-  if (a.callCandidate.estimated) score -= 12
+  if (a.ivEnv === 'elevated') score += 4
+  if (a.ivEnv === 'high') score += 8
   return Math.max(0, Math.min(100, Math.round(score)))
 }
 
@@ -258,8 +173,8 @@ export default function WheelScanner({
   const scanResults = scanState?.results || {}
   const lastScan = scanState?.timestamp || null
 
-  // ── Build a per-ticker analysis from local data + options chain ───────────
-  const gatherAnalysis = useCallback(async (ticker, histBars, position) => {
+  // ── Build a per-ticker analysis from bundle + HV-based options estimate ──
+  const gatherAnalysis = useCallback((ticker, histBars, position) => {
     const bundle = liveDataMulti[ticker]
     if (!bundle) return { ticker, error: 'No live data bundle yet. Connect Massive API key in Command.' }
     const price = bundle.price
@@ -270,85 +185,25 @@ export default function WheelScanner({
     const wk52High = closes.length ? Math.max(...closes) : null
     const wk52Low = closes.length ? Math.min(...closes) : null
     const trend = trendFromBars(histBars, price)
+    const hv = computeHV30(histBars)
+    const ivEnv = ivEnvFromHV(hv)
+    const ivPct = hv != null ? Math.round(hv * 100) : null
 
-    // Support / resistance from pivots + prev day (engine-style canonical names)
     const pivots = bundle.pivots
     const prevDay = bundle.prevDay
     const support = pivots?.s1 ?? prevDay?.low ?? null
     const resistance = pivots?.r1 ?? prevDay?.high ?? null
 
-    // IV environment: derived later from picked contract's IV if available.
-    const expiry = nearestMonthlyExpiry()
-    const dte = daysUntil(expiry)
+    const { putCandidate, callCandidate } = getOptionsData({
+      price,
+      hv,
+      dte: TARGET_DTE,
+      costBasis: position ? position.costBasis : null,
+    })
 
-    let putCandidate = null
-    let putFallbackReason = null
-    let callCandidate = null
-    let callFallbackReason = null
-
-    // Pull put chain
-    if (apiKey) {
-      try {
-        const puts = await getOptionChain(apiKey, ticker, expiry, null, 'put', OPTION_CHAIN_LIMIT)
-        if (puts && puts.length > 0) {
-          const picked = pickContract(puts, { type: 'put', currentPrice: price })
-          if (picked) {
-            putCandidate = { ...picked, dte }
-          } else {
-            putFallbackReason = 'no_qualifying_strike'
-          }
-        } else {
-          putFallbackReason = 'empty_chain'
-        }
-      } catch (e) {
-        putFallbackReason = e?.message?.includes('403') ? 'plan_restricted' : 'fetch_error'
-      }
-    } else {
-      putFallbackReason = 'no_api_key'
-    }
-    if (!putCandidate) {
-      putCandidate = estimatePut(price, dte)
-      if (putCandidate) putCandidate.dte = dte
-    }
-
-    // Pull call chain only if we hold the underlying (covered call)
-    if (position) {
-      if (apiKey) {
-        try {
-          const calls = await getOptionChain(apiKey, ticker, expiry, null, 'call', OPTION_CHAIN_LIMIT)
-          if (calls && calls.length > 0) {
-            const picked = pickContract(calls, { type: 'call', currentPrice: price, costBasis: position.costBasis })
-            if (picked) {
-              callCandidate = { ...picked, dte }
-            } else {
-              callFallbackReason = 'no_qualifying_strike'
-            }
-          } else {
-            callFallbackReason = 'empty_chain'
-          }
-        } catch (e) {
-          callFallbackReason = e?.message?.includes('403') ? 'plan_restricted' : 'fetch_error'
-        }
-      } else {
-        callFallbackReason = 'no_api_key'
-      }
-      if (!callCandidate) {
-        callCandidate = estimateCall(position.costBasis, price, dte)
-        if (callCandidate) callCandidate.dte = dte
-      }
-    }
-
-    const ivPct = (() => {
-      const iv = callCandidate?.iv ?? putCandidate?.iv
-      if (iv == null) return null
-      return Math.round(iv * 100) // Polygon returns IV as decimal (0.25 = 25%)
-    })()
-    const ivEnv = ivPct == null ? 'unknown'
-      : ivPct < 20 ? 'low'
-      : ivPct < 35 ? 'normal'
-      : ivPct < 55 ? 'elevated'
-      : 'high'
-    const confidence = (putCandidate?.estimated || (position && callCandidate?.estimated)) ? 'low' : 'medium'
+    // Confidence baseline: medium when HV computes cleanly, low if too few
+    // daily bars. Claude may upgrade or downgrade in the thesis step.
+    const confidence = hv == null ? 'low' : 'medium'
 
     return {
       ticker,
@@ -361,16 +216,15 @@ export default function WheelScanner({
       support,
       resistance,
       trend,
+      hv,
       ivPct,
       ivEnv,
       putCandidate,
-      putFallbackReason,
       callCandidate,
-      callFallbackReason,
       confidence,
       gatheredAt: Date.now(),
     }
-  }, [liveDataMulti, apiKey])
+  }, [liveDataMulti])
 
   // ── Bulk Claude call for thesis layer ─────────────────────────────────────
   // Matches the existing direct-to-anthropic pattern (see Journal.jsx,
@@ -378,21 +232,28 @@ export default function WheelScanner({
   // { [TICKER]: { putThesis, callThesis, confidence } } or {} on failure.
   const fetchThesisBatch = useCallback(async (analyses) => {
     if (!anthropicKey || !analyses?.length) return {}
-    const summary = analyses.map(a => ({
-      ticker: a.ticker,
-      price: a.price,
-      rsi: a.rsi,
-      trend: a.trend,
-      support: a.support,
-      resistance: a.resistance,
-      ivPct: a.ivPct,
-      ivEnv: a.ivEnv,
-      hasPosition: !!positions.find(p => p.ticker === a.ticker),
-      costBasis: positions.find(p => p.ticker === a.ticker)?.costBasis ?? null,
-      putCandidate: a.putCandidate ? { strike: a.putCandidate.strike, mid: a.putCandidate.mid, delta: a.putCandidate.delta, dte: a.putCandidate.dte, liquid: a.putCandidate.liquid, estimated: !!a.putCandidate.estimated } : null,
-      callCandidate: a.callCandidate ? { strike: a.callCandidate.strike, mid: a.callCandidate.mid, delta: a.callCandidate.delta, dte: a.callCandidate.dte, liquid: a.callCandidate.liquid, estimated: !!a.callCandidate.estimated } : null,
-    }))
-    const prompt = `You are an options income (wheel strategy) coach. For each ticker below, write a single-sentence thesis explaining why selling the suggested put (or covered call) is or isn't a good idea today. Be specific about RSI, IV environment, trend, and proximity to support/resistance. Do not invent prices; use the numbers given.
+    const summary = analyses
+      .filter(a => !a.error)
+      .map(a => ({
+        ticker: a.ticker,
+        price: a.price,
+        rsi: a.rsi,
+        trend: a.trend,
+        support: a.support,
+        resistance: a.resistance,
+        hv: a.hv != null ? Math.round(a.hv * 1000) / 1000 : null,
+        ivPct: a.ivPct,
+        ivEnv: a.ivEnv,
+        wk52High: a.wk52High,
+        wk52Low: a.wk52Low,
+        hasPosition: !!positions.find(p => p.ticker === a.ticker),
+        costBasis: positions.find(p => p.ticker === a.ticker)?.costBasis ?? null,
+        putCandidate: a.putCandidate,
+        callCandidate: a.callCandidate,
+      }))
+    if (!summary.length) return {}
+
+    const prompt = `You are an options income (wheel strategy) coach. For each ticker below, write a single-sentence thesis on the suggested put (and the covered call if a callCandidate is present), then rate your confidence in the trade. Be specific about RSI, the HV environment, trend, and proximity to support/resistance. Do not invent prices; use the numbers given. Strikes and premiums are HV-based estimates, not live quotes, so frame thesis language accordingly.
 
 Return ONLY valid JSON, no markdown fences, no commentary. Schema:
 {
@@ -448,7 +309,8 @@ ${JSON.stringify(summary, null, 2)}`
     }
 
     try {
-      // Pull 252-day histBars for every ticker in parallel (one batch).
+      // Pull 252-day histBars for every ticker in parallel. One request per
+      // ticker; feeds both the 52W range and the HV30 used by the estimator.
       const histPairs = await Promise.all(watchlist.map(async (ticker) => {
         try {
           const bars = await getHistoricalBars(apiKey, ticker, 252)
@@ -458,19 +320,16 @@ ${JSON.stringify(summary, null, 2)}`
         }
       }))
       const histMap = Object.fromEntries(histPairs)
+      setScanProgress(60)
 
-      // Gather per-ticker analysis (technicals + options chain).
-      const analyses = []
-      const total = watchlist.length
-      for (let i = 0; i < total; i++) {
-        const ticker = watchlist[i]
+      // Gather per-ticker analysis (sync now, no per-ticker network calls).
+      const analyses = watchlist.map((ticker) => {
         const pos = positions.find(p => p.ticker === ticker)
-        const a = await gatherAnalysis(ticker, histMap[ticker], pos)
-        analyses.push(a)
-        setScanProgress(Math.round(((i + 1) / total) * 90))
-      }
+        return gatherAnalysis(ticker, histMap[ticker], pos)
+      })
+      setScanProgress(80)
 
-      // Single thesis call for everything we just gathered.
+      // Single thesis call for the batch.
       const thesisMap = await fetchThesisBatch(analyses)
       setScanProgress(95)
 
@@ -513,7 +372,7 @@ ${JSON.stringify(summary, null, 2)}`
   const removeTicker = (t) => {
     if (!onWatchlistChange) return
     const next = (watchlist || []).filter(x => x !== t)
-    if (next.length === 0) return // never empty
+    if (next.length === 0) return
     onWatchlistChange(next)
   }
 
@@ -545,7 +404,6 @@ ${JSON.stringify(summary, null, 2)}`
     return positions.map(p => ({ ...p, ...scanResults[p.ticker] }))
   }, [positions, scanResults])
 
-  // ── Phase decision per ticker ─────────────────────────────────────────────
   const phaseFor = (ticker, analysis) => {
     const pos = positions.find(p => p.ticker === ticker)
     if (pos) {
@@ -695,11 +553,9 @@ ${JSON.stringify(summary, null, 2)}`
                   <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${BORDER}` }}>
                     <MetricsGrid r={r} />
                     {r.putCandidate && (
-                      <PutCandidateCard candidate={r.putCandidate} thesis={r.putThesis} fallback={r.putFallbackReason} capital={capital} />
+                      <PutCandidateCard candidate={r.putCandidate} thesis={r.putThesis} capital={capital} />
                     )}
-                    {r.confidence === 'low' && (
-                      <ConfidenceBanner />
-                    )}
+                    {r.confidence === 'low' && <ConfidenceBanner />}
                   </div>
                 )}
               </div>
@@ -747,7 +603,7 @@ ${JSON.stringify(summary, null, 2)}`
                   <div style={{ paddingTop: 10, borderTop: `1px solid ${BORDER}` }}>
                     <MetricsGrid r={p} />
                     {p.callCandidate && (
-                      <CallCandidateCard candidate={p.callCandidate} thesis={p.callThesis} fallback={p.callFallbackReason} costBasis={p.costBasis} shares={p.shares} />
+                      <CallCandidateCard candidate={p.callCandidate} thesis={p.callThesis} costBasis={p.costBasis} shares={p.shares} />
                     )}
                     {p.confidence === 'low' && <ConfidenceBanner />}
                   </div>
@@ -854,18 +710,20 @@ ${JSON.stringify(summary, null, 2)}`
           ))}
 
           <div style={{ marginTop: 22, padding: 12, background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 5 }}>
-            <div style={{ fontSize: 9, letterSpacing: '0.14em', color: LIME, marginBottom: 6, textTransform: 'uppercase' }}>Scoring logic</div>
+            <div style={{ fontSize: 9, letterSpacing: '0.14em', color: LIME, marginBottom: 6, textTransform: 'uppercase' }}>Scoring + estimates</div>
             <div style={{ fontSize: 11, color: '#aaa', lineHeight: 1.6 }}>
-              <strong style={{ color: '#e8e8e8' }}>Put score</strong>: RSI (28), proximity to support (22), annualized premium yield (28), trend bias (±8). Illiquid or estimated candidates lose points. ARMED ≥ {ARMED_PUT_SCORE}, WATCH ≥ {WATCH_PUT_SCORE}.
+              <strong style={{ color: '#e8e8e8' }}>Put score</strong>: RSI (28), proximity to support (22), annualized premium yield (28), trend bias (±8), HV environment bonus (4-8). ARMED ≥ {ARMED_PUT_SCORE}, WATCH ≥ {WATCH_PUT_SCORE}.
               <br /><br />
-              <strong style={{ color: '#e8e8e8' }}>Call score</strong>: RSI (28), proximity to resistance (20), strike above cost basis (18), annualized yield (22). HARVEST ≥ {HARVEST_CALL_SCORE}.
+              <strong style={{ color: '#e8e8e8' }}>Call score</strong>: RSI (28), proximity to resistance (20), strike at or above cost basis (18), annualized yield (22), HV environment bonus (4-8). HARVEST ≥ {HARVEST_CALL_SCORE}.
+              <br /><br />
+              <strong style={{ color: '#e8e8e8' }}>Strikes + premiums</strong> are HV-based Black-Scholes estimates (Trade Hub uses Massive's stock-data plan, no live option chains). When the options plan is active, getOptionsData in src/lib/wheelOptions.js will swap in real quotes.
             </div>
           </div>
         </div>
       )}
 
       <div style={{ marginTop: 24, padding: 10, borderTop: `1px solid ${BORDER}`, fontSize: 9, color: '#444', textAlign: 'center', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-        Numbers come from real chains when available · Always verify in your broker before placing
+        HV-based estimates only · Verify chain pricing in your broker before placing
       </div>
     </div>
   )
@@ -929,7 +787,7 @@ function ScoreRing({ score, color }) {
 function MetricsGrid({ r }) {
   const cells = [
     { label: 'RSI', value: r.rsi, color: r.rsi == null ? '#666' : r.rsi < 30 ? LIME : r.rsi > 70 ? RED : '#aaa' },
-    { label: 'IV', value: r.ivPct != null ? `${r.ivPct}%` : '—', color: r.ivEnv === 'high' || r.ivEnv === 'elevated' ? LIME : '#aaa' },
+    { label: 'HV30', value: r.ivPct != null ? `${r.ivPct}%` : '—', color: r.ivEnv === 'high' || r.ivEnv === 'elevated' ? LIME : '#aaa' },
     { label: 'Trend', value: (r.trend || '—').toUpperCase(), color: r.trend === 'uptrend' ? LIME : r.trend === 'downtrend' ? RED : '#aaa' },
     { label: 'IV Env', value: (r.ivEnv || 'unknown').toUpperCase(), color: r.ivEnv === 'high' || r.ivEnv === 'elevated' ? LIME : '#aaa' },
   ]
@@ -952,39 +810,28 @@ function MetricsGrid({ r }) {
   )
 }
 
-function PutCandidateCard({ candidate, thesis, fallback, capital }) {
+function PutCandidateCard({ candidate, thesis, capital }) {
   const dte = candidate?.dte || TARGET_DTE
-  const mid = candidate?.mid || 0
-  const yieldPct = candidate?.strike ? (mid / candidate.strike) * 100 : 0
+  const premium = candidate?.estPremium || 0
+  const strike = candidate?.strike || 0
+  const yieldPct = strike ? (premium / strike) * 100 : 0
   const annualized = yieldPct * (365 / dte)
-  const contracts = candidate?.strike ? Math.floor(capital / (candidate.strike * 100)) : 0
-  const totalPremium = contracts * mid * 100
-  const accent = candidate?.estimated ? YELLOW : LIME
+  const contracts = strike ? Math.floor(capital / (strike * 100)) : 0
+  const totalPremium = contracts * premium * 100
   return (
-    <div style={{ background: DARK, border: `1px solid ${BORDER}`, borderLeft: `2px solid ${accent}`, padding: 10, borderRadius: 3 }}>
-      <div style={{ fontSize: 9, color: accent, letterSpacing: '0.14em', marginBottom: 6, textTransform: 'uppercase' }}>
-        Suggested put · {dte}D {candidate?.estimated ? '· estimated' : ''}
+    <div style={{ background: DARK, border: `1px solid ${BORDER}`, borderLeft: `2px solid ${LIME}`, padding: 10, borderRadius: 3 }}>
+      <div style={{ fontSize: 9, color: LIME, letterSpacing: '0.14em', marginBottom: 6, textTransform: 'uppercase' }}>
+        Suggested put · {dte}D · estimate
       </div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>
-        <div style={{ fontSize: 15, color: '#e8e8e8', fontFamily: MONO, fontWeight: 700 }}>${f2(candidate?.strike)}P</div>
-        <div style={{ fontSize: 12, color: LIME, fontFamily: MONO, fontWeight: 700 }}>${f2(mid)}</div>
-        {candidate?.bid != null && candidate?.ask != null && (
-          <div style={{ fontSize: 10, color: '#666', fontFamily: MONO }}>{f2(candidate.bid)}/{f2(candidate.ask)}</div>
-        )}
+        <div style={{ fontSize: 15, color: '#e8e8e8', fontFamily: MONO, fontWeight: 700 }}>${f2(strike)}P</div>
+        <div style={{ fontSize: 12, color: LIME, fontFamily: MONO, fontWeight: 700 }}>${f2(premium)}</div>
         <div style={{ fontSize: 10, color: '#aaa', fontFamily: MONO }}>{yieldPct.toFixed(2)}% / {annualized.toFixed(1)}% ann</div>
-        {candidate?.delta != null && <div style={{ fontSize: 10, color: '#666', fontFamily: MONO }}>Δ {candidate.delta.toFixed(2)}</div>}
-        {candidate?.volume != null && candidate.volume > 0 && (
-          <div style={{ fontSize: 9, color: '#666', fontFamily: MONO }}>Vol {candidate.volume} / OI {candidate.openInterest}</div>
-        )}
+        {candidate?.deltaApprox != null && <div style={{ fontSize: 10, color: '#666', fontFamily: MONO }}>Δ {candidate.deltaApprox.toFixed(2)}</div>}
       </div>
       {contracts > 0 && (
         <div style={{ fontSize: 10, color: '#aaa', marginBottom: 6, fontFamily: MONO }}>
           ${capital.toLocaleString()} → {contracts} contract{contracts > 1 ? 's' : ''} · <span style={{ color: LIME }}>+${totalPremium.toFixed(0)} premium</span>
-        </div>
-      )}
-      {fallback && (
-        <div style={{ fontSize: 9, color: YELLOW, fontFamily: MONO, letterSpacing: '0.08em', marginBottom: 4, textTransform: 'uppercase' }}>
-          Chain fallback: {fallback.replace(/_/g, ' ')}
         </div>
       )}
       {thesis && (
@@ -996,40 +843,30 @@ function PutCandidateCard({ candidate, thesis, fallback, capital }) {
   )
 }
 
-function CallCandidateCard({ candidate, thesis, fallback, costBasis, shares }) {
+function CallCandidateCard({ candidate, thesis, costBasis, shares }) {
   const dte = candidate?.dte || TARGET_DTE
-  const mid = candidate?.mid || 0
-  const yieldPct = costBasis ? (mid / costBasis) * 100 : 0
+  const premium = candidate?.estPremium || 0
+  const strike = candidate?.strike || 0
+  const yieldPct = costBasis ? (premium / costBasis) * 100 : 0
   const annualized = yieldPct * (365 / dte)
   const contracts = Math.floor(shares / 100)
-  const totalPremium = contracts * mid * 100
-  const aboveCost = candidate?.strike > costBasis
-  const accent = candidate?.estimated ? YELLOW : aboveCost ? LIME : RED
+  const totalPremium = contracts * premium * 100
+  const aboveCost = strike >= costBasis
+  const accent = aboveCost ? LIME : RED
   return (
     <div style={{ background: DARK, border: `1px solid ${BORDER}`, borderLeft: `2px solid ${accent}`, padding: 10, borderRadius: 3 }}>
       <div style={{ fontSize: 9, color: accent, letterSpacing: '0.14em', marginBottom: 6, textTransform: 'uppercase' }}>
-        Suggested call · {dte}D {!aboveCost && '· below cost'} {candidate?.estimated && '· estimated'}
+        Suggested call · {dte}D · estimate {!aboveCost && '· below cost'}
       </div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>
-        <div style={{ fontSize: 15, color: '#e8e8e8', fontFamily: MONO, fontWeight: 700 }}>${f2(candidate?.strike)}C</div>
-        <div style={{ fontSize: 12, color: LIME, fontFamily: MONO, fontWeight: 700 }}>${f2(mid)}</div>
-        {candidate?.bid != null && candidate?.ask != null && (
-          <div style={{ fontSize: 10, color: '#666', fontFamily: MONO }}>{f2(candidate.bid)}/{f2(candidate.ask)}</div>
-        )}
+        <div style={{ fontSize: 15, color: '#e8e8e8', fontFamily: MONO, fontWeight: 700 }}>${f2(strike)}C</div>
+        <div style={{ fontSize: 12, color: LIME, fontFamily: MONO, fontWeight: 700 }}>${f2(premium)}</div>
         <div style={{ fontSize: 10, color: '#aaa', fontFamily: MONO }}>{yieldPct.toFixed(2)}% / {annualized.toFixed(1)}% ann</div>
-        {candidate?.delta != null && <div style={{ fontSize: 10, color: '#666', fontFamily: MONO }}>Δ {candidate.delta.toFixed(2)}</div>}
-        {candidate?.volume != null && candidate.volume > 0 && (
-          <div style={{ fontSize: 9, color: '#666', fontFamily: MONO }}>Vol {candidate.volume} / OI {candidate.openInterest}</div>
-        )}
+        {candidate?.deltaApprox != null && <div style={{ fontSize: 10, color: '#666', fontFamily: MONO }}>Δ {candidate.deltaApprox.toFixed(2)}</div>}
       </div>
       <div style={{ fontSize: 10, color: '#aaa', marginBottom: 6, fontFamily: MONO }}>
         {contracts} contract{contracts !== 1 ? 's' : ''} on {shares} sh · <span style={{ color: LIME }}>+${totalPremium.toFixed(0)}</span>
       </div>
-      {fallback && (
-        <div style={{ fontSize: 9, color: YELLOW, fontFamily: MONO, letterSpacing: '0.08em', marginBottom: 4, textTransform: 'uppercase' }}>
-          Chain fallback: {fallback.replace(/_/g, ' ')}
-        </div>
-      )}
       {thesis && (
         <div style={{ fontSize: 11, color: '#cbd5e1', lineHeight: 1.5, fontFamily: MONO, borderTop: `1px solid ${BORDER}`, paddingTop: 6, marginTop: 6 }}>
           {thesis}
@@ -1044,7 +881,7 @@ function ConfidenceBanner() {
     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginTop: 10, padding: 8, background: '#150d04', border: `1px solid ${YELLOW}44`, borderRadius: 3 }}>
       <AlertCircle size={11} style={{ color: YELLOW, marginTop: 2, flexShrink: 0 }} />
       <div style={{ fontSize: 10, color: YELLOW, lineHeight: 1.5, fontFamily: MONO }}>
-        Low confidence (chain unavailable or estimated). Verify the contract in your broker before selling.
+        Low confidence (insufficient daily history for a reliable HV). Treat the premium as a rough sanity check, not a quote.
       </div>
     </div>
   )
