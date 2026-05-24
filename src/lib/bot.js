@@ -278,7 +278,7 @@ function etMinutesOf(date = new Date()) {
 
 // Distance from current price to nearest "tradeable" level in the levels map.
 // Used to decide WATCH eligibility. Returns { name, price, distance } or null.
-function nearestTradableLevel(levels, currentPrice) {
+export function nearestTradableLevel(levels, currentPrice) {
   const tradable = ['VWAP', 'P', 'R1', 'R2', 'R3', 'S1', 'S2', 'S3', 'PDH', 'PDL']
   let best = null
   for (const name of tradable) {
