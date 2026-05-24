@@ -327,9 +327,10 @@ function ClosedView({ lastClosed, ticker, onDismissClosed }) {
 }
 
 // ─── LOCKED ────────────────────────────────────────────────────────────────
-function LockedView({ realizedPL, settings, onUnlock }) {
+function LockedView({ realizedPL, settings, onUnlock, perTickerBreakdown = [] }) {
   const [typed, setTyped] = useState('')
   const ready = typed.trim().toUpperCase() === 'UNLOCK'
+  const hasBreakdown = perTickerBreakdown && perTickerBreakdown.length > 0
   return (
     <div style={{ background: CARD_BG_LOCKED, border: `1px solid ${RED}`, borderRadius: 6, padding: 22, fontFamily: SANS, boxShadow: `0 0 0 3px ${RED}11` }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
@@ -345,6 +346,40 @@ function LockedView({ realizedPL, settings, onUnlock }) {
         <Field label="Realized today" value={fmtD(realizedPL)} color={RED} />
         <Field label="Limit" value={fmtD(-(settings?.dailyLossLimit || 0))} color={MUTED} />
       </div>
+
+      {hasBreakdown && (
+        <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${BORDER}` }}>
+          <div style={{ fontSize: 9, color: MUTED, fontFamily: MONO, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 8 }}>
+            By ticker (concentrated vs spread?)
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {perTickerBreakdown.map(row => {
+              const total = (row.realized || 0) + (row.unrealized || 0)
+              const c = total >= 0 ? LIME : RED
+              return (
+                <div key={row.ticker} style={{
+                  display: 'grid',
+                  gridTemplateColumns: '60px 1fr 80px 80px',
+                  alignItems: 'center', gap: 12,
+                  padding: '6px 10px', background: '#0a0a0a',
+                  border: `1px solid ${BORDER}`, borderRadius: 3,
+                }}>
+                  <span style={{ fontSize: 11, color: FG, fontFamily: MONO, fontWeight: 800, letterSpacing: '0.08em' }}>{row.ticker}</span>
+                  <span style={{ fontSize: 9, color: MUTED, fontFamily: MONO, letterSpacing: '0.06em' }}>
+                    {row.taken} trade{row.taken === 1 ? '' : 's'} taken
+                  </span>
+                  <span style={{ fontSize: 11, color: c, fontFamily: MONO, fontWeight: 700, textAlign: 'right' }}>
+                    {fmtD(row.realized || 0)}
+                  </span>
+                  <span style={{ fontSize: 10, color: row.unrealized ? c : MUTED, fontFamily: MONO, textAlign: 'right' }}>
+                    {row.unrealized ? `${fmtD(row.unrealized)} unr.` : 'closed'}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       <div style={{ marginTop: 16, padding: 12, background: '#0a0a0a', border: `1px solid ${RED}33`, borderRadius: 4 }}>
         <div style={{ fontSize: 10, color: RED, fontFamily: MONO, letterSpacing: '0.14em', marginBottom: 8, textTransform: 'uppercase' }}>
@@ -365,7 +400,7 @@ function LockedView({ realizedPL, settings, onUnlock }) {
 }
 
 // ─── Top-level dispatcher ──────────────────────────────────────────────────
-export default function BotRightNowCard({ currentCard, realizedPL, onTakeIt, onSkipIt, onCloseManually, onDismissClosed, onUnlock }) {
+export default function BotRightNowCard({ currentCard, realizedPL, onTakeIt, onSkipIt, onCloseManually, onDismissClosed, onUnlock, perTickerBreakdown = [] }) {
   if (!currentCard) return null
   const { state, setup, position, lastClosed, goExpiresAt, ticker, settings, checklistRequired } = currentCard
 
@@ -374,7 +409,7 @@ export default function BotRightNowCard({ currentCard, realizedPL, onTakeIt, onS
     case 'GO':       return <GoView setup={setup} goExpiresAt={goExpiresAt} ticker={ticker} onTakeIt={onTakeIt} onSkipIt={onSkipIt} />
     case 'IN_TRADE': return <InTradeView position={position} ticker={ticker} onCloseManually={onCloseManually} />
     case 'CLOSED':   return <ClosedView lastClosed={lastClosed} ticker={ticker} onDismissClosed={onDismissClosed} />
-    case 'LOCKED':   return <LockedView realizedPL={realizedPL} settings={settings} onUnlock={onUnlock} />
+    case 'LOCKED':   return <LockedView realizedPL={realizedPL} settings={settings} onUnlock={onUnlock} perTickerBreakdown={perTickerBreakdown} />
     case 'WAIT':
     default:         return <WaitView ticker={ticker} checklistRequired={checklistRequired} />
   }

@@ -15,6 +15,8 @@ import BotRightNowCard from './BotRightNowCard.jsx'
 import BotTodayPanel from './BotTodayPanel.jsx'
 import BotPatternsPanel from './BotPatternsPanel.jsx'
 import BotSettingsDrawer from './BotSettingsDrawer.jsx'
+import BotWatchlistChips from './BotWatchlistChips.jsx'
+import BotPendingPanel from './BotPendingPanel.jsx'
 
 const FG = '#e8e8e8'
 const DIM = '#888'
@@ -129,6 +131,15 @@ export default function Bot({
         </div>
       </div>
 
+      {/* Watchlist chip editor */}
+      <BotWatchlistChips
+        chips={tickerChips}
+        liveDataMulti={liveDataMulti}
+        watchlist={watchlist}
+        onWatchlistChange={onWatchlistChange}
+        locked={!!bot.state?.lockedAt}
+      />
+
       {/* Hero card for the primary ticker */}
       <BotRightNowCard
         currentCard={currentCard}
@@ -138,6 +149,14 @@ export default function Bot({
         onCloseManually={onCloseManually}
         onDismissClosed={onDismissClosed}
         onUnlock={bot.onUnlock}
+        perTickerBreakdown={patterns?.perTicker || []}
+      />
+
+      {/* Also-live pending setups from non-primary tickers */}
+      <BotPendingPanel
+        pendingCards={pendingCards}
+        onTakeIt={bot.onTakeIt}
+        onSkipIt={bot.onSkipIt}
       />
 
       {/* Today strip, flat list across all tickers */}
