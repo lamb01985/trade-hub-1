@@ -11,6 +11,7 @@ import InlineCheckGate from './components/InlineCheckGate.jsx'
 import CalendarTab from './components/Calendar.jsx'
 import Playbook from './components/Playbook.jsx'
 import ShortThesis from './components/ShortThesis.jsx'
+import WheelScanner from './components/WheelScanner.jsx'
 import Bot from './components/Bot.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
 import { getAllEvents, highImpactToday } from './lib/calendar.js'
@@ -448,6 +449,7 @@ export default function App() {
             <SubNav
               tabs={[
                 { id: 'watchlist', label: 'Watchlist' },
+                { id: 'wheel', label: 'Wheel' },
                 { id: 'prep', label: 'Prep' },
                 { id: 'playbook', label: 'Playbook' },
                 { id: 'calendar', label: 'Calendar' },
@@ -466,6 +468,12 @@ export default function App() {
                 onSendToPrep={entry => { setPrep(p => ({ ...p, ticker: entry.ticker, orbHigh: entry.priorHigh || '', orbLow: entry.priorLow || '', plannedStrike: entry.plannedStrike || '', plannedDTE: entry.plannedDTE || '', ivNote: entry.ivNote || '' })); setPlanSubTab('prep') }}
                 onLoadSavedPrep={saved => { const { dateSaved, ...data } = saved; setPrep(p => ({ ...p, ...data })); setPlanSubTab('prep') }}
               />
+            </div>
+
+            <div style={{ display: planSubTab === 'wheel' ? 'block' : 'none' }}>
+              <ErrorBoundary label="Wheel">
+                <WheelScanner anthropicKey={anthropicKey} apiKey={apiKey} />
+              </ErrorBoundary>
             </div>
 
             <div style={{ display: planSubTab === 'prep' ? 'block' : 'none' }}>
