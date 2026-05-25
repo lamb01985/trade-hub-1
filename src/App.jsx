@@ -12,6 +12,7 @@ import CalendarTab from './components/Calendar.jsx'
 import Playbook from './components/Playbook.jsx'
 import Setups from './components/Setups.jsx'
 import MoversScanner from './components/MoversScanner.jsx'
+import UniverseBuilder from './components/UniverseBuilder.jsx'
 import WheelScanner from './components/WheelScanner.jsx'
 import Bot from './components/Bot.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
@@ -98,6 +99,9 @@ export default function App() {
   // Account value used by the Setup engine to size staged trades. Defaults to
   // the same value the WheelScanner uses; not yet user-editable from App.
   const accountValue = 25000
+  // Saved screener universes from UniverseBuilder. Referenced by SetupBuilder
+  // to populate a setup's universe field from a saved filter set.
+  const [savedUniverses, setSavedUniverses] = useLocalStorage('tradeHub.universes.v1', {})
   const [_priceTick, setPriceTick] = useState(0)
   useEffect(() => { const id = setInterval(() => setPriceTick(t => t + 1), 5000); return () => clearInterval(id) }, [])
 
@@ -611,6 +615,7 @@ export default function App() {
                 { id: 'calendar', label: 'Calendar' },
                 { id: 'levels', label: 'Levels' },
                 { id: 'movers', label: 'Movers' },
+                { id: 'universe', label: 'Universe' },
                 { id: 'setups', label: 'Setups' },
               ]}
               active={planSubTab}
@@ -691,6 +696,16 @@ export default function App() {
               </ErrorBoundary>
             </div>
 
+            <div style={{ display: planSubTab === 'universe' ? 'block' : 'none' }}>
+              <ErrorBoundary label="Universe">
+                <UniverseBuilder
+                  apiKey={apiKey}
+                  savedUniverses={savedUniverses}
+                  onSavedUniversesChange={setSavedUniverses}
+                />
+              </ErrorBoundary>
+            </div>
+
             <div style={{ display: planSubTab === 'setups' ? 'block' : 'none' }}>
               <ErrorBoundary label="Setups">
                 <Setups
@@ -699,6 +714,7 @@ export default function App() {
                   evaluation={setupEvaluation}
                   accountValue={accountValue}
                   apiKey={apiKey}
+                  savedUniverses={savedUniverses}
                   suggestionTickers={[...new Set([...botWatchlist, ...wheelWatchlist, ...setupTickers])]}
                 />
               </ErrorBoundary>

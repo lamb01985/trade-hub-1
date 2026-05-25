@@ -40,6 +40,7 @@ export default function Setups({
   evaluation = null,
   accountValue = 25000,
   apiKey = '',
+  savedUniverses = {},
   suggestionTickers = [],
 }) {
   const [filter, setFilter] = useState('all')
@@ -220,6 +221,7 @@ export default function Setups({
           onSave={handleSave}
           onCancel={() => setEditing(null)}
           suggestionTickers={suggestionTickers}
+          savedUniverses={savedUniverses}
         />
       )}
 

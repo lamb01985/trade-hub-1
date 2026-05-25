@@ -245,7 +245,7 @@ function backtestPasses(bt) {
   return true
 }
 
-export default function SetupBuilder({ initial, isNew = false, onSave, onCancel, suggestionTickers = [] }) {
+export default function SetupBuilder({ initial, isNew = false, onSave, onCancel, suggestionTickers = [], savedUniverses = {} }) {
   const [setup, setSetup] = useState(() => createSetup({ ...(initial || {}) }))
   const [picking, setPicking] = useState(false)
   const [error, setError] = useState('')
@@ -355,7 +355,29 @@ export default function SetupBuilder({ initial, isNew = false, onSave, onCancel,
 
         {/* UNIVERSE */}
         <div style={sectionStyle}>
-          <div style={sectionLabel}>Universe</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+            <div style={sectionLabel}>Universe</div>
+            {Object.keys(savedUniverses || {}).length > 0 && (
+              <select
+                value=""
+                onChange={e => {
+                  const id = e.target.value
+                  if (!id) return
+                  const u = savedUniverses[id]
+                  if (!u) return
+                  patch({ universe: [...new Set([...(setup.universe || []), ...(u.tickers || [])])] })
+                  e.target.value = ''
+                }}
+                style={{ ...inputStyle, fontSize: 10 }}
+                title="Append tickers from a saved screener universe"
+              >
+                <option value="">+ Load saved universe</option>
+                {Object.values(savedUniverses).sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0)).map(u => (
+                  <option key={u.id} value={u.id}>{u.name} ({u.tickers?.length || 0})</option>
+                ))}
+              </select>
+            )}
+          </div>
           <UniverseInput
             tickers={setup.universe || []}
             onChange={(arr) => patch({ universe: arr })}
