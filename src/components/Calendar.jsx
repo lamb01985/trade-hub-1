@@ -409,15 +409,19 @@ export default function CalendarTab({ putTheses = {}, apiKey }) {
   const [selectedDate, setSelectedDate] = useState(null)
   const [edu, setEdu] = useLocalStorage('th-opex-edu-dismissed', false)
   const [nasdaqEarnings, setNasdaqEarnings] = useState([])
-  const [nasdaqStatus, setNasdaqStatus] = useState('idle') // idle | loading | ok | blocked
+  const [nasdaqStatus, setNasdaqStatus] = useState('idle') // idle | loading | ok | empty | error
+  const [nasdaqError, setNasdaqError] = useState('')
 
   const baseEvents = useMemo(() => getAllEvents(new Date(), 14), [])
 
-  // Best-effort Nasdaq earnings fetch — likely CORS blocked from browser
+  // Live earnings fetch via /api/calendar-earnings (same-origin Vercel proxy).
+  // The proxy bypasses CORS; we treat a total failure as 'error' (not silent
+  // fallback) and an empty rowset across all dates as 'empty'.
   useEffect(() => {
     let alive = true
     async function load() {
       setNasdaqStatus('loading')
+      setNasdaqError('')
       const dates = []
       const start = new Date()
       for (let i = 0; i < 14; i++) {
@@ -426,9 +430,17 @@ export default function CalendarTab({ putTheses = {}, apiKey }) {
       }
       const results = await Promise.allSettled(dates.map(d => fetchNasdaqEarnings(d)))
       if (!alive) return
-      const flat = results.flatMap(r => r.status === 'fulfilled' ? r.value : [])
-      if (flat.length === 0) {
-        setNasdaqStatus('blocked')
+      const successes = results.filter(r => r.status === 'fulfilled' && !r.value?.error)
+      const failures = results.filter(r => r.status === 'rejected' || r.value?.error)
+      const flat = successes.flatMap(r => r.value.rows || [])
+      if (successes.length === 0) {
+        const firstErr = failures[0]?.value?.error || failures[0]?.reason?.message || 'proxy unreachable'
+        setNasdaqError(firstErr)
+        setNasdaqStatus('error')
+        setNasdaqEarnings([])
+      } else if (flat.length === 0) {
+        setNasdaqStatus('empty')
+        setNasdaqEarnings([])
       } else {
         setNasdaqEarnings(flat)
         setNasdaqStatus('ok')
@@ -438,15 +450,11 @@ export default function CalendarTab({ putTheses = {}, apiKey }) {
     return () => { alive = false }
   }, [])
 
-  // Merge Nasdaq earnings with hardcoded fallback (dedupe by date+ticker)
+  // Merge live Nasdaq earnings with the rest of the calendar (no hardcoded
+  // earnings to dedupe against any more).
   const events = useMemo(() => {
     if (!nasdaqEarnings.length) return baseEvents
-    const seen = new Set(baseEvents.filter(e => e.type === 'earnings').map(e => `${e.date}-${e.ticker}`))
-    const merged = [...baseEvents]
-    for (const e of nasdaqEarnings) {
-      const key = `${e.date}-${e.ticker}`
-      if (!seen.has(key)) { merged.push(e); seen.add(key) }
-    }
+    const merged = [...baseEvents, ...nasdaqEarnings]
     merged.sort((a, b) => a.date !== b.date ? a.date.localeCompare(b.date) : (a.time || '').localeCompare(b.time || ''))
     return merged
   }, [baseEvents, nasdaqEarnings])
@@ -520,9 +528,15 @@ export default function CalendarTab({ putTheses = {}, apiKey }) {
 
       {!edu && <OpexEducation onDismiss={() => setEdu(true)} />}
 
-      {nasdaqStatus === 'blocked' && (
+      {nasdaqStatus === 'error' && (
+        <div style={{ fontSize: 10, fontFamily: MONO, color: YELLOW, background: '#1a1208', border: `1px solid ${YELLOW}44`, borderRadius: 4, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+          <span>Earnings feed unavailable: {nasdaqError || 'proxy error'}. Other calendar events still shown. Tracking: {MAJOR_TICKERS.join(', ')}.</span>
+          <Btn small variant="ghost" onClick={() => { setNasdaqStatus('idle'); setTimeout(() => window.location.reload(), 0) }}>Retry</Btn>
+        </div>
+      )}
+      {nasdaqStatus === 'empty' && (
         <div style={{ fontSize: 10, fontFamily: MONO, color: '#666', background: '#0c0c0c', border: `1px solid ${BORDER}`, borderRadius: 4, padding: '8px 12px' }}>
-          Live earnings feed unavailable (CORS blocked from browser). Showing hardcoded major-ticker schedule only. Tracking: {MAJOR_TICKERS.join(', ')}.
+          No tracked-ticker earnings in the next 14 days. Tracking: {MAJOR_TICKERS.join(', ')}.
         </div>
       )}
 

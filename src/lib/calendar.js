@@ -1,8 +1,13 @@
 // Calendar data: OPEX (computed), FOMC (hardcoded 2026), recurring economic
 // releases (algorithmic), and a small hardcoded one-off list for the next 30
-// days. Earnings come from a best-effort Nasdaq fetch with hardcoded fallback.
+// days. Earnings come ONLY from the live Nasdaq fetch (via /api/calendar-earnings
+// proxy). No hardcoded fallback. If the proxy is down, the Calendar shows the
+// other event types and a clear "live feed unavailable" notice — never fake dates.
 
-export const MAJOR_TICKERS = ['AAPL', 'MSFT', 'NVDA', 'AMZN', 'META', 'GOOGL', 'TSLA', 'AMD']
+export const MAJOR_TICKERS = [
+  'AAPL', 'MSFT', 'NVDA', 'AMZN', 'META', 'GOOGL', 'TSLA', 'AMD',
+  'CRWD', 'ELF', 'NET', 'IONQ',
+]
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
@@ -72,13 +77,6 @@ const ONE_OFF_EVENTS = [
   { date: '2026-06-12', time: '07:30', name: 'PPI (May)', impact: 'medium' },
   { date: '2026-06-17', time: '07:30', name: 'Retail Sales (May)', impact: 'high' },
   { date: '2026-06-26', time: '07:30', name: 'PCE Price Index', impact: 'high' },
-]
-
-// ── Hardcoded major-ticker earnings for the rolling 30-day window ────────────
-// Refresh quarterly; sourced from each company's IR calendar.
-
-const HARDCODED_EARNINGS = [
-  { date: '2026-05-27', time: '15:30', ticker: 'NVDA', bmo: 'AMC', name: 'NVDA Q1 Earnings' },
 ]
 
 // ── Generators ────────────────────────────────────────────────────────────────
@@ -163,28 +161,24 @@ function expandOneOffs(start, end) {
     .map(e => ({ ...e, type: 'economic' }))
 }
 
-function expandHardcodedEarnings(start, end) {
-  return HARDCODED_EARNINGS
-    .filter(e => {
-      const d = parseYmd(e.date)
-      return d >= start && d <= end
-    })
-    .map(e => ({ ...e, type: 'earnings', impact: 'medium' }))
-}
-
 // ── Earnings fetch via /api/calendar-earnings (Vercel proxy) ────────────────
-// Direct calls to api.nasdaq.com are blocked by CORS in the browser, so this
-// goes through a same-origin serverless function that proxies the request.
+// Same-origin proxy bypasses CORS. Returns an object with { rows, error } so
+// callers can distinguish "no earnings that day" from "fetch failed".
 
 export async function fetchNasdaqEarnings(dateStr) {
   try {
     const res = await fetch(`/api/calendar-earnings?date=${encodeURIComponent(dateStr)}`, {
       headers: { 'Accept': 'application/json' },
     })
-    if (!res.ok) return []
+    if (!res.ok) {
+      return { rows: [], error: `proxy returned ${res.status}` }
+    }
     const data = await res.json()
+    if (data?.error) {
+      return { rows: [], error: data.error }
+    }
     const rows = data?.data?.rows || []
-    return rows
+    const mapped = rows
       .filter(r => MAJOR_TICKERS.includes((r.symbol || '').toUpperCase()))
       .map(r => ({
         date: dateStr,
@@ -196,8 +190,9 @@ export async function fetchNasdaqEarnings(dateStr) {
         bmo: r.time === 'time-pre-market' ? 'BMO' : r.time === 'time-after-hours' ? 'AMC' : '—',
         est: r.epsForecast || null,
       }))
-  } catch {
-    return []
+    return { rows: mapped, error: null }
+  } catch (err) {
+    return { rows: [], error: err?.message || 'fetch failed' }
   }
 }
 
@@ -216,7 +211,6 @@ export function getAllEvents(fromDate, daysAhead = 14) {
     ...generateNFP(start, end),
     ...expandFOMC(start, end),
     ...expandOneOffs(start, end),
-    ...expandHardcodedEarnings(start, end),
   ]
 
   // Sort by date then time
