@@ -148,6 +148,21 @@ export default function BacktestResults({ result }) {
       }}>
         {passed ? '✓ Backtest passes activation gate (>= 20 triggers, positive EV)' : `Gate: needs >= 20 triggers and positive EV (have ${trades} triggers, EV ${ev.toFixed(2)}%)`}
       </div>
+
+      {/* Data quality line. Only shown when the engine reports universeSize
+          AND some portion of the universe was skipped during the run. */}
+      {result.universeSize != null && (result.tickersSkipped?.length || 0) > 0 && (
+        <div style={{
+          background: '#0a0606', border: `1px solid ${YELLOW}33`, borderRadius: 3,
+          padding: '8px 10px', fontSize: 10, color: YELLOW, fontFamily: MONO, lineHeight: 1.5,
+        }}>
+          Data quality: {result.tickersWithData?.length || 0} of {result.universeSize} tickers contributed
+          ({Math.round((result.dataQuality || 0) * 100)}%).
+          {result.tickersSkipped.length > 0 && (
+            <>{' '}Skipped {result.tickersSkipped.length}: {result.tickersSkipped.slice(0, 5).map(s => s.ticker).join(', ')}{result.tickersSkipped.length > 5 ? ', …' : ''}.</>
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -28,6 +28,7 @@ import { buildSnapshot } from './lib/conditionEvaluators.js'
 import { resolveUniverseTickers, universeAppendTickers } from './lib/universeResolver.js'
 import { estimatePremium, computeHV30 } from './lib/wheelOptions.js'
 import { notify, dismiss, subscribe as subscribeNotify, requestNotificationPermission, notifyTriggered } from './lib/notify.js'
+import { snapshot as apiHealthSnapshot, subscribe as subscribeApiHealth } from './lib/apiHealth.js'
 import { ORBTab, IVAnalyzerTab, CalculatorTab, StatsTab, WatchlistTab, PrepTab } from './components/tabs.jsx'
 import Journal from './components/Journal.jsx'
 import QuickLog from './components/QuickLog.jsx'
@@ -546,6 +547,7 @@ export default function App() {
                 {apiKey ? 'connecting...' : 'no live data'}
               </span>
             )}
+            <ApiHealthIndicator />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {lockedOut && (
@@ -1028,6 +1030,99 @@ export default function App() {
       )}
 
       <NotificationOverlay />
+    </div>
+  )
+}
+
+// Header dot + click-to-expand modal driven by apiHealth. Color rolls up
+// the last 5 minutes of Polygon outcomes: lime when no recent errors,
+// yellow when any errors at a low ratio, red when error rate >= 25% with
+// 3+ errors. Click opens a small modal with counts + the last 10 errors.
+function ApiHealthIndicator() {
+  const [snap, setSnap] = useState(() => apiHealthSnapshot())
+  const [open, setOpen] = useState(false)
+  useEffect(() => subscribeApiHealth(setSnap), [])
+  const color = snap.status === 'red' ? RED : snap.status === 'yellow' ? YELLOW : LIME
+  const tip = `API ${snap.status === 'red' ? 'degraded' : snap.status === 'yellow' ? 'wobbly' : 'OK'} — ${snap.successes}✓ ${snap.failures}✗ ${snap.rateLimits} rate-limited in last 5m`
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        title={tip}
+        style={{
+          background: 'transparent', border: 'none', padding: '4px',
+          cursor: 'pointer', display: 'inline-flex', alignItems: 'center',
+        }}
+      >
+        <span style={{
+          width: 8, height: 8, borderRadius: 4, background: color,
+          boxShadow: snap.status === 'green' ? `0 0 6px ${LIME}55` : 'none',
+          display: 'inline-block',
+        }} />
+      </button>
+      {open && (
+        <div onClick={() => setOpen(false)} style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
+          display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end',
+          padding: 28, zIndex: 260,
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 6,
+            width: '100%', maxWidth: 420, padding: 16, fontFamily: MONO,
+            display: 'flex', flexDirection: 'column', gap: 10,
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontSize: 10, color: '#666', letterSpacing: '0.14em', textTransform: 'uppercase' }}>API health</div>
+                <div style={{ fontSize: 14, color: '#e8e8e8', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: 5, background: color }} />
+                  {snap.status === 'red' ? 'Degraded' : snap.status === 'yellow' ? 'Wobbly' : 'All good'}
+                </div>
+              </div>
+              <button onClick={() => setOpen(false)} style={{ background: 'transparent', border: 'none', color: '#aaa', fontSize: 16, cursor: 'pointer' }}>✕</button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+              <Stat label="OK" value={snap.successes} color={LIME} />
+              <Stat label="Errors" value={snap.failures} color={snap.failures > 0 ? RED : '#aaa'} />
+              <Stat label="Rate-limit" value={snap.rateLimits} color={snap.rateLimits > 0 ? YELLOW : '#aaa'} />
+            </div>
+            <div style={{ fontSize: 10, color: '#666', fontFamily: MONO, letterSpacing: '0.06em' }}>
+              Rolling 5-minute window. Polygon requests served from in-memory cache don't count.
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: '#666', fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 6 }}>Recent errors</div>
+              {(!snap.recentErrors || snap.recentErrors.length === 0) ? (
+                <div style={{ fontSize: 11, color: '#666' }}>No errors recorded.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {snap.recentErrors.map((e, i) => (
+                    <div key={i} style={{
+                      background: '#0a0606', border: `1px solid ${BORDER}`, borderRadius: 3,
+                      padding: '5px 8px', fontSize: 10, fontFamily: MONO, color: '#aaa', lineHeight: 1.5,
+                    }}>
+                      <span style={{ color: e.kind === 'rate_limit' ? YELLOW : RED, fontWeight: 700 }}>{e.kind === 'rate_limit' ? 'RATE-LIMIT' : 'ERROR'}</span>
+                      <span style={{ color: '#666', marginLeft: 8 }}>{new Date(e.ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                      <div style={{ color: '#888', fontSize: 10, marginTop: 2, wordBreak: 'break-all' }}>
+                        {e.detail?.url || e.detail?.message || '—'}
+                        {e.detail?.status ? ` · status ${e.detail.status}` : ''}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+function Stat({ label, value, color = '#e8e8e8' }) {
+  return (
+    <div style={{ padding: 8, background: '#0a0606', borderRadius: 3 }}>
+      <div style={{ fontSize: 9, color: '#666', fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
+      <div style={{ fontSize: 14, color, fontFamily: MONO, fontWeight: 700 }}>{value}</div>
     </div>
   )
 }

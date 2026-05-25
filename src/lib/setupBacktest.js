@@ -264,22 +264,41 @@ export async function backtestSetup(setup, apiKey, options = {}) {
   const cooldownDays = Math.max(0, Math.ceil((setup.alerts?.cooldownMinutes || 0) / (60 * 24)))
 
   let allTrades = []
+  const tickersWithData = []
+  const tickersSkipped = []   // [{ ticker, reason }]
   for (let i = 0; i < tickers.length; i++) {
     const ticker = tickers[i]
-    onProgress({ ticker, progressPct: Math.round((i / tickers.length) * 100), stage: 'fetching' })
+    const progressPct = Math.round((i / tickers.length) * 100)
+    onProgress({ ticker, current: i, total: tickers.length, progressPct, stage: 'fetching' })
     let bars = cache[ticker]
+    let fetchError = null
     if (!bars) {
       try {
         bars = await getHistoricalBars(apiKey, ticker, 252)
         cache[ticker] = bars || []
-      } catch {
+      } catch (e) {
         cache[ticker] = []
         bars = []
+        fetchError = e?.message || 'fetch failed'
       }
     }
-    if (!bars?.length || bars.length < minBarsForEval) continue
+    if (fetchError) {
+      tickersSkipped.push({ ticker, reason: `fetch error after retries: ${fetchError}` })
+      // eslint-disable-next-line no-console
+      console.warn(`[backtest] skipping ${ticker}: ${fetchError}`)
+      continue
+    }
+    if (!bars?.length) {
+      tickersSkipped.push({ ticker, reason: 'no daily bars returned' })
+      continue
+    }
+    if (bars.length < minBarsForEval) {
+      tickersSkipped.push({ ticker, reason: `only ${bars.length} bars (need ${minBarsForEval}+)` })
+      continue
+    }
+    tickersWithData.push(ticker)
 
-    onProgress({ ticker, progressPct: Math.round((i / tickers.length) * 100), stage: 'walking' })
+    onProgress({ ticker, current: i, total: tickers.length, progressPct, stage: 'walking' })
 
     let lastTriggerIdx = -Infinity
     for (let day = minBarsForEval; day < bars.length; day++) {
@@ -300,12 +319,16 @@ export async function backtestSetup(setup, apiKey, options = {}) {
       lastTriggerIdx = day
     }
   }
-  onProgress({ ticker: null, progressPct: 100, stage: 'done' })
+  onProgress({ ticker: null, current: tickers.length, total: tickers.length, progressPct: 100, stage: 'done' })
 
   const summary = summarize(allTrades)
   return {
     ...summary,
     lastRunAt: Date.now(),
     trades: allTrades,
+    tickersWithData,
+    tickersSkipped,
+    universeSize: tickers.length,
+    dataQuality: tickers.length ? tickersWithData.length / tickers.length : 0,
   }
 }

@@ -172,11 +172,13 @@ function expandHardcodedEarnings(start, end) {
     .map(e => ({ ...e, type: 'earnings', impact: 'medium' }))
 }
 
-// ── Earnings fetch (best-effort, CORS often blocks) ──────────────────────────
+// ── Earnings fetch via /api/calendar-earnings (Vercel proxy) ────────────────
+// Direct calls to api.nasdaq.com are blocked by CORS in the browser, so this
+// goes through a same-origin serverless function that proxies the request.
 
 export async function fetchNasdaqEarnings(dateStr) {
   try {
-    const res = await fetch(`https://api.nasdaq.com/api/calendar/earnings?date=${dateStr}`, {
+    const res = await fetch(`/api/calendar-earnings?date=${encodeURIComponent(dateStr)}`, {
       headers: { 'Accept': 'application/json' },
     })
     if (!res.ok) return []
