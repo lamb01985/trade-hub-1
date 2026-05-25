@@ -11,6 +11,7 @@
 
 import { useMemo, useState } from 'react'
 import { LIME, RED, YELLOW, MONO, BORDER, PANEL, DARK } from '../constants.js'
+import { useLocalStorage } from '../hooks/useStore.js'
 import { buildSnapshot } from '../lib/conditionEvaluators.js'
 import { createFocusedTicker } from '../lib/focusedTickersStorage.js'
 import FocusedTickerCard from './FocusedTickerCard.jsx'
@@ -33,6 +34,29 @@ export default function Focus({
 }) {
   const [editing, setEditing] = useState(null)   // { record, isNew }
   const [adjusting, setAdjusting] = useState(null) // record
+  // Per-ticker collapsed flag. Sparse: only stores explicit user choices.
+  // First card defaults to expanded, rest to collapsed when no entry exists.
+  const [uiState, setUiState] = useLocalStorage('th-focused-tickers-ui-v1', {})
+
+  function isCollapsed(ticker, index) {
+    const entry = uiState?.[ticker]
+    if (entry && typeof entry.collapsed === 'boolean') return entry.collapsed
+    return index !== 0
+  }
+  function toggleCollapsed(ticker) {
+    setUiState(prev => {
+      const cur = prev?.[ticker]
+      const wasCollapsed = cur && typeof cur.collapsed === 'boolean'
+        ? cur.collapsed
+        : focusedTickers.findIndex(f => f.ticker === ticker) !== 0
+      return { ...(prev || {}), [ticker]: { ...(cur || {}), collapsed: !wasCollapsed } }
+    })
+  }
+  function setAllCollapsed(value) {
+    const next = {}
+    for (const f of focusedTickers || []) next[f.ticker] = { ...(uiState?.[f.ticker] || {}), collapsed: value }
+    setUiState(next)
+  }
 
   function updateFocused(updated) {
     if (!onFocusedTickersChange) return
@@ -91,11 +115,27 @@ export default function Focus({
             Focus<span style={{ color: LIME }}>.</span>
           </div>
         </div>
-        <button onClick={handleNewClick} style={{
-          background: LIME, color: '#000', border: 'none', padding: '10px 16px',
-          borderRadius: 4, fontFamily: MONO, fontSize: 11, fontWeight: 800,
-          letterSpacing: '0.14em', textTransform: 'uppercase', cursor: 'pointer',
-        }}>+ Focus on ticker</button>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          {focusedTickers.length > 1 && (
+            <>
+              <button onClick={() => setAllCollapsed(false)} title="Expand every focused ticker" style={{
+                background: 'transparent', border: `1px solid ${BORDER}`, color: '#aaa',
+                padding: '7px 12px', borderRadius: 3, fontFamily: MONO, fontSize: 10,
+                letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer',
+              }}>Expand all</button>
+              <button onClick={() => setAllCollapsed(true)} title="Collapse every focused ticker" style={{
+                background: 'transparent', border: `1px solid ${BORDER}`, color: '#aaa',
+                padding: '7px 12px', borderRadius: 3, fontFamily: MONO, fontSize: 10,
+                letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer',
+              }}>Collapse all</button>
+            </>
+          )}
+          <button onClick={handleNewClick} style={{
+            background: LIME, color: '#000', border: 'none', padding: '10px 16px',
+            borderRadius: 4, fontFamily: MONO, fontSize: 11, fontWeight: 800,
+            letterSpacing: '0.14em', textTransform: 'uppercase', cursor: 'pointer',
+          }}>+ Focus on ticker</button>
+        </div>
       </div>
 
       {focusedTickers.length === 0 && (
@@ -105,7 +145,7 @@ export default function Focus({
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {focusedTickers.map(f => {
+        {focusedTickers.map((f, idx) => {
           const attached = (f.attachedSetupIds || []).map(id => setups.find(s => s.id === id)).filter(Boolean)
           const snap = snapshotFor(f.ticker)
           const bundle = liveDataMulti?.[f.ticker.toUpperCase()]
@@ -119,6 +159,8 @@ export default function Focus({
               savedUniverses={savedUniverses}
               accountValue={accountValue}
               apiKey={apiKey}
+              collapsed={isCollapsed(f.ticker, idx)}
+              onToggleCollapsed={() => toggleCollapsed(f.ticker)}
               onEditThesis={(rec) => setEditing({ record: rec, isNew: false })}
               onAdjustSetups={(rec) => setAdjusting(rec)}
               onUpdateNotes={(notes) => updateFocused({ ...f, notes, updatedAt: new Date().toISOString() })}

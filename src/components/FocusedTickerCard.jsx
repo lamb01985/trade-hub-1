@@ -208,6 +208,8 @@ export default function FocusedTickerCard({
   savedUniverses = [],
   accountValue = 25000,
   apiKey = '',
+  collapsed = false,
+  onToggleCollapsed,
   onEditThesis,
   onAdjustSetups,
   onUpdateNotes,
@@ -233,6 +235,16 @@ export default function FocusedTickerCard({
       if (st === 'approaching' && best !== 'triggered') best = 'approaching'
     }
     return best
+  }, [attachedSetups, evaluationsBySetup])
+
+  // Status counts for the collapsed-mode summary line.
+  const statusCounts = useMemo(() => {
+    const counts = { triggered: 0, approaching: 0, monitoring: 0 }
+    for (const s of attachedSetups) {
+      const st = evaluationsBySetup[s.id]?.status || 'monitoring'
+      counts[st] = (counts[st] || 0) + 1
+    }
+    return counts
   }, [attachedSetups, evaluationsBySetup])
 
   // Notes inline editor.
@@ -294,51 +306,85 @@ export default function FocusedTickerCard({
           </span>
         )}
         <div style={{ flex: 1 }} />
-        <button onClick={() => onEditThesis?.(focused)} style={actionBtn}>Edit thesis</button>
-        <button onClick={() => onAdjustSetups?.(focused)} style={actionBtn}>Adjust setups</button>
-        <button onClick={() => onRemove?.(focused)} style={{ ...actionBtn, color: RED, borderColor: `${RED}55` }}>Remove</button>
+        {!collapsed && (
+          <>
+            <button onClick={() => onEditThesis?.(focused)} style={actionBtn}>Edit thesis</button>
+            <button onClick={() => onAdjustSetups?.(focused)} style={actionBtn}>Adjust setups</button>
+            <button onClick={() => onRemove?.(focused)} style={{ ...actionBtn, color: RED, borderColor: `${RED}55` }}>Remove</button>
+          </>
+        )}
+        <button
+          onClick={() => onToggleCollapsed?.()}
+          title={collapsed ? 'Expand card' : 'Collapse card'}
+          style={{
+            background: 'transparent', border: `1px solid ${BORDER}`, color: '#aaa',
+            padding: '4px 9px', borderRadius: 3, cursor: 'pointer', fontFamily: MONO,
+            fontSize: 11, lineHeight: 1,
+          }}
+        >{collapsed ? '▶' : '▼'}</button>
       </div>
 
-      {/* Thesis description */}
-      {focused.thesisDescription && (
-        <div style={{ fontSize: 12, color: '#aaa', fontFamily: MONO, lineHeight: 1.6 }}>
-          {focused.thesisDescription}
-        </div>
-      )}
-      {focused.timeHorizon && (
-        <div style={{ fontSize: 10, color: MUTED, fontFamily: MONO, letterSpacing: '0.06em' }}>
-          Horizon: <span style={{ color: '#aaa' }}>{focused.timeHorizon}</span>
+      {/* Collapsed summary line */}
+      {collapsed && (
+        <div style={{ fontSize: 11, color: '#aaa', fontFamily: MONO, lineHeight: 1.5, letterSpacing: '0.04em' }}>
+          {attachedSetups.length === 0
+            ? 'No setups attached.'
+            : (
+              <>
+                {attachedSetups.length} setup{attachedSetups.length === 1 ? '' : 's'}:{' '}
+                <span style={{ color: statusCounts.triggered > 0 ? RED : MUTED, fontWeight: statusCounts.triggered > 0 ? 800 : 400 }}>{statusCounts.triggered} triggered</span>
+                <span style={{ color: MUTED }}> · </span>
+                <span style={{ color: statusCounts.approaching > 0 ? YELLOW : MUTED, fontWeight: statusCounts.approaching > 0 ? 800 : 400 }}>{statusCounts.approaching} approaching</span>
+                <span style={{ color: MUTED }}> · </span>
+                <span style={{ color: '#aaa' }}>{statusCounts.monitoring} monitoring</span>
+              </>
+            )}
         </div>
       )}
 
-      {/* Inline staged trade per triggered setup */}
-      {attachedSetups.filter(s => evaluationsBySetup[s.id]?.status === 'triggered').map(s => (
-        <StagedTradeInline
-          key={`stg-${s.id}`}
-          trigger={{ ticker, snapshot }}
-          setup={s}
-          snapshot={snapshot}
-          accountValue={accountValue}
-        />
-      ))}
+      {/* Expanded body */}
+      {!collapsed && (
+        <>
+          {/* Thesis description */}
+          {focused.thesisDescription && (
+            <div style={{ fontSize: 12, color: '#aaa', fontFamily: MONO, lineHeight: 1.6 }}>
+              {focused.thesisDescription}
+            </div>
+          )}
+          {focused.timeHorizon && (
+            <div style={{ fontSize: 10, color: MUTED, fontFamily: MONO, letterSpacing: '0.06em' }}>
+              Horizon: <span style={{ color: '#aaa' }}>{focused.timeHorizon}</span>
+            </div>
+          )}
 
-      {/* Per-setup status */}
-      {attachedSetups.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ fontSize: 10, color: MUTED, fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Attached setups ({attachedSetups.length})</div>
-          {attachedSetups.map(s => (
-            <PerSetupRow key={s.id} setup={s} evaluation={evaluationsBySetup[s.id]} />
+          {/* Inline staged trade per triggered setup */}
+          {attachedSetups.filter(s => evaluationsBySetup[s.id]?.status === 'triggered').map(s => (
+            <StagedTradeInline
+              key={`stg-${s.id}`}
+              trigger={{ ticker, snapshot }}
+              setup={s}
+              snapshot={snapshot}
+              accountValue={accountValue}
+            />
           ))}
-        </div>
-      )}
-      {attachedSetups.length === 0 && (
-        <div style={{ fontSize: 11, color: MUTED, fontFamily: MONO }}>
-          No setups attached. Use "Adjust setups" to attach this ticker to one or more active setups.
-        </div>
-      )}
 
-      {/* Key levels ladder */}
-      <KeyLevelsLadder price={livePrice} snapshot={snapshot} focused={focused} />
+          {/* Per-setup status */}
+          {attachedSetups.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ fontSize: 10, color: MUTED, fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Attached setups ({attachedSetups.length})</div>
+              {attachedSetups.map(s => (
+                <PerSetupRow key={s.id} setup={s} evaluation={evaluationsBySetup[s.id]} />
+              ))}
+            </div>
+          )}
+          {attachedSetups.length === 0 && (
+            <div style={{ fontSize: 11, color: MUTED, fontFamily: MONO }}>
+              No setups attached. Use "Adjust setups" to attach this ticker to one or more active setups.
+            </div>
+          )}
+
+          {/* Key levels ladder */}
+          <KeyLevelsLadder price={livePrice} snapshot={snapshot} focused={focused} />
 
       {/* Notes */}
       <div style={{ background: DARK, border: `1px solid ${BORDER}`, borderRadius: 4, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -402,6 +448,8 @@ export default function FocusedTickerCard({
           </div>
         )}
       </div>
+        </>
+      )}
     </div>
   )
 }
