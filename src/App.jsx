@@ -18,9 +18,10 @@ import { getAllEvents, highImpactToday } from './lib/calendar.js'
 import { exchangeCode, refreshTokens, getAccountNumbers, getAccountSummary, getTodaysFilledOrders, countDayTrades, SCHWAB_BLUE } from './lib/schwab.js'
 import { getHistoricalBars } from './lib/massive.js'
 import { bootstrapSetups, saveSetups } from './lib/setupStorage.js'
-import { evaluateAllSetups, derivePutThesesProjection } from './lib/setupEngine.js'
+import { evaluateAllSetups, derivePutThesesProjection, computeStagedTrade } from './lib/setupEngine.js'
 import { buildSnapshot } from './lib/conditionEvaluators.js'
-import { notify, dismiss, subscribe as subscribeNotify, requestNotificationPermission } from './lib/notify.js'
+import { estimatePremium, computeHV30 } from './lib/wheelOptions.js'
+import { notify, dismiss, subscribe as subscribeNotify, requestNotificationPermission, notifyTriggered } from './lib/notify.js'
 import { ORBTab, IVAnalyzerTab, CalculatorTab, StatsTab, WatchlistTab, PrepTab } from './components/tabs.jsx'
 import Journal from './components/Journal.jsx'
 import QuickLog from './components/QuickLog.jsx'
@@ -304,19 +305,22 @@ export default function App() {
       return next
     })
 
-    // Toast + native notification per new trigger.
+    // Toast + native + off-app per new trigger, with the staged trade attached
+    // so Telegram / email recipients get the same plan the in-app card shows.
     for (const tr of newOnes) {
       if (tr.setup?.alerts?.enabled === false) continue
-      notify({
-        id: `setup-${tr.setupId}-${tr.ticker}`,
-        title: `${tr.setup.name}: triggered on ${tr.ticker}`,
-        body: `Price $${(tr.snapshot?.price ?? 0).toFixed(2)} · ${tr.setup.direction?.toUpperCase() || 'SETUP'} · open Setups for the staged trade.`,
-        kind: 'trigger',
+      const hv = computeHV30(tr.snapshot?.histBars || [])
+      const stagedTrade = computeStagedTrade(tr.setup, tr.snapshot?.price, accountValue, hv, estimatePremium)
+      notifyTriggered({
+        setup: tr.setup,
+        ticker: tr.ticker,
+        snapshot: tr.snapshot,
+        stagedTrade,
+        conditionResults: tr.conditionResults,
         action: {
           label: 'Open Setups',
           onClick: () => { setActiveTab('plan'); setPlanSubTab('setups') },
         },
-        ttlMs: 0,
       })
     }
   }, [setupEvaluation])

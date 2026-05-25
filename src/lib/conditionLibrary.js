@@ -91,6 +91,20 @@ export const CONDITIONS = [
     params: [{ name: 'value', type: 'number', label: 'Price', default: 100 }],
   },
   {
+    id: 'price_close_above',
+    label: 'Daily close above',
+    category: 'PRICE',
+    description: 'The most recent daily close is above the value.',
+    params: [{ name: 'value', type: 'number', label: 'Price', default: 100 }],
+  },
+  {
+    id: 'price_close_below',
+    label: 'Daily close below',
+    category: 'PRICE',
+    description: 'The most recent daily close is below the value.',
+    params: [{ name: 'value', type: 'number', label: 'Price', default: 100 }],
+  },
+  {
     id: 'price_within_pct_of',
     label: 'Price within % of value',
     category: 'PRICE',

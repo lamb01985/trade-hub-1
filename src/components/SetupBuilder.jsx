@@ -467,6 +467,43 @@ export default function SetupBuilder({ initial, isNew = false, onSave, onCancel,
             <input type="checkbox" checked={!!setup.alerts.enabled} onChange={e => patchAlerts({ enabled: e.target.checked })} />
             <span style={{ fontSize: 11, color: FG, fontFamily: MONO }}>Fire notifications when triggered</span>
           </label>
+          <div>
+            <label style={labelStyle}>Channels</label>
+            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+              {[
+                { key: 'inApp', label: 'In-app toast' },
+                { key: 'telegram', label: 'Telegram' },
+                { key: 'email', label: 'Email' },
+              ].map(ch => (
+                <label key={ch.key} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={!!setup.alerts?.channels?.[ch.key]}
+                    onChange={e => patchAlerts({ channels: { ...(setup.alerts?.channels || {}), [ch.key]: e.target.checked } })}
+                  />
+                  <span style={{ fontSize: 11, color: FG, fontFamily: MONO }}>{ch.label}</span>
+                </label>
+              ))}
+            </div>
+            <div style={{ fontSize: 9, color: MUTED, fontFamily: MONO, marginTop: 6, lineHeight: 1.5 }}>
+              Telegram + email require env vars set in Vercel: TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID, RESEND_API_KEY + NOTIFICATION_EMAIL.
+            </div>
+          </div>
+          <div>
+            <label style={labelStyle}>Priority</label>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {['normal', 'urgent'].map(p => (
+                <button key={p} onClick={() => patchAlerts({ priority: p })} style={{
+                  background: setup.alerts?.priority === p ? (p === 'urgent' ? RED : LIME) : 'transparent',
+                  color: setup.alerts?.priority === p ? '#000' : '#aaa',
+                  border: `1px solid ${setup.alerts?.priority === p ? (p === 'urgent' ? RED : LIME) : BORDER}`,
+                  padding: '4px 12px', borderRadius: 3, cursor: 'pointer',
+                  fontFamily: MONO, fontSize: 10, letterSpacing: '0.12em',
+                  textTransform: 'uppercase', fontWeight: setup.alerts?.priority === p ? 700 : 500,
+                }}>{p}</button>
+              ))}
+            </div>
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <label style={{ ...labelStyle, marginBottom: 0 }}>Cooldown (minutes)</label>
             <input type="number" value={setup.alerts.cooldownMinutes ?? 60} onChange={e => patchAlerts({ cooldownMinutes: Number(e.target.value) || 0 })} style={{ ...inputStyle, width: 100 }} />

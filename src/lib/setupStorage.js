@@ -62,8 +62,15 @@ export function createSetup(partial = {}) {
       enabled: partial.alerts?.enabled ?? true,
       cooldownMinutes: partial.alerts?.cooldownMinutes ?? 60,
       lastTriggeredAt: partial.alerts?.lastTriggeredAt || {},
+      channels: {
+        inApp: partial.alerts?.channels?.inApp ?? true,
+        telegram: partial.alerts?.channels?.telegram ?? false,
+        email: partial.alerts?.channels?.email ?? false,
+      },
+      priority: partial.alerts?.priority || 'normal',
     },
     triggeredEvents: partial.triggeredEvents || [],
+    backtest: partial.backtest || null,
   }
 }
 

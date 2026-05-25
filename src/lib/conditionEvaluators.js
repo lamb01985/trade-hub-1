@@ -222,6 +222,18 @@ const EVALUATORS = {
     if (s.price == null || value == null) return notReady()
     return { met: s.price < Number(value), currentValue: s.price, label: `$${fmt2(s.price)} ${s.price < value ? '<' : '>='} $${fmt2(value)}` }
   },
+  price_close_above: ({ value }, s) => {
+    const last = s.closes?.length ? s.closes[s.closes.length - 1] : null
+    if (last == null || value == null) return notReady()
+    const met = last > Number(value)
+    return { met, currentValue: last, label: `Close $${fmt2(last)} ${met ? '>' : '<='} $${fmt2(value)}` }
+  },
+  price_close_below: ({ value }, s) => {
+    const last = s.closes?.length ? s.closes[s.closes.length - 1] : null
+    if (last == null || value == null) return notReady()
+    const met = last < Number(value)
+    return { met, currentValue: last, label: `Close $${fmt2(last)} ${met ? '<' : '>='} $${fmt2(value)}` }
+  },
   price_within_pct_of: ({ value, pct = 1 }, s) => {
     if (s.price == null || value == null) return notReady()
     const tol = Math.abs(Number(value)) * (Number(pct) / 100)
