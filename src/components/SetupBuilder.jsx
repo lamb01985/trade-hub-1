@@ -234,13 +234,26 @@ const actionBtn = {
 
 // ── Main builder ──────────────────────────────────────────────────────────
 
+// Activation gate: status='active' requires a backtest with >= 20 triggers
+// and positive EV. The user can override with a checkbox after acknowledging
+// the warning.
+const MIN_BACKTEST_TRIGGERS = 20
+function backtestPasses(bt) {
+  if (!bt) return false
+  if ((bt.triggers || 0) < MIN_BACKTEST_TRIGGERS) return false
+  if ((bt.expectedValue || 0) <= 0) return false
+  return true
+}
+
 export default function SetupBuilder({ initial, isNew = false, onSave, onCancel, suggestionTickers = [] }) {
   const [setup, setSetup] = useState(() => createSetup({ ...(initial || {}) }))
   const [picking, setPicking] = useState(false)
   const [error, setError] = useState('')
+  const [overrideActivation, setOverrideActivation] = useState(false)
 
   useEffect(() => {
     setSetup(createSetup({ ...(initial || {}) }))
+    setOverrideActivation(false)
   }, [initial])
 
   function patch(part) { setSetup(prev => ({ ...prev, ...part })) }
@@ -269,6 +282,10 @@ export default function SetupBuilder({ initial, isNew = false, onSave, onCancel,
     if (!(setup.conditions || []).length) { setError('Add at least one condition.'); return }
     const sz = Number(setup.tradePlan?.sizingValue)
     if (isNaN(sz) || sz < 0.001 || sz > 0.05) { setError('Sizing must be between 0.1% and 5% (0.001-0.05).'); return }
+    if (setup.status === 'active' && !backtestPasses(setup.backtest) && !overrideActivation) {
+      setError(`Cannot promote to active without a passing backtest (>= ${MIN_BACKTEST_TRIGGERS} triggers and positive EV). Run a backtest first, or check "I know what I'm doing" to override.`)
+      return
+    }
     setError('')
     onSave({ ...setup })
   }
@@ -510,6 +527,25 @@ export default function SetupBuilder({ initial, isNew = false, onSave, onCancel,
             <span style={{ fontSize: 10, color: MUTED, fontFamily: MONO }}>Prevents the same ticker from re-firing within this window.</span>
           </div>
         </div>
+
+        {/* Activation gate */}
+        {setup.status === 'active' && !backtestPasses(setup.backtest) && (
+          <div style={{ background: '#150d04', border: `1px solid ${YELLOW}55`, borderRadius: 4, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ fontSize: 10, color: YELLOW, fontFamily: MONO, letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 800 }}>
+              Activation gate
+            </div>
+            <div style={{ fontSize: 11, color: '#c8a030', fontFamily: MONO, lineHeight: 1.5 }}>
+              This setup hasn't passed a backtest yet (need {MIN_BACKTEST_TRIGGERS}+ triggers and positive EV).
+              {setup.backtest
+                ? ` Current: ${setup.backtest.triggers || 0} triggers, EV ${(setup.backtest.expectedValue ?? 0).toFixed(2)}%.`
+                : ' Save as Paused, open the setup, run a backtest, then promote.'}
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              <input type="checkbox" checked={overrideActivation} onChange={e => setOverrideActivation(e.target.checked)} />
+              <span style={{ fontSize: 11, color: FG, fontFamily: MONO }}>I know what I'm doing. Activate anyway.</span>
+            </label>
+          </div>
+        )}
 
         {error && (
           <div style={{ background: '#150505', border: `1px solid ${RED}55`, color: RED, padding: '8px 12px', borderRadius: 4, fontSize: 11, fontFamily: MONO }}>

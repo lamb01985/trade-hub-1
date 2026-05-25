@@ -191,16 +191,20 @@ export function seedExamplesIfEmpty() {
     localStorage.setItem(SEEDED_FLAG, '1')
     return current
   }
+  // All seeds ship with status='paused' so the user reviews and activates them
+  // intentionally. The activation gate in SetupBuilder requires a passing
+  // backtest before promotion (or an explicit override).
   const seeds = [
     createSetup({
-      name: 'Distribution drawdown short',
-      description: 'Names already 15% off their 52W high are now losing the 50-day with VWAP rejection and elevated volume. Edit this setup if you want to swap in P/S or scanner-score conditions when fundamentals are wired.',
+      name: 'Multiple compression short',
+      description: 'High P/S growth name already 15% off the highs, with the breakdown line broken on elevated volume. Edit the price_close_below value to set your breakdown trigger price. ps_ratio_above will report "not ready" until fundamentals are wired into the snapshot.',
       direction: 'short',
+      status: 'paused',
       universe: ['NET', 'CRWD', 'DDOG', 'NOW'],
       conditions: [
+        { id: uid(), type: 'ps_ratio_above', params: { value: 20 } },
         { id: uid(), type: 'down_from_high_pct', params: { pct: 15 } },
-        { id: uid(), type: 'price_below_ema', params: { period: 50 } },
-        { id: uid(), type: 'price_below_vwap', params: {} },
+        { id: uid(), type: 'price_close_below', params: { value: 0 } },   // user edits to set the breakdown line
         { id: uid(), type: 'volume_above_avg', params: { multiple: 1.5 } },
       ],
       operator: 'all',
@@ -208,8 +212,9 @@ export function seedExamplesIfEmpty() {
     }),
     createSetup({
       name: 'EMAs stacked + RSI pullback long',
-      description: 'Trend-following long on quality names: established uptrend with a short-term RSI dip.',
+      description: 'Trend-following long on quality names: established uptrend (9>21>50>200) with a short-term RSI dip below 35.',
       direction: 'long',
+      status: 'paused',
       universe: ['AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL'],
       conditions: [
         { id: uid(), type: 'emas_stacked_bullish', params: {} },
@@ -221,21 +226,23 @@ export function seedExamplesIfEmpty() {
     }),
     createSetup({
       name: 'Failed breakout fade short',
-      description: 'Recent breakout failed and price has lost VWAP on heavy volume. Fade the trapped buyers.',
+      description: 'Recent breakout failed and price has lost VWAP on heavier volume. Fade the trapped buyers.',
       direction: 'short',
+      status: 'paused',
       universe: ['SPY', 'QQQ', 'IWM'],
       conditions: [
-        { id: uid(), type: 'failed_breakout', params: { days: 20 } },
+        { id: uid(), type: 'failed_breakout', params: { days: 5 } },
         { id: uid(), type: 'price_below_vwap', params: {} },
         { id: uid(), type: 'volume_above_avg', params: { multiple: 1.5 } },
       ],
       operator: 'all',
-      tradePlan: { instrumentType: 'option', optionType: 'put', strikeOffset: -0.05, dte: 21, sizingValue: 0.015, targetExitPct: 75, stopExitPct: 50, stopExitPrice: null, timeExitDte: 7 },
+      tradePlan: { instrumentType: 'option', optionType: 'put', strikeOffset: -0.05, dte: 21, sizingValue: 0.01, targetExitPct: 75, stopExitPct: 60, stopExitPrice: null, timeExitDte: 7 },
     }),
     createSetup({
       name: 'Oversold bounce at S1',
       description: 'Mean-reversion long: price tagged the S1 pivot while RSI is oversold and volume is elevated.',
       direction: 'long',
+      status: 'paused',
       universe: ['QQQ', 'SPY', 'TQQQ'],
       conditions: [
         { id: uid(), type: 'price_at_pivot', params: { pivot: 's1', pct: 0.5 } },
@@ -243,7 +250,7 @@ export function seedExamplesIfEmpty() {
         { id: uid(), type: 'volume_above_avg', params: { multiple: 1.2 } },
       ],
       operator: 'all',
-      tradePlan: { instrumentType: 'option', optionType: 'call', strikeOffset: 0.02, dte: 14, sizingValue: 0.015, targetExitPct: 75, stopExitPct: 50, stopExitPrice: null, timeExitDte: 5 },
+      tradePlan: { instrumentType: 'option', optionType: 'call', strikeOffset: 0.02, dte: 14, sizingValue: 0.01, targetExitPct: 50, stopExitPct: 50, stopExitPrice: null, timeExitDte: 5 },
     }),
   ]
   saveSetups(seeds)
