@@ -14,6 +14,8 @@ import Setups from './components/Setups.jsx'
 import MoversScanner from './components/MoversScanner.jsx'
 import UniverseBuilder from './components/UniverseBuilder.jsx'
 import OutcomesAnalyzer from './components/OutcomesAnalyzer.jsx'
+import Focus from './components/Focus.jsx'
+import { loadFocusedTickers, saveFocusedTickers, bootstrapFocusedTickers } from './lib/focusedTickersStorage.js'
 import WheelScanner from './components/WheelScanner.jsx'
 import Bot from './components/Bot.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
@@ -23,7 +25,7 @@ import { getHistoricalBars } from './lib/massive.js'
 import { bootstrapSetups, saveSetups } from './lib/setupStorage.js'
 import { evaluateAllSetups, derivePutThesesProjection, computeStagedTrade } from './lib/setupEngine.js'
 import { buildSnapshot } from './lib/conditionEvaluators.js'
-import { resolveUniverseTickers } from './lib/universeResolver.js'
+import { resolveUniverseTickers, universeAppendTickers } from './lib/universeResolver.js'
 import { estimatePremium, computeHV30 } from './lib/wheelOptions.js'
 import { notify, dismiss, subscribe as subscribeNotify, requestNotificationPermission, notifyTriggered } from './lib/notify.js'
 import { ORBTab, IVAnalyzerTab, CalculatorTab, StatsTab, WatchlistTab, PrepTab } from './components/tabs.jsx'
@@ -138,6 +140,17 @@ export default function App() {
   // by Clone-with-universe from template suggestions. When non-null, Setups
   // auto-opens SetupBuilder with the seed and clears it on consume.
   const [pendingSetupSeed, setPendingSetupSeed] = useState(null)
+  // Focused tickers (per-ticker dashboards under Plan / Focus). Initialized
+  // straight from localStorage on first render; the seed bootstrap runs in
+  // a dedicated effect below once setups are loaded.
+  const [focusedTickers, setFocusedTickersRaw] = useState(() => (typeof window === 'undefined' ? [] : loadFocusedTickers()))
+  const setFocusedTickers = (nextOrFn) => {
+    setFocusedTickersRaw(prev => {
+      const next = typeof nextOrFn === 'function' ? nextOrFn(prev) : nextOrFn
+      saveFocusedTickers(next)
+      return next
+    })
+  }
   const [_priceTick, setPriceTick] = useState(0)
   useEffect(() => { const id = setInterval(() => setPriceTick(t => t + 1), 5000); return () => clearInterval(id) }, [])
 
@@ -244,8 +257,8 @@ export default function App() {
   const wheelDataMulti = useLiveDataMulti(apiKey, wheelWatchlist)
 
   // Setup engine: live-subscribe to the union of every active setup's
-  // universe. Uses resolveUniverseTickers so saved-universe refs flatten
-  // to ticker lists.
+  // universe PLUS the symbols of every focused ticker so the Focus tab
+  // always has live data for the dashboards.
   const setupTickers = useMemo(() => {
     const seen = new Set()
     const out = []
@@ -257,8 +270,14 @@ export default function App() {
         out.push(T)
       }
     }
+    for (const f of focusedTickers || []) {
+      const T = String(f.ticker || '').toUpperCase()
+      if (!T || seen.has(T)) continue
+      seen.add(T)
+      out.push(T)
+    }
     return out
-  }, [setups, savedUniverses])
+  }, [setups, savedUniverses, focusedTickers])
   const setupDataMulti = useLiveDataMulti(apiKey, setupTickers)
 
   // 252-day daily bars per setup ticker, used by buildSnapshot for EMAs, RSI,
@@ -370,6 +389,24 @@ export default function App() {
   // Best-effort: ask for native notification permission once. Browsers silence
   // re-prompts after a denial; this is a one-time best-attempt on mount.
   useEffect(() => { requestNotificationPermission() }, [])
+
+  // Focused-tickers seed bootstrap. Runs once. If the seeded flag is unset
+  // and the focused-tickers store is empty, adds CRWD + ELF and auto-attaches
+  // each to compatible-direction active setups.
+  useEffect(() => {
+    const { focusedTickers: seeded, setupsPatch } = bootstrapFocusedTickers(setups)
+    if (seeded?.length && seeded.length !== focusedTickers.length) {
+      setFocusedTickers(seeded)
+    }
+    if (setupsPatch?.length) {
+      setSetups(prev => prev.map(s => {
+        const adds = setupsPatch.filter(p => p.setupId === s.id).map(p => p.addTicker)
+        if (adds.length === 0) return s
+        return { ...s, universe: universeAppendTickers(s.universe, adds, savedUniverses || []), updatedAt: new Date().toISOString() }
+      }))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Derived projection feeding Chart / Levels / Calendar via the legacy
   // putTheses-shape API. Kept so those components don't have to be rewritten.
@@ -646,6 +683,7 @@ export default function App() {
             <SubNav
               tabs={[
                 { id: 'watchlist', label: 'Watchlist' },
+                { id: 'focus', label: 'Focus' },
                 { id: 'wheel', label: 'Wheel' },
                 { id: 'prep', label: 'Prep' },
                 { id: 'playbook', label: 'Playbook' },
@@ -667,6 +705,22 @@ export default function App() {
                 onSendToPrep={entry => { setPrep(p => ({ ...p, ticker: entry.ticker, orbHigh: entry.priorHigh || '', orbLow: entry.priorLow || '', plannedStrike: entry.plannedStrike || '', plannedDTE: entry.plannedDTE || '', ivNote: entry.ivNote || '' })); setPlanSubTab('prep') }}
                 onLoadSavedPrep={saved => { const { dateSaved, ...data } = saved; setPrep(p => ({ ...p, ...data })); setPlanSubTab('prep') }}
               />
+            </div>
+
+            <div style={{ display: planSubTab === 'focus' ? 'block' : 'none' }}>
+              <ErrorBoundary label="Focus">
+                <Focus
+                  focusedTickers={focusedTickers}
+                  onFocusedTickersChange={setFocusedTickers}
+                  setups={setups}
+                  onSetupsChange={setSetups}
+                  liveDataMulti={setupDataMulti?.data || {}}
+                  setupHistMap={setupHistRef.current}
+                  savedUniverses={savedUniverses}
+                  accountValue={accountValue}
+                  apiKey={apiKey}
+                />
+              </ErrorBoundary>
             </div>
 
             <div style={{ display: planSubTab === 'wheel' ? 'block' : 'none' }}>

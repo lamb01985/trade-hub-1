@@ -13,6 +13,30 @@
 import { evaluateAll } from './conditionEvaluators.js'
 import { resolveUniverseTickers } from './universeResolver.js'
 
+// Public helper used by FocusedTickerCard to render per-setup condition
+// state for a specific ticker. Returns the raw condition results plus the
+// derived statuses + percentMet so the UI can show progress bars and
+// "approaching" indicators without re-implementing the classifier.
+//
+// snapshot is the buildSnapshot-shape object the caller produces from the
+// ticker's bundle + 252-day daily bars.
+export function evaluateSetupForTicker(setup, ticker, snapshot) {
+  if (!setup || !setup.conditions?.length || !snapshot) {
+    return { conditionResults: [], allMet: false, anyMet: false, percentMet: 0, status: 'monitoring' }
+  }
+  const conditionResults = evaluateAll(setup.conditions, snapshot)
+  const total = conditionResults.length
+  const metCount = conditionResults.filter(r => r.met).length
+  const allMet = total > 0 && metCount === total
+  const anyMet = metCount > 0
+  const percentMet = total > 0 ? metCount / total : 0
+  const op = setup.operator || 'all'
+  let status = 'monitoring'
+  if ((op === 'all' && allMet) || (op === 'any' && anyMet)) status = 'triggered'
+  else if (percentMet > 0.5) status = 'approaching'
+  return { conditionResults, allMet, anyMet, percentMet, status, metCount, total }
+}
+
 // Determine the status for a single ticker given its condition results and
 // the setup's operator. Triggered when all-met (operator=all) or any-met
 // (operator=any). Approaching when half or more conditions are met but not
