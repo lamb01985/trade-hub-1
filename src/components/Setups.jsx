@@ -16,6 +16,7 @@ import { LIME, RED, YELLOW, MONO, BORDER, PANEL, DARK } from '../constants.js'
 import { createSetup } from '../lib/setupStorage.js'
 import SetupCard from './SetupCard.jsx'
 import SetupBuilder from './SetupBuilder.jsx'
+import SetupTemplatesLibrary from './SetupTemplatesLibrary.jsx'
 
 const FG = '#e8e8e8'
 const MUTED = '#666'
@@ -44,6 +45,8 @@ export default function Setups({
   const [filter, setFilter] = useState('all')
   const [sort, setSort] = useState('recent')
   const [editing, setEditing] = useState(null) // { setup, isNew }
+  const [chooserOpen, setChooserOpen] = useState(false)
+  const [templatesOpen, setTemplatesOpen] = useState(false)
   // Shared bar cache across backtest runs.
   const backtestCacheRef = useRef({})
 
@@ -67,7 +70,19 @@ export default function Setups({
     setEditing(null)
   }
   function handleNew() {
+    setChooserOpen(true)
+  }
+  function handleFromScratch() {
+    setChooserOpen(false)
     setEditing({ setup: createSetup({ name: '', universe: [], conditions: [], status: 'paused' }), isNew: true })
+  }
+  function handleFromTemplate() {
+    setChooserOpen(false)
+    setTemplatesOpen(true)
+  }
+  function handleTemplateClone(partial) {
+    setTemplatesOpen(false)
+    setEditing({ setup: createSetup({ ...partial }), isNew: true })
   }
   function handleEdit(setup) {
     setEditing({ setup, isNew: false })
@@ -207,6 +222,63 @@ export default function Setups({
           suggestionTickers={suggestionTickers}
         />
       )}
+
+      {chooserOpen && (
+        <NewSetupChooser
+          onPickTemplate={handleFromTemplate}
+          onPickScratch={handleFromScratch}
+          onCancel={() => setChooserOpen(false)}
+        />
+      )}
+
+      {templatesOpen && (
+        <SetupTemplatesLibrary
+          apiKey={apiKey}
+          onClone={handleTemplateClone}
+          onCancel={() => setTemplatesOpen(false)}
+        />
+      )}
     </div>
   )
 }
+
+function NewSetupChooser({ onPickTemplate, onPickScratch, onCancel }) {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 28, zIndex: 230,
+    }}>
+      <div style={{
+        background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 6,
+        width: '100%', maxWidth: 520, padding: 22, display: 'flex',
+        flexDirection: 'column', gap: 14, fontFamily: MONO,
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: 10, color: MUTED, letterSpacing: '0.16em', textTransform: 'uppercase' }}>New setup</div>
+            <div style={{ fontSize: 16, color: FG, fontWeight: 800 }}>How do you want to start?</div>
+          </div>
+          <button onClick={onCancel} style={{ background: 'transparent', border: 'none', color: '#aaa', fontSize: 16, cursor: 'pointer' }}>✕</button>
+        </div>
+        <button onClick={onPickTemplate} style={{
+          background: '#0c1408', border: `1px solid ${LIME}55`, borderRadius: 5,
+          padding: 14, textAlign: 'left', cursor: 'pointer', fontFamily: MONO, color: FG,
+          display: 'flex', flexDirection: 'column', gap: 4,
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: LIME, letterSpacing: '0.04em' }}>Start from a template →</div>
+          <div style={{ fontSize: 11, color: '#aaa', lineHeight: 1.5 }}>15 documented setups across long swing, short swing, income, and intraday. Backtest before cloning.</div>
+        </button>
+        <button onClick={onPickScratch} style={{
+          background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: 5,
+          padding: 14, textAlign: 'left', cursor: 'pointer', fontFamily: MONO, color: FG,
+          display: 'flex', flexDirection: 'column', gap: 4,
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 800 }}>Build from scratch →</div>
+          <div style={{ fontSize: 11, color: '#aaa', lineHeight: 1.5 }}>Empty SetupBuilder. Pick your own universe, conditions, and trade plan.</div>
+        </button>
+      </div>
+    </div>
+  )
+}
+
