@@ -12,12 +12,13 @@
 //   - Pause / archive / duplicate / delete from the action menu
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { LIME, RED, YELLOW, BLUE, MONO, BORDER, PANEL, DARK, f2 } from '../constants.js'
 import { CONDITIONS_BY_ID } from '../lib/conditionLibrary.js'
 import { createSetup } from '../lib/setupStorage.js'
 import { computeStagedTrade } from '../lib/setupEngine.js'
 import { estimatePremium, computeHV30 } from '../lib/wheelOptions.js'
+import { backtestSetup } from '../lib/setupBacktest.js'
 import SetupBuilder from './SetupBuilder.jsx'
 
 const FG = '#e8e8e8'
@@ -127,7 +128,85 @@ function StagedTradeBanner({ trigger, setup, accountValue }) {
   )
 }
 
-function SetupCard({ setup, evaluation, accountValue, onEdit, onDuplicate, onPause, onArchive, onDelete }) {
+function BacktestBlock({ setup, apiKey, backtestCache, onResult }) {
+  const [running, setRunning] = useState(false)
+  const [progress, setProgress] = useState({ pct: 0, ticker: null, stage: 'idle' })
+  const [error, setError] = useState(null)
+  async function run() {
+    if (!apiKey) { setError('Add a Massive API key in Command first.'); return }
+    setRunning(true); setError(null); setProgress({ pct: 0, ticker: null, stage: 'starting' })
+    try {
+      const result = await backtestSetup(setup, apiKey, {
+        barsCache: backtestCache,
+        onProgress: (p) => setProgress({ pct: p.progressPct, ticker: p.ticker, stage: p.stage }),
+      })
+      if (result?.error) { setError(result.error); setRunning(false); return }
+      onResult(result)
+      setProgress({ pct: 100, ticker: null, stage: 'done' })
+    } catch (e) {
+      setError(e?.message || 'Backtest failed')
+    }
+    setRunning(false)
+  }
+  const bt = setup.backtest
+  return (
+    <div style={{ background: DARK, border: `1px solid ${BORDER}`, borderRadius: 4, padding: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ fontSize: 10, color: MUTED, fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Backtest</div>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          {running && (
+            <span style={{ fontSize: 10, color: '#aaa', fontFamily: MONO }}>
+              {progress.stage} {progress.ticker || ''} ({progress.pct}%)
+            </span>
+          )}
+          <button onClick={run} disabled={running || !apiKey} title={!apiKey ? 'Add Massive API key in Command' : ''} style={{
+            background: running || !apiKey ? '#1a1a1a' : LIME,
+            color: running || !apiKey ? '#666' : '#000', border: 'none',
+            padding: '6px 12px', borderRadius: 3, fontFamily: MONO, fontSize: 10,
+            cursor: running || !apiKey ? 'not-allowed' : 'pointer', fontWeight: 700,
+            letterSpacing: '0.12em', textTransform: 'uppercase',
+          }}>{running ? 'Running...' : bt ? 'Re-run backtest' : 'Run backtest'}</button>
+        </div>
+      </div>
+      {running && (
+        <div style={{ marginTop: 8, height: 3, background: '#1a1a1a', borderRadius: 2, overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: `${progress.pct}%`, background: LIME, transition: 'width 0.3s ease' }} />
+        </div>
+      )}
+      {error && (
+        <div style={{ marginTop: 8, fontSize: 10, color: RED, fontFamily: MONO }}>{error}</div>
+      )}
+      {bt && !running && (
+        <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8 }}>
+          <BtStat label="Triggers" value={bt.triggers} />
+          <BtStat label="Win rate" value={`${(bt.winRate * 100).toFixed(0)}%`} color={bt.winRate >= 0.5 ? LIME : YELLOW} />
+          <BtStat label="Avg win" value={`+${(bt.avgWin || 0).toFixed(1)}%`} color={LIME} />
+          <BtStat label="Avg loss" value={`${(bt.avgLoss || 0).toFixed(1)}%`} color={RED} />
+          <BtStat label="EV / trade" value={`${(bt.expectedValue || 0) >= 0 ? '+' : ''}${(bt.expectedValue || 0).toFixed(2)}%`} color={(bt.expectedValue || 0) >= 0 ? LIME : RED} />
+          <BtStat label="Max DD" value={`${(bt.maxDrawdown || 0).toFixed(1)}%`} color={YELLOW} />
+          <BtStat label="Sharpe" value={(bt.sharpe || 0).toFixed(2)} color={(bt.sharpe || 0) >= 1 ? LIME : '#aaa'} />
+          <BtStat label="Last run" value={bt.lastRunAt ? new Date(bt.lastRunAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'} color="#aaa" />
+        </div>
+      )}
+      {!bt && !running && (
+        <div style={{ marginTop: 8, fontSize: 10, color: MUTED, fontFamily: MONO, lineHeight: 1.5 }}>
+          Walk-forward simulation against 252 days of daily bars with HV-based Black-Scholes option pricing. Daily-bar approximation; intraday signals (VWAP, true gap) are estimated.
+        </div>
+      )}
+    </div>
+  )
+}
+
+function BtStat({ label, value, color = '#e8e8e8' }) {
+  return (
+    <div style={{ padding: 7, background: '#0a0a0a', borderRadius: 3 }}>
+      <div style={{ fontSize: 9, color: MUTED, fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
+      <div style={{ fontSize: 12, color, fontFamily: MONO, fontWeight: 700 }}>{value}</div>
+    </div>
+  )
+}
+
+function SetupCard({ setup, evaluation, accountValue, apiKey, backtestCache, onBacktestResult, onEdit, onDuplicate, onPause, onArchive, onDelete }) {
   const [expanded, setExpanded] = useState(false)
   const badge = statusBadgeFor(setup, evaluation)
   const r = evaluation?.bySetup?.[setup.id]
@@ -222,6 +301,14 @@ function SetupCard({ setup, evaluation, accountValue, onEdit, onDuplicate, onPau
             </div>
           )}
 
+          {/* Backtest */}
+          <BacktestBlock
+            setup={setup}
+            apiKey={apiKey}
+            backtestCache={backtestCache}
+            onResult={(result) => onBacktestResult(setup.id, result)}
+          />
+
           {/* Trade plan */}
           <div style={{ fontSize: 10, color: MUTED, fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Trade plan</div>
           <div style={{ background: DARK, border: `1px solid ${BORDER}`, borderRadius: 4, padding: 10, fontSize: 11, fontFamily: MONO, color: '#aaa', lineHeight: 1.7 }}>
@@ -273,11 +360,21 @@ export default function Setups({
   onSetupsChange = null,
   evaluation = null,
   accountValue = 25000,
+  apiKey = '',
   suggestionTickers = [],
 }) {
   const [filter, setFilter] = useState('all')
   const [sort, setSort] = useState('recent')
   const [editing, setEditing] = useState(null) // { setup, isNew }
+  // Shared bar cache across backtest runs so re-running setup B doesn't
+  // re-fetch tickers that setup A already pulled.
+  const backtestCacheRef = useRef({})
+  function handleBacktestResult(setupId, result) {
+    if (!onSetupsChange) return
+    onSetupsChange(prev => prev.map(s => s.id === setupId
+      ? { ...s, backtest: result, updatedAt: new Date().toISOString() }
+      : s))
+  }
 
   function updateSetup(updated) {
     if (!onSetupsChange) return
@@ -410,6 +507,9 @@ export default function Setups({
             setup={setup}
             evaluation={evaluation}
             accountValue={accountValue}
+            apiKey={apiKey}
+            backtestCache={backtestCacheRef.current}
+            onBacktestResult={handleBacktestResult}
             onEdit={handleEdit}
             onDuplicate={handleDuplicate}
             onPause={handlePause}

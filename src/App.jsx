@@ -686,6 +686,7 @@ export default function App() {
                   onSetupsChange={setSetups}
                   evaluation={setupEvaluation}
                   accountValue={accountValue}
+                  apiKey={apiKey}
                   suggestionTickers={[...new Set([...botWatchlist, ...wheelWatchlist, ...setupTickers])]}
                 />
               </ErrorBoundary>
