@@ -11,6 +11,7 @@ import InlineCheckGate from './components/InlineCheckGate.jsx'
 import CalendarTab from './components/Calendar.jsx'
 import Playbook from './components/Playbook.jsx'
 import Setups from './components/Setups.jsx'
+import MoversScanner from './components/MoversScanner.jsx'
 import WheelScanner from './components/WheelScanner.jsx'
 import Bot from './components/Bot.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
@@ -609,6 +610,7 @@ export default function App() {
                 { id: 'playbook', label: 'Playbook' },
                 { id: 'calendar', label: 'Calendar' },
                 { id: 'levels', label: 'Levels' },
+                { id: 'movers', label: 'Movers' },
                 { id: 'setups', label: 'Setups' },
               ]}
               active={planSubTab}
@@ -675,6 +677,16 @@ export default function App() {
                   onSettingsChange={setSettings}
                   mtfAlignment={mtfAlignment}
                   putThesis={derivedPutTheses[(prep.ticker || 'QQQ').toUpperCase()]}
+                />
+              </ErrorBoundary>
+            </div>
+
+            <div style={{ display: planSubTab === 'movers' ? 'block' : 'none' }}>
+              <ErrorBoundary label="Movers">
+                <MoversScanner
+                  apiKey={apiKey}
+                  setups={setups}
+                  onSetupsChange={setSetups}
                 />
               </ErrorBoundary>
             </div>
