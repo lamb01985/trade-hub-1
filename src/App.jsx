@@ -23,6 +23,7 @@ import { getHistoricalBars } from './lib/massive.js'
 import { bootstrapSetups, saveSetups } from './lib/setupStorage.js'
 import { evaluateAllSetups, derivePutThesesProjection, computeStagedTrade } from './lib/setupEngine.js'
 import { buildSnapshot } from './lib/conditionEvaluators.js'
+import { resolveUniverseTickers } from './lib/universeResolver.js'
 import { estimatePremium, computeHV30 } from './lib/wheelOptions.js'
 import { notify, dismiss, subscribe as subscribeNotify, requestNotificationPermission, notifyTriggered } from './lib/notify.js'
 import { ORBTab, IVAnalyzerTab, CalculatorTab, StatsTab, WatchlistTab, PrepTab } from './components/tabs.jsx'
@@ -44,6 +45,34 @@ function defaultTabForSession() {
   if (s === 'pre-market') return 'plan'
   if (s === 'open' || s === 'chop' || s === 'power-hour') return 'trade'
   return 'review'
+}
+
+// Read the legacy 'tradeHub.universes.v1' map (Phase 2 shape) if present,
+// convert to the array shape Phase 2+ expects under 'th-universes-v1', and
+// write the result so subsequent reads find the new key populated. Returns
+// the array used as the useLocalStorage default.
+function migrateSavedUniverses() {
+  if (typeof window === 'undefined') return []
+  try {
+    const newRaw = localStorage.getItem('th-universes-v1')
+    if (newRaw) return JSON.parse(newRaw) || []
+    const oldRaw = localStorage.getItem('tradeHub.universes.v1')
+    if (!oldRaw) return []
+    const old = JSON.parse(oldRaw)
+    if (!old || typeof old !== 'object') return []
+    const arr = Object.values(old).map(u => ({
+      id: u.id || `u_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+      name: u.name || 'Migrated universe',
+      tickers: u.tickers || [],
+      filterDefinition: u.filters || u.filterDefinition || {},
+      createdAt: u.savedAt || u.createdAt || Date.now(),
+      lastUsedAt: u.lastUsedAt || u.savedAt || u.createdAt || Date.now(),
+    }))
+    localStorage.setItem('th-universes-v1', JSON.stringify(arr))
+    return arr
+  } catch {
+    return []
+  }
 }
 
 const defaultSettings = { dailyLossLimit: 500, maxTradesPerDay: 5, orPeriod: '15', alertsEnabled: false }
@@ -101,8 +130,14 @@ export default function App() {
   // the same value the WheelScanner uses; not yet user-editable from App.
   const accountValue = 25000
   // Saved screener universes from UniverseBuilder. Referenced by SetupBuilder
-  // to populate a setup's universe field from a saved filter set.
-  const [savedUniverses, setSavedUniverses] = useLocalStorage('tradeHub.universes.v1', {})
+  // and by setup.universe = { type: 'saved', universeId } refs. Stored as an
+  // array under 'th-universes-v1'; one-time migrates the old map shape under
+  // 'tradeHub.universes.v1'.
+  const [savedUniverses, setSavedUniverses] = useLocalStorage('th-universes-v1', migrateSavedUniverses())
+  // Pending setup seed used by the CREATE-SETUP flow from UniverseBuilder and
+  // by Clone-with-universe from template suggestions. When non-null, Setups
+  // auto-opens SetupBuilder with the seed and clears it on consume.
+  const [pendingSetupSeed, setPendingSetupSeed] = useState(null)
   const [_priceTick, setPriceTick] = useState(0)
   useEffect(() => { const id = setInterval(() => setPriceTick(t => t + 1), 5000); return () => clearInterval(id) }, [])
 
@@ -208,21 +243,22 @@ export default function App() {
   // Multi-ticker bundle for the wheel scanner's watchlist (separate from bot).
   const wheelDataMulti = useLiveDataMulti(apiKey, wheelWatchlist)
 
-  // Setup engine: live-subscribe to the union of every active setup's universe.
+  // Setup engine: live-subscribe to the union of every active setup's
+  // universe. Uses resolveUniverseTickers so saved-universe refs flatten
+  // to ticker lists.
   const setupTickers = useMemo(() => {
     const seen = new Set()
     const out = []
     for (const s of setups || []) {
       if ((s.status || 'active') !== 'active') continue
-      for (const t of s.universe || []) {
-        const T = String(t || '').toUpperCase().trim()
+      for (const T of resolveUniverseTickers(s.universe, savedUniverses)) {
         if (!T || seen.has(T)) continue
         seen.add(T)
         out.push(T)
       }
     }
     return out
-  }, [setups])
+  }, [setups, savedUniverses])
   const setupDataMulti = useLiveDataMulti(apiKey, setupTickers)
 
   // 252-day daily bars per setup ticker, used by buildSnapshot for EMAs, RSI,
@@ -270,8 +306,8 @@ export default function App() {
   }, [setupDataMulti, setupTickersKey, histVersion])
 
   const setupEvaluation = useMemo(
-    () => evaluateAllSetups(setups, setupSnapshots),
-    [setups, setupSnapshots]
+    () => evaluateAllSetups(setups, setupSnapshots, { savedUniverses }),
+    [setups, setupSnapshots, savedUniverses]
   )
 
   // Trigger-transition detection. The first evaluation after mount establishes
@@ -337,7 +373,7 @@ export default function App() {
 
   // Derived projection feeding Chart / Levels / Calendar via the legacy
   // putTheses-shape API. Kept so those components don't have to be rewritten.
-  const derivedPutTheses = useMemo(() => derivePutThesesProjection(setups), [setups])
+  const derivedPutTheses = useMemo(() => derivePutThesesProjection(setups, savedUniverses), [setups, savedUniverses])
 
   // Merge pre-market H/L into custom levels so they show in the level map
   const enrichedCustomLevels = useMemo(() => {
@@ -693,6 +729,7 @@ export default function App() {
                   apiKey={apiKey}
                   setups={setups}
                   onSetupsChange={setSetups}
+                  savedUniverses={savedUniverses}
                 />
               </ErrorBoundary>
             </div>
@@ -703,6 +740,14 @@ export default function App() {
                   apiKey={apiKey}
                   savedUniverses={savedUniverses}
                   onSavedUniversesChange={setSavedUniverses}
+                  onCreateSetupFromTickers={(tickers) => {
+                    setPendingSetupSeed({ universe: { type: 'list', tickers } })
+                    setActiveTab('plan'); setPlanSubTab('setups')
+                  }}
+                  onCloneTemplateWithTickers={(templatePartial, tickers) => {
+                    setPendingSetupSeed({ ...templatePartial, universe: { type: 'list', tickers } })
+                    setActiveTab('plan'); setPlanSubTab('setups')
+                  }}
                 />
               </ErrorBoundary>
             </div>
@@ -717,6 +762,8 @@ export default function App() {
                   apiKey={apiKey}
                   savedUniverses={savedUniverses}
                   suggestionTickers={[...new Set([...botWatchlist, ...wheelWatchlist, ...setupTickers])]}
+                  pendingSeed={pendingSetupSeed}
+                  onConsumeSeed={() => setPendingSetupSeed(null)}
                 />
               </ErrorBoundary>
             </div>

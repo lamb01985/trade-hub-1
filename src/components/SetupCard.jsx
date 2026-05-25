@@ -13,6 +13,7 @@ import { useMemo, useState } from 'react'
 import { LIME, RED, YELLOW, BLUE, MONO, BORDER, PANEL, DARK, f2 } from '../constants.js'
 import { CONDITIONS_BY_ID } from '../lib/conditionLibrary.js'
 import { computeStagedTrade } from '../lib/setupEngine.js'
+import { resolveUniverseTickers } from '../lib/universeResolver.js'
 import { estimatePremium, computeHV30 } from '../lib/wheelOptions.js'
 import { backtestSetup } from '../lib/setupBacktest.js'
 import BacktestResults from './BacktestResults.jsx'
@@ -186,6 +187,7 @@ export default function SetupCard({
   accountValue,
   apiKey,
   backtestCache,
+  savedUniverses = [],
   onBacktestResult,
   onEdit,
   onDuplicate,
@@ -201,7 +203,7 @@ export default function SetupCard({
   const monitoring = r?.monitoring || []
   const missing = r?.missing || []
   const conditionCount = setup.conditions?.length || 0
-  const universeCount = setup.universe?.length || 0
+  const universeCount = resolveUniverseTickers(setup.universe, savedUniverses).length
   const lastTrig = Object.entries(setup.alerts?.lastTriggeredAt || {}).sort((a, b) => b[1] - a[1])[0]
   const lastSummary = lastTrig ? `Last triggered: ${lastTrig[0]} ${fmtAgo(lastTrig[1])}` : null
 

@@ -11,6 +11,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { evaluateAll } from './conditionEvaluators.js'
+import { resolveUniverseTickers } from './universeResolver.js'
 
 // Determine the status for a single ticker given its condition results and
 // the setup's operator. Triggered when all-met (operator=all) or any-met
@@ -30,11 +31,10 @@ function classify(operator, results) {
 // Filter the universe down to tickers that actually have a snapshot. Tickers
 // missing data are reported separately so the UI can show "no data" rather
 // than silently dropping them.
-function partitionUniverse(universe, snapshotsByTicker) {
+function partitionUniverse(tickerList, snapshotsByTicker) {
   const ready = []
   const missing = []
-  for (const t of universe || []) {
-    const T = String(t || '').toUpperCase()
+  for (const T of tickerList || []) {
     if (!T) continue
     if (snapshotsByTicker[T]) ready.push(T)
     else missing.push(T)
@@ -56,7 +56,9 @@ export function evaluateSetup(setup, snapshotsByTicker, opts = {}) {
   if (!setup || !setup.conditions?.length) {
     return { triggered: [], approaching: [], monitoring: [], missing: [] }
   }
-  const { ready, missing } = partitionUniverse(setup.universe, snapshotsByTicker)
+  const savedUniverses = opts.savedUniverses || []
+  const universeTickers = resolveUniverseTickers(setup.universe, savedUniverses)
+  const { ready, missing } = partitionUniverse(universeTickers, snapshotsByTicker)
   const operator = setup.operator || 'all'
 
   const triggered = []
@@ -87,7 +89,7 @@ export function evaluateSetup(setup, snapshotsByTicker, opts = {}) {
 // Caller uses triggers to fire notifications + stage trade plans, and
 // tickerStatus for header pills / per-ticker badges.
 
-export function evaluateAllSetups(setups, snapshotsByTicker) {
+export function evaluateAllSetups(setups, snapshotsByTicker, opts = {}) {
   const bySetup = {}
   const triggers = []
   const tickerStatus = {}
@@ -100,7 +102,7 @@ export function evaluateAllSetups(setups, snapshotsByTicker) {
   }
   for (const setup of setups || []) {
     if (setup.status && setup.status !== 'active') continue
-    const r = evaluateSetup(setup, snapshotsByTicker)
+    const r = evaluateSetup(setup, snapshotsByTicker, opts)
     bySetup[setup.id] = r
     for (const t of r.triggered) {
       triggers.push({ setupId: setup.id, setup, ticker: t.ticker, snapshot: t.snapshot, conditionResults: t.conditionResults })
@@ -202,11 +204,12 @@ export function computeStagedTrade(setup, currentPrice, accountValue, hv = null,
 // price_above condition project a "PUT TRIGGER"-style notification too,
 // for the long case (Chart and Levels treat trigger as a horizontal level
 // without direction).
-export function derivePutThesesProjection(setups) {
+export function derivePutThesesProjection(setups, savedUniverses = []) {
   const out = {}
   for (const setup of setups || []) {
     if (setup.status && setup.status !== 'active') continue
-    for (const ticker of setup.universe || []) {
+    const tickers = resolveUniverseTickers(setup.universe, savedUniverses)
+    for (const ticker of tickers) {
       const T = String(ticker || '').toUpperCase()
       if (!T) continue
       for (const cond of setup.conditions || []) {

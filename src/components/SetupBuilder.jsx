@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { LIME, RED, YELLOW, BLUE, MONO, BORDER, PANEL, DARK, f2 } from '../constants.js'
 import { CATEGORIES, CONDITIONS, CONDITIONS_BY_ID, conditionsByCategory, defaultParamsFor } from '../lib/conditionLibrary.js'
 import { createSetup } from '../lib/setupStorage.js'
+import { resolveUniverseTickers, universeIsSaved, normalizeUniverse } from '../lib/universeResolver.js'
 
 const FG = '#e8e8e8'
 const DIM = '#888'
@@ -245,7 +246,7 @@ function backtestPasses(bt) {
   return true
 }
 
-export default function SetupBuilder({ initial, isNew = false, onSave, onCancel, suggestionTickers = [], savedUniverses = {} }) {
+export default function SetupBuilder({ initial, isNew = false, onSave, onCancel, suggestionTickers = [], savedUniverses = [] }) {
   const [setup, setSetup] = useState(() => createSetup({ ...(initial || {}) }))
   const [picking, setPicking] = useState(false)
   const [error, setError] = useState('')
@@ -278,7 +279,12 @@ export default function SetupBuilder({ initial, isNew = false, onSave, onCancel,
 
   function handleSave() {
     if (!setup.name?.trim()) { setError('Name is required.'); return }
-    if (!(setup.universe || []).length) { setError('Add at least one ticker to the universe.'); return }
+    if (resolveUniverseTickers(setup.universe, savedUniverses).length === 0) {
+      setError(universeIsSaved(setup.universe)
+        ? 'Pick a saved universe with at least one ticker, or switch to ticker-list mode.'
+        : 'Add at least one ticker to the universe.')
+      return
+    }
     if (!(setup.conditions || []).length) { setError('Add at least one condition.'); return }
     const sz = Number(setup.tradePlan?.sizingValue)
     if (isNaN(sz) || sz < 0.001 || sz > 0.05) { setError('Sizing must be between 0.1% and 5% (0.001-0.05).'); return }
@@ -355,34 +361,102 @@ export default function SetupBuilder({ initial, isNew = false, onSave, onCancel,
 
         {/* UNIVERSE */}
         <div style={sectionStyle}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <div style={sectionLabel}>Universe</div>
-            {Object.keys(savedUniverses || {}).length > 0 && (
-              <select
-                value=""
-                onChange={e => {
-                  const id = e.target.value
-                  if (!id) return
-                  const u = savedUniverses[id]
-                  if (!u) return
-                  patch({ universe: [...new Set([...(setup.universe || []), ...(u.tickers || [])])] })
-                  e.target.value = ''
-                }}
-                style={{ ...inputStyle, fontSize: 10 }}
-                title="Append tickers from a saved screener universe"
-              >
-                <option value="">+ Load saved universe</option>
-                {Object.values(savedUniverses).sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0)).map(u => (
-                  <option key={u.id} value={u.id}>{u.name} ({u.tickers?.length || 0})</option>
-                ))}
-              </select>
-            )}
+            <div style={{ display: 'flex', gap: 6 }}>
+              {['list', 'saved'].map(t => {
+                const active = universeIsSaved(setup.universe) ? t === 'saved' : t === 'list'
+                return (
+                  <button key={t} type="button" onClick={() => {
+                    if (t === 'list') {
+                      // Convert saved -> list, snapshotting the current resolved tickers.
+                      const tickers = resolveUniverseTickers(setup.universe, savedUniverses)
+                      patch({ universe: { type: 'list', tickers } })
+                    } else {
+                      // Switch to saved-ref form. Default to the first saved universe if any.
+                      const first = (savedUniverses && savedUniverses[0]) ? savedUniverses[0].id : null
+                      patch({ universe: { type: 'saved', universeId: first || '' } })
+                    }
+                  }} style={{
+                    background: active ? LIME : 'transparent',
+                    color: active ? '#000' : '#aaa',
+                    border: `1px solid ${active ? LIME : BORDER}`,
+                    padding: '5px 12px', borderRadius: 3, cursor: 'pointer',
+                    fontFamily: MONO, fontSize: 10, letterSpacing: '0.12em',
+                    textTransform: 'uppercase', fontWeight: active ? 700 : 500,
+                  }}>{t === 'list' ? 'Ticker list' : 'Saved universe'}</button>
+                )
+              })}
+            </div>
           </div>
-          <UniverseInput
-            tickers={setup.universe || []}
-            onChange={(arr) => patch({ universe: arr })}
-            suggestions={suggestionTickers}
-          />
+
+          {universeIsSaved(setup.universe) ? (
+            (() => {
+              const sel = (savedUniverses || []).find(u => u.id === setup.universe.universeId)
+              const resolved = resolveUniverseTickers(setup.universe, savedUniverses)
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {(!savedUniverses || savedUniverses.length === 0) && (
+                    <div style={{ fontSize: 11, color: YELLOW, fontFamily: MONO, lineHeight: 1.5 }}>
+                      No saved universes yet. Build one in Plan / Universe and Save it first, then come back here.
+                    </div>
+                  )}
+                  {savedUniverses && savedUniverses.length > 0 && (
+                    <select
+                      value={setup.universe.universeId || ''}
+                      onChange={e => patch({ universe: { type: 'saved', universeId: e.target.value } })}
+                      style={{ ...inputStyle, width: '100%' }}
+                    >
+                      <option value="">— pick a saved universe —</option>
+                      {[...savedUniverses].sort((a, b) => (b.lastUsedAt || b.createdAt || 0) - (a.lastUsedAt || a.createdAt || 0)).map(u => (
+                        <option key={u.id} value={u.id}>{u.name} ({u.tickers?.length || 0})</option>
+                      ))}
+                    </select>
+                  )}
+                  {sel && (
+                    <div style={{ fontSize: 10, color: MUTED, fontFamily: MONO, lineHeight: 1.6 }}>
+                      Linked to <strong style={{ color: FG }}>{sel.name}</strong> · resolves to {resolved.length} ticker{resolved.length === 1 ? '' : 's'} ({resolved.slice(0, 8).join(', ')}{resolved.length > 8 ? `, +${resolved.length - 8} more` : ''}).
+                      Engine resolves at evaluation time, so updates to the saved universe propagate to this setup.
+                    </div>
+                  )}
+                </div>
+              )
+            })()
+          ) : (
+            <>
+              {initial && Array.isArray(initial.universe) === false && initial.universe?.type === 'list' && (initial.universe.tickers || []).length > 0 && isNew && (
+                <div style={{ fontSize: 10, color: LIME, fontFamily: MONO, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                  Universe loaded from screener ({(initial.universe.tickers || []).length} tickers)
+                </div>
+              )}
+              {(savedUniverses && savedUniverses.length > 0) && (
+                <select
+                  value=""
+                  onChange={e => {
+                    const id = e.target.value
+                    if (!id) return
+                    const u = (savedUniverses || []).find(x => x.id === id)
+                    if (!u) return
+                    const merged = [...new Set([...(setup.universe?.tickers || []), ...(u.tickers || [])])]
+                    patch({ universe: { type: 'list', tickers: merged } })
+                    e.target.value = ''
+                  }}
+                  style={{ ...inputStyle, fontSize: 10, maxWidth: 240 }}
+                  title="Append tickers from a saved screener universe"
+                >
+                  <option value="">+ Append from saved universe</option>
+                  {[...savedUniverses].sort((a, b) => (b.lastUsedAt || b.createdAt || 0) - (a.lastUsedAt || a.createdAt || 0)).map(u => (
+                    <option key={u.id} value={u.id}>{u.name} ({u.tickers?.length || 0})</option>
+                  ))}
+                </select>
+              )}
+              <UniverseInput
+                tickers={(setup.universe?.tickers) || []}
+                onChange={(arr) => patch({ universe: { type: 'list', tickers: arr } })}
+                suggestions={suggestionTickers}
+              />
+            </>
+          )}
         </div>
 
         {/* CONDITIONS */}

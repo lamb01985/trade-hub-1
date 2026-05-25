@@ -11,7 +11,7 @@
 // bottom when editing is non-null.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { LIME, RED, YELLOW, MONO, BORDER, PANEL, DARK } from '../constants.js'
 import { createSetup } from '../lib/setupStorage.js'
 import SetupCard from './SetupCard.jsx'
@@ -40,8 +40,10 @@ export default function Setups({
   evaluation = null,
   accountValue = 25000,
   apiKey = '',
-  savedUniverses = {},
+  savedUniverses = [],
   suggestionTickers = [],
+  pendingSeed = null,
+  onConsumeSeed = null,
 }) {
   const [filter, setFilter] = useState('all')
   const [sort, setSort] = useState('recent')
@@ -50,6 +52,17 @@ export default function Setups({
   const [templatesOpen, setTemplatesOpen] = useState(false)
   // Shared bar cache across backtest runs.
   const backtestCacheRef = useRef({})
+
+  // Consume a seed handed in from another tab (UniverseBuilder CREATE SETUP
+  // or Clone-with-universe from template suggestions). Opens SetupBuilder
+  // pre-filled and clears the seed via the parent callback.
+  useEffect(() => {
+    if (!pendingSeed) return
+    if (editing) return // user already in the middle of an edit; defer
+    setEditing({ setup: createSetup({ status: 'paused', ...pendingSeed }), isNew: true })
+    onConsumeSeed?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingSeed])
 
   function updateSetup(updated) {
     if (!onSetupsChange) return
@@ -204,6 +217,7 @@ export default function Setups({
             accountValue={accountValue}
             apiKey={apiKey}
             backtestCache={backtestCacheRef.current}
+            savedUniverses={savedUniverses}
             onBacktestResult={handleBacktestResult}
             onEdit={handleEdit}
             onDuplicate={handleDuplicate}

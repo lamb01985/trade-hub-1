@@ -22,6 +22,16 @@ export const SEEDED_FLAG = 'tradeHub.setups.seeded.v1'
 export const ALERT_LOG_KEY = 'tradeHub.setups.alerts.v1'
 export const LEGACY_KEY = 'th-short-theses'
 
+// Normalize a universe value into the discriminated { type: 'list', tickers }
+// or { type: 'saved', universeId } form. Legacy flat arrays become 'list'.
+function normalizeUniverseValue(u) {
+  if (!u) return { type: 'list', tickers: [] }
+  if (Array.isArray(u)) return { type: 'list', tickers: u.map(t => String(t || '').toUpperCase()).filter(Boolean) }
+  if (typeof u === 'object' && u.type === 'list') return { type: 'list', tickers: (u.tickers || []).map(t => String(t || '').toUpperCase()).filter(Boolean) }
+  if (typeof u === 'object' && u.type === 'saved') return { type: 'saved', universeId: String(u.universeId || '') }
+  return { type: 'list', tickers: [] }
+}
+
 function uid() {
   return `setup_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
 }
@@ -54,7 +64,7 @@ export function createSetup(partial = {}) {
     status: partial.status || 'active',
     createdAt: partial.createdAt || now,
     updatedAt: now,
-    universe: partial.universe || [],
+    universe: normalizeUniverseValue(partial.universe),
     conditions: partial.conditions || [],
     operator: partial.operator || 'all',
     tradePlan: { ...defaultTradePlanForDirection(direction), ...(partial.tradePlan || {}) },
@@ -82,7 +92,9 @@ export function loadSetups() {
     const raw = localStorage.getItem(SETUPS_KEY)
     if (!raw) return []
     const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed : []
+    if (!Array.isArray(parsed)) return []
+    // Normalize universe shape across existing records (legacy array -> list form).
+    return parsed.map(s => ({ ...s, universe: normalizeUniverseValue(s.universe) }))
   } catch {
     return []
   }

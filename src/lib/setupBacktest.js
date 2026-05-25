@@ -23,6 +23,7 @@ import { calcPivots } from './levels.js'
 import { evaluateAll } from './conditionEvaluators.js'
 import { computeEMA, computeRSI, computeMACD, computeHV } from './indicators.js'
 import { estimatePremium } from './wheelOptions.js'
+import { resolveUniverseTickers } from './universeResolver.js'
 
 const TRADING_DAYS_PER_YEAR = 252
 
@@ -254,7 +255,8 @@ function summarize(trades) {
 export async function backtestSetup(setup, apiKey, options = {}) {
   if (!setup || !apiKey) return { error: 'Missing setup or apiKey' }
   if (!setup.conditions?.length) return { error: 'Setup has no conditions' }
-  if (!setup.universe?.length) return { error: 'Setup has no universe' }
+  const tickers = resolveUniverseTickers(setup.universe, options.savedUniverses || [])
+  if (!tickers.length) return { error: 'Setup has no universe' }
 
   const cache = options.barsCache || {}
   const onProgress = options.onProgress || (() => {})
@@ -262,7 +264,6 @@ export async function backtestSetup(setup, apiKey, options = {}) {
   const cooldownDays = Math.max(0, Math.ceil((setup.alerts?.cooldownMinutes || 0) / (60 * 24)))
 
   let allTrades = []
-  const tickers = setup.universe
   for (let i = 0; i < tickers.length; i++) {
     const ticker = tickers[i]
     onProgress({ ticker, progressPct: Math.round((i / tickers.length) * 100), stage: 'fetching' })

@@ -1,20 +1,17 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// UniverseBuilder.jsx — screen a base universe by multi-factor filters and
-// optionally save the filter set + resulting ticker list as a named universe.
+// UniverseBuilder.jsx — screen a base universe and act on the result.
 //
-// Two uses:
-//   1. Standalone Plan sub-tab (the user explores filters and saves results)
-//   2. Modal opened from SetupBuilder (the user picks tickers for a setup)
+// Three header actions complete the research workflow:
+//   - SAVE UNIVERSE: name the selection and persist filterDefinition +
+//     tickers to 'th-universes-v1' (array shape).
+//   - CREATE SETUP: hand the selected tickers to App.jsx, which seeds the
+//     SetupBuilder and navigates to Plan / Setups.
+//   - SUGGEST TEMPLATES: score the selection against the template library
+//     (templateSuggestions.js), open a side panel with the top matches and
+//     one-click "Clone with this universe" buttons.
 //
-// Data layer: a hardcoded liquid base universe (~30 tickers) is hydrated
-// once per load via getHistoricalBars (252 daily bars per ticker) +
-// getTickerDetails (market cap, sector). Hydration is cached in
-// localStorage for 6 hours so reopening the tab is instant.
-//
-// Limits called out: fundamentals like P/S and P/E require getFinancials,
-// which the user's Massive plan may not return for every ticker. Filters
-// pass any row whose required data is missing (lenient mode) so the tool
-// is still useful when fundamentals are sparse.
+// Above the screener, a chip row lists saved universes; click a chip to
+// load both the filterDefinition and the saved ticker selection.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -22,6 +19,9 @@ import { LIME, RED, YELLOW, MONO, BORDER, PANEL, DARK, f2 } from '../constants.j
 import { useLocalStorage } from '../hooks/useStore.js'
 import { getHistoricalBars, getTickerDetails } from '../lib/massive.js'
 import { lastEMA, lastRSI } from '../lib/indicators.js'
+import { notify } from '../lib/notify.js'
+import { suggestTemplates } from '../lib/templateSuggestions.js'
+import { CONDITIONS_BY_ID } from '../lib/conditionLibrary.js'
 
 const FG = '#e8e8e8'
 const DIM = '#888'
@@ -36,12 +36,12 @@ const BASE_UNIVERSE = [
 ]
 
 const HYDRATION_CACHE_KEY = 'tradeHub.universeBuilder.cache.v1'
-const HYDRATION_MAX_AGE_MS = 6 * 60 * 60 * 1000   // 6 hours
+const HYDRATION_MAX_AGE_MS = 6 * 60 * 60 * 1000
 
 const DEFAULT_FILTERS = {
-  marketCapMin: null,      // null = no floor
+  marketCapMin: null,
   marketCapMax: null,
-  sector: '',              // empty = any
+  sector: '',
   psRatioMin: null,
   psRatioMax: null,
   peRatioMin: null,
@@ -50,9 +50,9 @@ const DEFAULT_FILTERS = {
   rsiMin: null,
   rsiMax: null,
   rvolMin: null,
-  dist50Min: null,         // -100..+100 (% from 50 EMA)
+  dist50Min: null,
   dist50Max: null,
-  fromHighMin: null,       // -100..0
+  fromHighMin: null,
   fromHighMax: null,
   aboveEma200: false,
 }
@@ -65,13 +65,17 @@ function fmtBigCap(n) {
   return `$${Math.round(n).toLocaleString()}`
 }
 
+function uid() {
+  return `u_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
+}
+
 async function hydrateOne(apiKey, ticker) {
   const out = { ticker, hydratedAt: Date.now() }
   try {
     const bars = await getHistoricalBars(apiKey, ticker, 252)
     if (bars?.length) {
       const closes = bars.map(b => b?.c).filter(v => v != null && v > 0)
-      out.closes = closes.slice(-60)        // keep just enough for the sparkline + filters
+      out.closes = closes.slice(-60)
       out.price = closes[closes.length - 1]
       out.ema50 = lastEMA(closes, 50)
       out.ema200 = lastEMA(closes, 200)
@@ -83,7 +87,6 @@ async function hydrateOne(apiKey, ticker) {
       out.fromHighPct = wk52High ? ((out.price - wk52High) / wk52High) * 100 : null
       out.dist50 = out.price && out.ema50 ? ((out.price - out.ema50) / out.ema50) * 100 : null
       out.dist200 = out.price && out.ema200 ? ((out.price - out.ema200) / out.ema200) * 100 : null
-      // Approximate RVOL = today's volume vs trailing-20-day average.
       if (bars.length >= 21 && bars[bars.length - 1]?.v != null) {
         const recent = bars.slice(-21, -1)
         const sum = recent.reduce((s, b) => s + (b?.v || 0), 0)
@@ -117,7 +120,6 @@ function saveCache(map) {
 
 function passFilters(row, f) {
   if (!row) return false
-  // Market cap (skip if missing)
   if (row.marketCap != null) {
     if (f.marketCapMin != null && row.marketCap < f.marketCapMin) return false
     if (f.marketCapMax != null && row.marketCap > f.marketCapMax) return false
@@ -126,7 +128,6 @@ function passFilters(row, f) {
     const want = f.sector.trim().toLowerCase()
     if (!row.sector || !row.sector.toLowerCase().includes(want)) return false
   }
-  // P/S, P/E (currently can be null if fundamentals weren't fetched; row passes when null)
   if (row.psRatio != null) {
     if (f.psRatioMin != null && row.psRatio < f.psRatioMin) return false
     if (f.psRatioMax != null && row.psRatio > f.psRatioMax) return false
@@ -135,8 +136,6 @@ function passFilters(row, f) {
     if (!f.includeNegativePE && row.peRatio < 0) return false
     if (f.peRatioMin != null && row.peRatio < f.peRatioMin) return false
     if (f.peRatioMax != null && row.peRatio > f.peRatioMax) return false
-  } else if (!f.includeNegativePE) {
-    // No P/E data — be lenient and let it through.
   }
   if (row.rsi14 != null) {
     if (f.rsiMin != null && row.rsi14 < f.rsiMin) return false
@@ -153,6 +152,21 @@ function passFilters(row, f) {
   }
   if (f.aboveEma200 && row.ema200 != null && row.price != null && row.price <= row.ema200) return false
   return true
+}
+
+function suggestNameFromFilters(f) {
+  const parts = []
+  if (f.sector?.trim()) parts.push(f.sector.trim())
+  if (f.marketCapMin != null && f.marketCapMin >= 200e9) parts.push('mega-cap')
+  else if (f.marketCapMin != null && f.marketCapMin >= 10e9) parts.push('large-cap')
+  else if (f.marketCapMin != null && f.marketCapMin >= 2e9) parts.push('mid-cap')
+  if (f.rsiMin != null || f.rsiMax != null) {
+    parts.push(`RSI ${f.rsiMin ?? '?'}-${f.rsiMax ?? '?'}`)
+  }
+  if (f.aboveEma200) parts.push('above 200 EMA')
+  if (f.psRatioMin != null) parts.push(`P/S>${f.psRatioMin}`)
+  if (parts.length === 0) parts.push('Custom universe')
+  return parts.join(' ')
 }
 
 function NumInput({ value, onChange, placeholder = '', width = 70 }) {
@@ -191,8 +205,6 @@ function RangeRow({ valueMin, valueMax, onMin, onMax, suffix = '' }) {
   )
 }
 
-// ── Result row (compact) ──────────────────────────────────────────────────
-
 function Row({ row, selected, onToggleSelect }) {
   return (
     <div onClick={onToggleSelect} style={{
@@ -217,29 +229,161 @@ function Row({ row, selected, onToggleSelect }) {
   )
 }
 
-// ── Top-level component ──────────────────────────────────────────────────
-// Two modes:
-//   mode='standalone'  full page, includes Save controls
-//   mode='picker'      compact, "Use these tickers →" handoff for SetupBuilder
-//
-// Props:
-//   apiKey, savedUniverses, onSavedUniversesChange, onUseTickers? (picker)
+// ── Suggestion side panel ─────────────────────────────────────────────────
+
+function SuggestionPanel({ rows, onClone, onClose }) {
+  const suggestions = useMemo(() => suggestTemplates(rows), [rows])
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)',
+      display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end',
+      padding: 0, zIndex: 240,
+    }}>
+      <div style={{
+        background: '#0a0a0a', border: `1px solid ${BORDER}`,
+        width: '100%', maxWidth: 520, height: '100%', overflowY: 'auto',
+        padding: 18, fontFamily: MONO, display: 'flex', flexDirection: 'column', gap: 12,
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: 10, color: MUTED, letterSpacing: '0.16em', textTransform: 'uppercase' }}>Template suggestions</div>
+            <div style={{ fontSize: 16, color: FG, fontWeight: 800 }}>Best fits for your selection</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#aaa', fontSize: 16, cursor: 'pointer' }}>✕</button>
+        </div>
+
+        {suggestions.length === 0 && (
+          <div style={{ background: PANEL, border: `1px dashed ${BORDER}`, borderRadius: 5, padding: 18, fontSize: 11, color: MUTED, fontFamily: MONO, lineHeight: 1.6 }}>
+            No templates score above the match threshold for this selection. Try a different filter or add more tickers; the scorer needs at least RSI / EMA-distance / 52W data per row.
+          </div>
+        )}
+
+        {suggestions.map(s => {
+          const dir = s.template.direction
+          const dirColor = dir === 'short' ? RED : dir === 'either' ? YELLOW : LIME
+          return (
+            <div key={s.template.id} style={{ background: PANEL, border: `1px solid ${BORDER}`, borderLeft: `3px solid ${dirColor}`, borderRadius: 5, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12, color: FG, fontWeight: 800 }}>{s.template.name}</span>
+                <span style={{ fontSize: 9, color: dirColor, fontFamily: MONO, fontWeight: 700, border: `1px solid ${dirColor}55`, padding: '2px 6px', borderRadius: 3, letterSpacing: '0.14em', textTransform: 'uppercase' }}>{dir}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ flex: 1, height: 4, background: '#1a1a1a', borderRadius: 2, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${s.matchScore}%`, background: LIME }} />
+                </div>
+                <span style={{ fontSize: 10, color: LIME, fontFamily: MONO, fontWeight: 700, minWidth: 60, textAlign: 'right' }}>{s.matchScore}% match</span>
+              </div>
+              <div style={{ fontSize: 10, color: MUTED, fontFamily: MONO, letterSpacing: '0.06em' }}>{s.template.source}</div>
+              <div style={{ fontSize: 11, color: '#aaa', fontFamily: MONO, lineHeight: 1.5 }}>{s.reasoning}</div>
+              <div style={{ fontSize: 10, color: MUTED, fontFamily: MONO }}>
+                Conditions:{' '}
+                {(s.template.defaultConditions || []).map(c => CONDITIONS_BY_ID[c.type]?.label || c.type).join(' · ')}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+                <button onClick={() => onClone(s.template)} style={{
+                  background: LIME, color: '#000', border: 'none', padding: '7px 14px', borderRadius: 3,
+                  fontFamily: MONO, fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase',
+                  cursor: 'pointer',
+                }}>Clone with this universe →</button>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ── Save modal ───────────────────────────────────────────────────────────
+
+function SaveModal({ initialName, count, onSave, onCancel }) {
+  const [name, setName] = useState(initialName || '')
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 250,
+    }}>
+      <div style={{
+        background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 6,
+        width: '100%', maxWidth: 440, padding: 18, fontFamily: MONO,
+        display: 'flex', flexDirection: 'column', gap: 12,
+      }}>
+        <div>
+          <div style={{ fontSize: 10, color: MUTED, letterSpacing: '0.16em', textTransform: 'uppercase' }}>Save universe</div>
+          <div style={{ fontSize: 14, color: FG, fontWeight: 800 }}>{count} ticker{count === 1 ? '' : 's'}</div>
+        </div>
+        <input
+          autoFocus
+          value={name}
+          onChange={e => setName(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && name.trim()) onSave(name.trim()) }}
+          placeholder="Universe name"
+          style={{
+            background: DARK, border: `1px solid ${BORDER}`, borderRadius: 3,
+            color: FG, fontFamily: MONO, fontSize: 12, padding: '8px 10px', outline: 'none',
+          }}
+        />
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <button onClick={onCancel} style={{
+            background: 'transparent', border: `1px solid ${BORDER}`, color: '#aaa',
+            padding: '7px 14px', borderRadius: 3, cursor: 'pointer',
+            fontFamily: MONO, fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase',
+          }}>Cancel</button>
+          <button onClick={() => name.trim() && onSave(name.trim())} disabled={!name.trim()} style={{
+            background: name.trim() ? LIME : '#1a1a1a', color: name.trim() ? '#000' : '#666',
+            border: 'none', padding: '7px 14px', borderRadius: 3,
+            fontFamily: MONO, fontSize: 10, fontWeight: 800,
+            letterSpacing: '0.12em', textTransform: 'uppercase',
+            cursor: name.trim() ? 'pointer' : 'not-allowed',
+          }}>Save</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Saved-universes chip row ─────────────────────────────────────────────
+
+function SavedUniversesChips({ list, onLoad, onRename, onDelete }) {
+  if (!list?.length) {
+    return (
+      <div style={{ fontSize: 10, color: MUTED, fontFamily: MONO, padding: '6px 0' }}>
+        No saved universes yet. Use SAVE UNIVERSE after filtering to save your first.
+      </div>
+    )
+  }
+  return (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+      {list.map(u => (
+        <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 3, padding: '4px 8px', fontFamily: MONO, fontSize: 10 }}>
+          <button onClick={() => onLoad(u)} title={`Load ${u.name}`} style={{ background: 'transparent', border: 'none', color: '#aaa', cursor: 'pointer', fontFamily: MONO, fontSize: 10 }}>
+            <strong style={{ color: FG }}>{u.name}</strong> <span style={{ color: MUTED }}>{u.tickers?.length || 0}</span>
+          </button>
+          <button onClick={() => onRename(u)} title="Rename" style={{ background: 'transparent', border: 'none', color: MUTED, cursor: 'pointer', padding: 0, fontSize: 11 }}>✎</button>
+          <button onClick={() => onDelete(u)} title="Delete" style={{ background: 'transparent', border: 'none', color: MUTED, cursor: 'pointer', padding: 0 }}>✕</button>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ── Top-level ─────────────────────────────────────────────────────────────
 
 export default function UniverseBuilder({
   apiKey,
-  savedUniverses = {},
+  savedUniverses = [],
   onSavedUniversesChange,
-  onUseTickers = null,
-  mode = 'standalone',
-  initialFilters = null,
+  onCreateSetupFromTickers = null,
+  onCloneTemplateWithTickers = null,
 }) {
-  const [filters, setFilters] = useState({ ...DEFAULT_FILTERS, ...(initialFilters || {}) })
+  const [filters, setFilters] = useState(DEFAULT_FILTERS)
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(false)
   const [progress, setProgress] = useState({ done: 0, total: 0 })
   const [error, setError] = useState(null)
   const [selected, setSelected] = useState(new Set())
-  const [saveName, setSaveName] = useState('')
+  const [saveOpen, setSaveOpen] = useState(false)
+  const [suggestOpen, setSuggestOpen] = useState(false)
   const cacheRef = useRef(loadCache())
 
   function patch(p) { setFilters(prev => ({ ...prev, ...p })) }
@@ -250,9 +394,7 @@ export default function UniverseBuilder({
     const cache = cacheRef.current
     const out = []
     let done = 0
-    // Run a bounded-concurrency pool (5 in flight) to avoid REST flooding.
     const queue = [...BASE_UNIVERSE]
-    const inFlight = []
     async function next() {
       if (!queue.length) return
       const t = queue.shift()
@@ -265,6 +407,7 @@ export default function UniverseBuilder({
       setProgress({ done, total: BASE_UNIVERSE.length })
       await next()
     }
+    const inFlight = []
     for (let i = 0; i < 5; i++) inFlight.push(next())
     await Promise.all(inFlight)
     saveCache(cache)
@@ -273,6 +416,7 @@ export default function UniverseBuilder({
   }
 
   const filtered = useMemo(() => rows.filter(r => passFilters(r, filters)), [rows, filters])
+  const selectedRows = useMemo(() => filtered.filter(r => selected.has(r.ticker)), [filtered, selected])
 
   function toggleSelect(ticker) {
     setSelected(prev => {
@@ -284,39 +428,78 @@ export default function UniverseBuilder({
   function selectAllFiltered() { setSelected(new Set(filtered.map(r => r.ticker))) }
   function clearSelection() { setSelected(new Set()) }
 
-  function handleSaveUniverse() {
-    if (!saveName.trim()) return
+  // Effective tickers used for actions: explicit selection if any, else all filtered.
+  const effectiveTickers = useMemo(() => (
+    selected.size > 0 ? [...selected] : filtered.map(r => r.ticker)
+  ), [selected, filtered])
+
+  const effectiveRows = useMemo(() => (
+    selected.size > 0 ? filtered.filter(r => selected.has(r.ticker)) : filtered
+  ), [selected, filtered])
+
+  function handleSaveCommit(name) {
     if (!onSavedUniversesChange) return
-    const tickers = selected.size > 0 ? [...selected] : filtered.map(r => r.ticker)
-    const id = `u_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
     const record = {
-      id,
-      name: saveName.trim(),
-      filters: { ...filters },
-      tickers,
-      savedAt: Date.now(),
+      id: uid(),
+      name,
+      tickers: effectiveTickers,
+      filterDefinition: { ...filters },
+      createdAt: Date.now(),
+      lastUsedAt: Date.now(),
     }
-    onSavedUniversesChange({ ...(savedUniverses || {}), [id]: record })
-    setSaveName('')
-  }
-
-  function handleUsePicker() {
-    if (!onUseTickers) return
-    const tickers = selected.size > 0 ? [...selected] : filtered.map(r => r.ticker)
-    onUseTickers(tickers)
-  }
-
-  function handleDeleteSaved(id) {
-    if (!onSavedUniversesChange) return
-    const next = { ...(savedUniverses || {}) }
-    delete next[id]
-    onSavedUniversesChange(next)
+    onSavedUniversesChange(prev => [record, ...(prev || [])])
+    setSaveOpen(false)
+    notify({ title: `Universe "${name}" saved`, body: `${effectiveTickers.length} ticker${effectiveTickers.length === 1 ? '' : 's'} stored. Reference from any SetupBuilder.`, kind: 'info', ttlMs: 4500 })
   }
 
   function handleLoadSaved(u) {
-    setFilters({ ...DEFAULT_FILTERS, ...(u.filters || {}) })
+    setFilters({ ...DEFAULT_FILTERS, ...(u.filterDefinition || {}) })
     setSelected(new Set(u.tickers || []))
+    // Bump lastUsedAt.
+    if (onSavedUniversesChange) {
+      onSavedUniversesChange(prev => (prev || []).map(x => x.id === u.id ? { ...x, lastUsedAt: Date.now() } : x))
+    }
+    notify({ title: `Loaded "${u.name}"`, body: `${(u.tickers || []).length} ticker${(u.tickers || []).length === 1 ? '' : 's'} restored from saved filters.`, kind: 'info', ttlMs: 3000 })
   }
+
+  function handleRenameSaved(u) {
+    if (typeof window === 'undefined' || !onSavedUniversesChange) return
+    const next = window.prompt('Rename universe', u.name)
+    if (next == null || !next.trim()) return
+    onSavedUniversesChange(prev => (prev || []).map(x => x.id === u.id ? { ...x, name: next.trim() } : x))
+  }
+
+  function handleDeleteSaved(u) {
+    if (typeof window === 'undefined' || !onSavedUniversesChange) return
+    if (!window.confirm(`Delete saved universe "${u.name}"?`)) return
+    onSavedUniversesChange(prev => (prev || []).filter(x => x.id !== u.id))
+  }
+
+  function handleCreateSetup() {
+    if (!onCreateSetupFromTickers || effectiveTickers.length === 0) return
+    onCreateSetupFromTickers(effectiveTickers)
+  }
+
+  function handleSuggestClone(template) {
+    setSuggestOpen(false)
+    if (!onCloneTemplateWithTickers) return
+    // Pass the template's createSetup-compatible partial alongside the tickers.
+    const partial = {
+      name: template.name,
+      description: template.description,
+      direction: template.direction,
+      operator: template.defaultOperator || 'all',
+      conditions: (template.defaultConditions || []).map(c => ({
+        id: `cond_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+        type: c.type,
+        params: { ...(c.params || {}) },
+      })),
+      tradePlan: { ...(template.defaultTradePlan || {}) },
+    }
+    onCloneTemplateWithTickers(partial, effectiveTickers)
+  }
+
+  const canAct = effectiveTickers.length > 0
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, fontFamily: MONO }}>
@@ -327,32 +510,45 @@ export default function UniverseBuilder({
             Universe<span style={{ color: LIME }}>.</span>
           </div>
         </div>
-        <button onClick={loadOrHydrate} disabled={loading || !apiKey} title={!apiKey ? 'Add Massive API key' : ''} style={{
-          background: loading || !apiKey ? '#1a1a1a' : LIME, color: loading || !apiKey ? '#666' : '#000',
-          border: 'none', padding: '8px 14px', borderRadius: 3,
-          fontFamily: MONO, fontSize: 11, fontWeight: 800,
-          letterSpacing: '0.14em', textTransform: 'uppercase',
-          cursor: loading || !apiKey ? 'not-allowed' : 'pointer',
-        }}>{loading ? `Hydrating ${progress.done}/${progress.total}` : rows.length ? 'Reload universe' : 'Load universe'}</button>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button onClick={loadOrHydrate} disabled={loading || !apiKey} title={!apiKey ? 'Add Massive API key' : ''} style={{
+            background: 'transparent', border: `1px solid ${BORDER}`, color: loading || !apiKey ? '#666' : '#aaa',
+            padding: '7px 12px', borderRadius: 3,
+            fontFamily: MONO, fontSize: 10, fontWeight: 700,
+            letterSpacing: '0.12em', textTransform: 'uppercase',
+            cursor: loading || !apiKey ? 'not-allowed' : 'pointer',
+          }}>{loading ? `Hydrating ${progress.done}/${progress.total}` : rows.length ? 'Reload universe' : 'Load universe'}</button>
+          <button onClick={() => setSuggestOpen(true)} disabled={!canAct} title={canAct ? 'Match templates to this selection' : 'Pick tickers first'} style={{
+            background: 'transparent', border: `1px solid ${canAct ? '#aaa' : BORDER}`, color: canAct ? '#aaa' : '#666',
+            padding: '7px 12px', borderRadius: 3,
+            fontFamily: MONO, fontSize: 10, fontWeight: 700,
+            letterSpacing: '0.12em', textTransform: 'uppercase',
+            cursor: canAct ? 'pointer' : 'not-allowed',
+          }}>Suggest templates</button>
+          <button onClick={handleCreateSetup} disabled={!canAct || !onCreateSetupFromTickers} title={canAct ? 'Open SetupBuilder with these tickers' : 'Pick tickers first'} style={{
+            background: 'transparent', color: canAct ? LIME : '#666',
+            border: `1px solid ${canAct ? LIME : BORDER}`,
+            padding: '7px 12px', borderRadius: 3,
+            fontFamily: MONO, fontSize: 10, fontWeight: 700,
+            letterSpacing: '0.12em', textTransform: 'uppercase',
+            cursor: canAct ? 'pointer' : 'not-allowed',
+          }}>Create setup →</button>
+          <button onClick={() => setSaveOpen(true)} disabled={!canAct || !onSavedUniversesChange} title={canAct ? 'Save this filter + selection' : 'Pick tickers first'} style={{
+            background: canAct ? LIME : '#1a1a1a', color: canAct ? '#000' : '#666',
+            border: 'none', padding: '8px 14px', borderRadius: 3,
+            fontFamily: MONO, fontSize: 11, fontWeight: 800,
+            letterSpacing: '0.14em', textTransform: 'uppercase',
+            cursor: canAct ? 'pointer' : 'not-allowed',
+          }}>Save universe</button>
+        </div>
       </div>
 
       {error && <div style={{ background: '#150505', border: `1px solid ${RED}55`, color: RED, padding: '8px 12px', borderRadius: 4, fontSize: 11, fontFamily: MONO }}>{error}</div>}
 
-      {mode === 'standalone' && Object.keys(savedUniverses || {}).length > 0 && (
-        <div style={{ background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 5, padding: 10 }}>
-          <div style={{ fontSize: 9, color: MUTED, fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 6 }}>Saved universes</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {Object.values(savedUniverses).sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0)).map(u => (
-              <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 3, padding: '4px 8px' }}>
-                <button onClick={() => handleLoadSaved(u)} style={{ background: 'transparent', border: 'none', color: '#aaa', fontFamily: MONO, fontSize: 10, cursor: 'pointer' }}>
-                  <strong style={{ color: FG }}>{u.name}</strong> <span style={{ color: MUTED }}>{u.tickers?.length || 0}</span>
-                </button>
-                <button onClick={() => handleDeleteSaved(u.id)} style={{ background: 'transparent', border: 'none', color: MUTED, cursor: 'pointer', padding: 0 }}>✕</button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <div style={{ background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 5, padding: 10 }}>
+        <div style={{ fontSize: 9, color: MUTED, fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 6 }}>Saved universes</div>
+        <SavedUniversesChips list={[...(savedUniverses || [])].sort((a, b) => (b.lastUsedAt || b.createdAt || 0) - (a.lastUsedAt || a.createdAt || 0))} onLoad={handleLoadSaved} onRename={handleRenameSaved} onDelete={handleDeleteSaved} />
+      </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 280px) 1fr', gap: 12 }}>
         {/* Filter sidebar */}
@@ -439,42 +635,25 @@ export default function UniverseBuilder({
               ))}
             </div>
           )}
-
-          {/* Save / Use bar */}
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', paddingTop: 6 }}>
-            {mode === 'standalone' && onSavedUniversesChange && (
-              <>
-                <input value={saveName} onChange={e => setSaveName(e.target.value)} placeholder="Name this universe" style={{
-                  flex: 1, minWidth: 180, background: DARK, border: `1px solid ${BORDER}`, borderRadius: 3,
-                  color: FG, fontFamily: MONO, fontSize: 11, padding: '7px 10px', outline: 'none',
-                }} />
-                <button onClick={handleSaveUniverse} disabled={!saveName.trim() || filtered.length === 0} style={{
-                  background: saveName.trim() && filtered.length ? LIME : '#1a1a1a',
-                  color: saveName.trim() && filtered.length ? '#000' : '#666',
-                  border: 'none', padding: '7px 14px', borderRadius: 3,
-                  fontFamily: MONO, fontSize: 10, fontWeight: 800,
-                  letterSpacing: '0.12em', textTransform: 'uppercase',
-                  cursor: saveName.trim() && filtered.length ? 'pointer' : 'not-allowed',
-                }}>Save universe</button>
-              </>
-            )}
-            {mode === 'picker' && onUseTickers && (
-              <>
-                <div style={{ fontSize: 10, color: MUTED, fontFamily: MONO }}>{selected.size > 0 ? `${selected.size} selected tickers` : `Use all ${filtered.length} matching tickers`}</div>
-                <div style={{ flex: 1 }} />
-                <button onClick={handleUsePicker} disabled={filtered.length === 0} style={{
-                  background: filtered.length ? LIME : '#1a1a1a',
-                  color: filtered.length ? '#000' : '#666',
-                  border: 'none', padding: '7px 14px', borderRadius: 3,
-                  fontFamily: MONO, fontSize: 10, fontWeight: 800,
-                  letterSpacing: '0.12em', textTransform: 'uppercase',
-                  cursor: filtered.length ? 'pointer' : 'not-allowed',
-                }}>Use these tickers →</button>
-              </>
-            )}
-          </div>
         </div>
       </div>
+
+      {saveOpen && (
+        <SaveModal
+          initialName={suggestNameFromFilters(filters)}
+          count={effectiveTickers.length}
+          onSave={handleSaveCommit}
+          onCancel={() => setSaveOpen(false)}
+        />
+      )}
+
+      {suggestOpen && (
+        <SuggestionPanel
+          rows={effectiveRows}
+          onClone={handleSuggestClone}
+          onClose={() => setSuggestOpen(false)}
+        />
+      )}
     </div>
   )
 }
