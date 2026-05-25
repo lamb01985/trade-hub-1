@@ -12,8 +12,14 @@
 const WINDOW_MS = 5 * 60 * 1000
 const MAX_ERRORS_REMEMBERED = 30
 
-let events = []          // [{ ts, kind: 'success' | 'failure' | 'rate_limit', detail }]
+let events = []          // [{ ts, kind: 'success' | 'failure' | 'rate_limit' | 'unavailable', detail }]
 let subscribers = []
+
+// Permanently-unavailable endpoint patterns (Polygon 403, plan tier). Tracked
+// here as a flat list — the live truth lives in massive.js. apiHealth keeps a
+// mirror so the header indicator modal can render it without depending on the
+// API client module load order.
+let unavailableEndpoints = []   // [{ pattern, firstSeenTs, hint? }]
 
 function prune() {
   const cutoff = Date.now() - WINDOW_MS
@@ -57,6 +63,21 @@ export function recordRateLimit(detail = null) {
   notify()
 }
 
+// Records a NEW unavailable endpoint (first time we saw the 403). Idempotent:
+// the second 403 for the same pattern is a no-op so we don't double-notify or
+// inflate the recent-error list.
+export function recordUnavailable(pattern, hint = null) {
+  if (!pattern) return
+  if (unavailableEndpoints.some(e => e.pattern === pattern)) return
+  unavailableEndpoints.push({ pattern, firstSeenTs: Date.now(), hint })
+  events.push({ ts: Date.now(), kind: 'unavailable', detail: { url: pattern, hint } })
+  notify()
+}
+
+export function getUnavailableEndpoints() {
+  return unavailableEndpoints.slice()
+}
+
 function errorBufferCount() {
   let n = 0
   for (const e of events) if (e.kind !== 'success') n++
@@ -89,6 +110,7 @@ export function snapshot() {
     errorRate,
     windowMs: WINDOW_MS,
     recentErrors,
+    unavailableEndpoints: unavailableEndpoints.slice(),
   }
 }
 
@@ -101,5 +123,6 @@ export function subscribe(fn) {
 
 export function clear() {
   events = []
+  unavailableEndpoints = []
   notify()
 }

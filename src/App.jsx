@@ -33,7 +33,7 @@ import { ORBTab, IVAnalyzerTab, CalculatorTab, StatsTab, WatchlistTab, PrepTab }
 import Journal from './components/Journal.jsx'
 import QuickLog from './components/QuickLog.jsx'
 import GlossaryModal from './components/Glossary.jsx'
-import { LIME, RED, YELLOW, MONO, SANS, DARK, BORDER, PANEL, todayStr, uid, getSession, f2 } from './constants.js'
+import { LIME, RED, YELLOW, BLUE, MONO, SANS, DARK, BORDER, PANEL, todayStr, uid, getSession, f2 } from './constants.js'
 
 const TABS = [
   { id: 'plan', label: 'Plan', desc: 'Pre-market game plan' },
@@ -1089,25 +1089,58 @@ function ApiHealthIndicator() {
             <div style={{ fontSize: 10, color: '#666', fontFamily: MONO, letterSpacing: '0.06em' }}>
               Rolling 5-minute window. Polygon requests served from in-memory cache don't count.
             </div>
+
+            {/* Polygon plan limits — populated whenever the API client sees a
+                403 on an endpoint. We short-circuit further calls to that
+                endpoint, so this list is what's currently unavailable to the
+                user's plan tier. */}
+            {snap.unavailableEndpoints?.length > 0 && (
+              <div>
+                <div style={{ fontSize: 10, color: '#666', fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 6 }}>
+                  Polygon plan limits
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {snap.unavailableEndpoints.map((u, i) => (
+                    <div key={i} style={{
+                      background: '#161005', border: `1px solid ${YELLOW}33`, borderRadius: 3,
+                      padding: '6px 8px', fontSize: 10, fontFamily: MONO, color: '#caa860', lineHeight: 1.5,
+                    }}>
+                      <div style={{ wordBreak: 'break-all', color: YELLOW, fontWeight: 700 }}>{u.pattern}</div>
+                      {u.hint && <div style={{ color: '#9a8b54', marginTop: 2 }}>{u.hint}</div>}
+                    </div>
+                  ))}
+                </div>
+                <a href="https://polygon.io/pricing" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: 6, fontSize: 10, color: BLUE, fontFamily: MONO, letterSpacing: '0.06em', textDecoration: 'none' }}>
+                  polygon.io/pricing →
+                </a>
+              </div>
+            )}
             <div>
               <div style={{ fontSize: 10, color: '#666', fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 6 }}>Recent errors</div>
               {(!snap.recentErrors || snap.recentErrors.length === 0) ? (
                 <div style={{ fontSize: 11, color: '#666' }}>No errors recorded.</div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {snap.recentErrors.map((e, i) => (
-                    <div key={i} style={{
-                      background: '#0a0606', border: `1px solid ${BORDER}`, borderRadius: 3,
-                      padding: '5px 8px', fontSize: 10, fontFamily: MONO, color: '#aaa', lineHeight: 1.5,
-                    }}>
-                      <span style={{ color: e.kind === 'rate_limit' ? YELLOW : RED, fontWeight: 700 }}>{e.kind === 'rate_limit' ? 'RATE-LIMIT' : 'ERROR'}</span>
-                      <span style={{ color: '#666', marginLeft: 8 }}>{new Date(e.ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
-                      <div style={{ color: '#888', fontSize: 10, marginTop: 2, wordBreak: 'break-all' }}>
-                        {e.detail?.url || e.detail?.message || '—'}
-                        {e.detail?.status ? ` · status ${e.detail.status}` : ''}
+                  {snap.recentErrors.map((e, i) => {
+                    const isRate = e.kind === 'rate_limit'
+                    const isUnavail = e.kind === 'unavailable'
+                    const tagColor = isRate ? YELLOW : isUnavail ? YELLOW : RED
+                    const tag = isRate ? 'RATE-LIMIT' : isUnavail ? 'PLAN LIMIT' : 'ERROR'
+                    return (
+                      <div key={i} style={{
+                        background: '#0a0606', border: `1px solid ${BORDER}`, borderRadius: 3,
+                        padding: '5px 8px', fontSize: 10, fontFamily: MONO, color: '#aaa', lineHeight: 1.5,
+                      }}>
+                        <span style={{ color: tagColor, fontWeight: 700 }}>{tag}</span>
+                        <span style={{ color: '#666', marginLeft: 8 }}>{new Date(e.ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                        <div style={{ color: '#888', fontSize: 10, marginTop: 2, wordBreak: 'break-all' }}>
+                          {e.detail?.url || e.detail?.message || '—'}
+                          {e.detail?.status ? ` · status ${e.detail.status}` : ''}
+                          {e.detail?.hint ? ` · ${e.detail.hint}` : ''}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>

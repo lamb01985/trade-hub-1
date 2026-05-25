@@ -11,9 +11,48 @@
 // Every outcome (success / failure / rate-limit retry) is recorded into
 // apiHealth so the header indicator reflects current API quality.
 
-import { recordSuccess, recordFailure, recordRateLimit } from './apiHealth.js'
+import { recordSuccess, recordFailure, recordRateLimit, recordUnavailable } from './apiHealth.js'
 
 const BASE = 'https://api.polygon.io'
+
+// ── Plan-tier 403 tracking ─────────────────────────────────────────────────
+// Polygon returns 403 for endpoints not included in the user's plan tier.
+// These are PERMANENT for the session — retrying does nothing but burn time
+// and log spam. We remember the endpoint pattern (path with ticker/dates
+// stripped) and short-circuit future calls to it with a synthetic 403.
+//
+// A small per-endpoint hint helps the user understand why something is
+// missing in the UI without having to read Polygon's pricing page.
+
+const unavailableEndpoints = new Set()
+
+function endpointPattern(urlStr) {
+  try {
+    const u = new URL(urlStr)
+    let p = u.pathname
+    // /v2/aggs/ticker/NVDA/range/1/day/2026-01-01/2026-05-01 →
+    // /v2/aggs/ticker/{TICKER}/range/1/day/{DATE}/{DATE}
+    p = p.replace(/\/[A-Z][A-Z0-9.\-]{0,9}(?=\/|$)/g, '/{TICKER}')
+    p = p.replace(/\d{4}-\d{2}-\d{2}/g, '{DATE}')
+    return p
+  } catch {
+    return String(urlStr).slice(0, 80)
+  }
+}
+
+const ENDPOINT_HINTS = {
+  '/v3/snapshot/options/{TICKER}': 'Options chain (Polygon Options plan).',
+  '/v3/reference/short-interest': 'Short interest (Polygon Stocks Advanced).',
+  '/vX/reference/financials': 'Fundamentals (Polygon Stocks Advanced).',
+  '/v2/snapshot/locale/us/markets/stocks/tickers/{TICKER}': 'Full snapshot (Polygon Stocks Starter+).',
+}
+
+export function isEndpointUnavailable(urlStr) {
+  return unavailableEndpoints.has(endpointPattern(urlStr))
+}
+export function listUnavailableEndpoints() {
+  return [...unavailableEndpoints]
+}
 
 // ── Throttle ───────────────────────────────────────────────────────────────
 // Polygon's free tier allows 5 req/s and most paid plans go to 100+ req/s.
@@ -40,10 +79,37 @@ async function waitForNextSlot() {
 }
 
 async function throttledFetch(url, options = {}) {
+  // Short-circuit: this endpoint pattern has already 403'd on this session,
+  // so don't waste a request slot. We synthesize a Response-shape object the
+  // callers can branch on, identical to what fetch would have produced.
+  const pattern = endpointPattern(url)
+  if (unavailableEndpoints.has(pattern)) {
+    return {
+      ok: false,
+      status: 403,
+      _unavailable: true,
+      _pattern: pattern,
+      text: async () => 'endpoint unavailable on current Polygon plan',
+      json: async () => ({ error: 'endpoint unavailable on current Polygon plan' }),
+    }
+  }
+
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     await waitForNextSlot()
     try {
       const r = await fetch(url, options)
+      if (r.status === 403) {
+        // Permanent for the session — don't retry, don't poll. Remember the
+        // pattern so future callers for the same endpoint short-circuit too.
+        if (!unavailableEndpoints.has(pattern)) {
+          unavailableEndpoints.add(pattern)
+          const hint = ENDPOINT_HINTS[pattern] || null
+          recordUnavailable(pattern, hint)
+          // eslint-disable-next-line no-console
+          console.warn(`[Polygon] endpoint unavailable on current plan: ${pattern}${hint ? ` — ${hint}` : ''}`)
+        }
+        return r
+      }
       if (r.status === 429) {
         recordRateLimit({ url: shortUrl(url), attempt })
         if (attempt < MAX_RETRIES - 1) {
@@ -140,8 +206,16 @@ async function get(apiKey, path, params = {}) {
   const res = await throttledFetch(urlStr)
   if (!res.ok) {
     const text = await res.text().catch(() => '')
-    recordFailure({ url: shortUrl(urlStr), status: res.status })
-    throw new Error(`Massive API ${res.status}: ${text.slice(0, 120)}`)
+    // 403 is already recorded as 'unavailable' by throttledFetch; don't
+    // double-record it as a generic failure (which would inflate the error
+    // rate and turn the header indicator red over a permanent plan limit).
+    if (res.status !== 403) {
+      recordFailure({ url: shortUrl(urlStr), status: res.status })
+    }
+    const err = new Error(`Massive API ${res.status}: ${text.slice(0, 120)}`)
+    err.status = res.status
+    err.unavailable = res.status === 403
+    throw err
   }
   recordSuccess({ url: shortUrl(urlStr) })
   return res.json()
@@ -284,7 +358,7 @@ export async function getOptionsPCRatio(apiKey, ticker) {
     if (callVol + putVol === 0) return { callVol: 0, putVol: 0, pcRatio: null }
     return { callVol, putVol, pcRatio: callVol > 0 ? putVol / callVol : null }
   } catch (e) {
-    return { planError: e.message?.includes('403'), error: e.message }
+    return { planError: e.unavailable === true || e.status === 403, error: e.message }
   }
 }
 
