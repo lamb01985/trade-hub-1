@@ -186,14 +186,14 @@ export function seedExamplesIfEmpty() {
   }
   const seeds = [
     createSetup({
-      name: 'Multiple compression short',
-      description: 'High P/S growth stock with deteriorating fundamentals and confirmed drawdown.',
+      name: 'Distribution drawdown short',
+      description: 'Names already 15% off their 52W high are now losing the 50-day with VWAP rejection and elevated volume. Edit this setup if you want to swap in P/S or scanner-score conditions when fundamentals are wired.',
       direction: 'short',
       universe: ['NET', 'CRWD', 'DDOG', 'NOW'],
       conditions: [
-        { id: uid(), type: 'ps_ratio_above', params: { value: 20 } },
         { id: uid(), type: 'down_from_high_pct', params: { pct: 15 } },
-        { id: uid(), type: 'scanner_score_above', params: { value: 40 } },
+        { id: uid(), type: 'price_below_ema', params: { period: 50 } },
+        { id: uid(), type: 'price_below_vwap', params: {} },
         { id: uid(), type: 'volume_above_avg', params: { multiple: 1.5 } },
       ],
       operator: 'all',

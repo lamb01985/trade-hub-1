@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useLocalStorage } from './hooks/useStore.js'
 import { useLiveData } from './hooks/useLiveData.js'
 import { useLiveDataMulti } from './hooks/useLiveDataMulti.js'
@@ -10,12 +10,17 @@ import ChartTab from './components/Chart.jsx'
 import InlineCheckGate from './components/InlineCheckGate.jsx'
 import CalendarTab from './components/Calendar.jsx'
 import Playbook from './components/Playbook.jsx'
-import ShortThesis from './components/ShortThesis.jsx'
+import Setups from './components/Setups.jsx'
 import WheelScanner from './components/WheelScanner.jsx'
 import Bot from './components/Bot.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
 import { getAllEvents, highImpactToday } from './lib/calendar.js'
 import { exchangeCode, refreshTokens, getAccountNumbers, getAccountSummary, getTodaysFilledOrders, countDayTrades, SCHWAB_BLUE } from './lib/schwab.js'
+import { getHistoricalBars } from './lib/massive.js'
+import { bootstrapSetups, saveSetups } from './lib/setupStorage.js'
+import { evaluateAllSetups, derivePutThesesProjection } from './lib/setupEngine.js'
+import { buildSnapshot } from './lib/conditionEvaluators.js'
+import { notify, dismiss, subscribe as subscribeNotify, requestNotificationPermission } from './lib/notify.js'
 import { ORBTab, IVAnalyzerTab, CalculatorTab, StatsTab, WatchlistTab, PrepTab } from './components/tabs.jsx'
 import Journal from './components/Journal.jsx'
 import QuickLog from './components/QuickLog.jsx'
@@ -68,7 +73,17 @@ export default function App() {
   const [schwabDayTrades, setSchwabDayTrades] = useState(0)
   const [schwabToast, setSchwabToast] = useState('')
   const [schwabConnectError, setSchwabConnectError] = useState('')
-  const [putTheses, setPutTheses] = useLocalStorage('th-short-theses', {})
+  // Setups: generic trade-trigger engine. State seeded via bootstrapSetups on
+  // first mount (migrates legacy th-short-theses into short setups, adds four
+  // example seeds if storage is empty afterwards). Every mutation persists.
+  const [setups, setSetupsRaw] = useState(() => (typeof window === 'undefined' ? [] : bootstrapSetups()))
+  const setSetups = (nextOrFn) => {
+    setSetupsRaw(prev => {
+      const next = typeof nextOrFn === 'function' ? nextOrFn(prev) : nextOrFn
+      saveSetups(next)
+      return next
+    })
+  }
   // Per-ticker volume thresholds for the chart overlay. Lifted to App so the
   // AI brief generator in PrepTab can write into it and the Chart reacts in
   // the same session. Defaults to 50k when a ticker has no entry (Chart-side).
@@ -78,6 +93,9 @@ export default function App() {
   const [botWatchlist, setBotWatchlist] = useLocalStorage('tradeHub.bot.watchlist.v1', ['QQQ', 'TQQQ', 'SPY'])
   // Wheel scanner watchlist. Default 9 quality names with active option chains.
   const [wheelWatchlist, setWheelWatchlist] = useLocalStorage('tradeHub.wheel.watchlist.v1', ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'AMD', 'COST', 'SPY', 'QQQ'])
+  // Account value used by the Setup engine to size staged trades. Defaults to
+  // the same value the WheelScanner uses; not yet user-editable from App.
+  const accountValue = 25000
   const [_priceTick, setPriceTick] = useState(0)
   useEffect(() => { const id = setInterval(() => setPriceTick(t => t + 1), 5000); return () => clearInterval(id) }, [])
 
@@ -182,6 +200,134 @@ export default function App() {
 
   // Multi-ticker bundle for the wheel scanner's watchlist (separate from bot).
   const wheelDataMulti = useLiveDataMulti(apiKey, wheelWatchlist)
+
+  // Setup engine: live-subscribe to the union of every active setup's universe.
+  const setupTickers = useMemo(() => {
+    const seen = new Set()
+    const out = []
+    for (const s of setups || []) {
+      if ((s.status || 'active') !== 'active') continue
+      for (const t of s.universe || []) {
+        const T = String(t || '').toUpperCase().trim()
+        if (!T || seen.has(T)) continue
+        seen.add(T)
+        out.push(T)
+      }
+    }
+    return out
+  }, [setups])
+  const setupDataMulti = useLiveDataMulti(apiKey, setupTickers)
+
+  // 252-day daily bars per setup ticker, used by buildSnapshot for EMAs, RSI,
+  // MACD, and 52W high/low. Cached in a ref; refreshed when tickers change
+  // and again every 30 minutes during the session.
+  const setupHistRef = useRef({})  // { TICKER: { bars, fetchedAt } }
+  const [histVersion, setHistVersion] = useState(0)
+  const setupTickersKey = setupTickers.join('|')
+  useEffect(() => {
+    if (!apiKey || setupTickers.length === 0) return
+    let cancelled = false
+    async function refresh() {
+      const MAX_AGE = 30 * 60 * 1000
+      for (const t of setupTickers) {
+        const cached = setupHistRef.current[t]
+        if (cached && (Date.now() - cached.fetchedAt) < MAX_AGE) continue
+        try {
+          const bars = await getHistoricalBars(apiKey, t, 252)
+          if (cancelled) return
+          setupHistRef.current[t] = { bars: bars || [], fetchedAt: Date.now() }
+        } catch {}
+      }
+      if (!cancelled) setHistVersion(v => v + 1)
+    }
+    refresh()
+    const id = setInterval(refresh, 15 * 60 * 1000)
+    return () => { cancelled = true; clearInterval(id) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiKey, setupTickersKey])
+
+  // Per-ticker snapshots = bundle + indicators. Recomputed every render so it
+  // tracks the price ticks pumped through liveDataMulti without a separate
+  // interval.
+  const setupSnapshots = useMemo(() => {
+    const out = {}
+    const bundles = setupDataMulti?.data || {}
+    for (const t of setupTickers) {
+      const bundle = bundles[t]
+      const hist = setupHistRef.current[t]?.bars || []
+      const snap = buildSnapshot(t, bundle, hist, {})
+      if (snap) out[t] = snap
+    }
+    return out
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setupDataMulti, setupTickersKey, histVersion])
+
+  const setupEvaluation = useMemo(
+    () => evaluateAllSetups(setups, setupSnapshots),
+    [setups, setupSnapshots]
+  )
+
+  // Trigger-transition detection. The first evaluation after mount establishes
+  // a baseline so we don't spam toasts for setups that were already in a
+  // triggered state from a previous session.
+  const prevTriggerKeysRef = useRef(null)
+  useEffect(() => {
+    if (!setupEvaluation) return
+    const currentKeys = new Set(setupEvaluation.triggers.map(t => `${t.setupId}|${t.ticker}`))
+    if (prevTriggerKeysRef.current === null) {
+      prevTriggerKeysRef.current = currentKeys
+      return
+    }
+    const newOnes = setupEvaluation.triggers.filter(t => !prevTriggerKeysRef.current.has(`${t.setupId}|${t.ticker}`))
+    prevTriggerKeysRef.current = currentKeys
+    if (newOnes.length === 0) return
+
+    // Stamp lastTriggeredAt + triggered events on the relevant setups.
+    setSetups(prev => {
+      const next = [...prev]
+      for (const tr of newOnes) {
+        const idx = next.findIndex(s => s.id === tr.setupId)
+        if (idx < 0) continue
+        const cur = next[idx]
+        next[idx] = {
+          ...cur,
+          alerts: {
+            ...(cur.alerts || {}),
+            lastTriggeredAt: { ...((cur.alerts || {}).lastTriggeredAt || {}), [tr.ticker]: Date.now() },
+          },
+          triggeredEvents: [
+            { ticker: tr.ticker, triggeredAt: Date.now(), price: tr.snapshot?.price ?? null },
+            ...((cur.triggeredEvents || []).slice(0, 49)),
+          ],
+        }
+      }
+      return next
+    })
+
+    // Toast + native notification per new trigger.
+    for (const tr of newOnes) {
+      if (tr.setup?.alerts?.enabled === false) continue
+      notify({
+        id: `setup-${tr.setupId}-${tr.ticker}`,
+        title: `${tr.setup.name}: triggered on ${tr.ticker}`,
+        body: `Price $${(tr.snapshot?.price ?? 0).toFixed(2)} · ${tr.setup.direction?.toUpperCase() || 'SETUP'} · open Setups for the staged trade.`,
+        kind: 'trigger',
+        action: {
+          label: 'Open Setups',
+          onClick: () => { setActiveTab('plan'); setPlanSubTab('setups') },
+        },
+        ttlMs: 0,
+      })
+    }
+  }, [setupEvaluation])
+
+  // Best-effort: ask for native notification permission once. Browsers silence
+  // re-prompts after a denial; this is a one-time best-attempt on mount.
+  useEffect(() => { requestNotificationPermission() }, [])
+
+  // Derived projection feeding Chart / Levels / Calendar via the legacy
+  // putTheses-shape API. Kept so those components don't have to be rewritten.
+  const derivedPutTheses = useMemo(() => derivePutThesesProjection(setups), [setups])
 
   // Merge pre-market H/L into custom levels so they show in the level map
   const enrichedCustomLevels = useMemo(() => {
@@ -334,15 +480,15 @@ export default function App() {
               </button>
             )}
             {(() => {
-              const curT = (prep.ticker || 'QQQ').toUpperCase()
-              const thesis = putTheses[curT]
-              if (!thesis?.trigger || !liveData?.price) return null
-              const near = Math.abs(liveData.price - thesis.trigger) <= 1
-              const triggered = liveData.price <= thesis.trigger
-              if (!near && !triggered) return null
+              const count = setupEvaluation?.triggers?.length || 0
+              if (count === 0) return null
               return (
-                <button onClick={() => { setActiveTab('plan'); setPlanSubTab('shortthesis') }} title="Active put thesis trigger (Plan / Short Thesis)" style={{ fontSize: 9, color: RED, fontFamily: MONO, background: 'transparent', border: `1px solid ${RED}55`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.08em', cursor: 'pointer', fontWeight: 700, animation: triggered ? 'hdrpulse 1.5s infinite' : 'none' }}>
-                  PUT {triggered ? 'TRIGGER' : 'NEAR'}: {curT} ↓${f2(thesis.trigger)}
+                <button
+                  onClick={() => { setActiveTab('plan'); setPlanSubTab('setups') }}
+                  title="Setups triggered (Plan / Setups)"
+                  style={{ fontSize: 9, color: RED, fontFamily: MONO, background: 'transparent', border: `1px solid ${RED}55`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.08em', cursor: 'pointer', fontWeight: 700, animation: 'hdrpulse 1.5s infinite' }}
+                >
+                  {count} SETUP{count === 1 ? '' : 'S'} TRIGGERED →
                 </button>
               )
             })()}
@@ -459,7 +605,7 @@ export default function App() {
                 { id: 'playbook', label: 'Playbook' },
                 { id: 'calendar', label: 'Calendar' },
                 { id: 'levels', label: 'Levels' },
-                { id: 'shortthesis', label: 'Short Thesis' },
+                { id: 'setups', label: 'Setups' },
               ]}
               active={planSubTab}
               onChange={setPlanSubTab}
@@ -511,7 +657,7 @@ export default function App() {
 
             <div style={{ display: planSubTab === 'calendar' ? 'block' : 'none' }}>
               <ErrorBoundary label="Calendar">
-                <CalendarTab putTheses={putTheses} apiKey={apiKey} />
+                <CalendarTab putTheses={derivedPutTheses} apiKey={apiKey} />
               </ErrorBoundary>
             </div>
 
@@ -524,14 +670,20 @@ export default function App() {
                   settings={settings}
                   onSettingsChange={setSettings}
                   mtfAlignment={mtfAlignment}
-                  putThesis={putTheses[(prep.ticker || 'QQQ').toUpperCase()]}
+                  putThesis={derivedPutTheses[(prep.ticker || 'QQQ').toUpperCase()]}
                 />
               </ErrorBoundary>
             </div>
 
-            <div style={{ display: planSubTab === 'shortthesis' ? 'block' : 'none' }}>
-              <ErrorBoundary label="Short Thesis">
-                <ShortThesis apiKey={apiKey} anthropicKey={anthropicKey} theses={putTheses} onThesesChange={setPutTheses} />
+            <div style={{ display: planSubTab === 'setups' ? 'block' : 'none' }}>
+              <ErrorBoundary label="Setups">
+                <Setups
+                  setups={setups}
+                  onSetupsChange={setSetups}
+                  evaluation={setupEvaluation}
+                  accountValue={accountValue}
+                  suggestionTickers={[...new Set([...botWatchlist, ...wheelWatchlist, ...setupTickers])]}
+                />
               </ErrorBoundary>
             </div>
           </div>
@@ -562,7 +714,7 @@ export default function App() {
                   customLevels={customLevels}
                   onCustomLevelsChange={setCustomLevels}
                   mtfAlignment={mtfAlignment}
-                  putThesis={putTheses[(prep.ticker || 'QQQ').toUpperCase()]}
+                  putThesis={derivedPutTheses[(prep.ticker || 'QQQ').toUpperCase()]}
                   volumeThresholds={volumeThresholds}
                   onVolumeThresholdsChange={setVolumeThresholds}
                 />
@@ -727,6 +879,49 @@ export default function App() {
           {schwabToast}
         </div>
       )}
+
+      <NotificationOverlay />
+    </div>
+  )
+}
+
+// Toast stack pinned bottom-right. Subscribes to the notify.js queue and
+// renders dismissible cards. Setup-trigger toasts are sticky until the user
+// dismisses or hits the action; info toasts auto-fade via their own ttlMs.
+function NotificationOverlay() {
+  const [items, setItems] = useState([])
+  useEffect(() => subscribeNotify(setItems), [])
+  if (!items?.length) return null
+  return (
+    <div style={{
+      position: 'fixed', bottom: 90, right: 22, zIndex: 250,
+      display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 360,
+    }}>
+      {items.map(t => {
+        const accent = t.kind === 'trigger' ? RED : t.kind === 'warn' ? YELLOW : LIME
+        return (
+          <div key={t.id} style={{
+            background: '#0a0a0a', border: `1px solid ${accent}55`, borderLeft: `3px solid ${accent}`,
+            borderRadius: 5, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6,
+            boxShadow: '0 6px 24px rgba(0,0,0,0.5)',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+              <div style={{ fontSize: 12, fontFamily: MONO, fontWeight: 800, color: '#e8e8e8', lineHeight: 1.3 }}>{t.title}</div>
+              <button onClick={() => dismiss(t.id)} style={{ background: 'transparent', border: 'none', color: '#666', fontFamily: MONO, fontSize: 12, cursor: 'pointer' }}>✕</button>
+            </div>
+            {t.body && (
+              <div style={{ fontSize: 11, fontFamily: MONO, color: '#aaa', lineHeight: 1.5 }}>{t.body}</div>
+            )}
+            {t.action && (
+              <button onClick={() => { try { t.action.onClick?.() } catch {}; dismiss(t.id) }} style={{
+                alignSelf: 'flex-start', background: accent, color: '#000', border: 'none',
+                padding: '5px 10px', borderRadius: 3, fontFamily: MONO, fontSize: 10,
+                letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 800, cursor: 'pointer',
+              }}>{t.action.label}</button>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
