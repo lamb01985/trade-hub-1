@@ -13,6 +13,7 @@ import Playbook from './components/Playbook.jsx'
 import Setups from './components/Setups.jsx'
 import MoversScanner from './components/MoversScanner.jsx'
 import UniverseBuilder from './components/UniverseBuilder.jsx'
+import OutcomesAnalyzer from './components/OutcomesAnalyzer.jsx'
 import WheelScanner from './components/WheelScanner.jsx'
 import Bot from './components/Bot.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
@@ -847,6 +848,7 @@ export default function App() {
             <SubNav
               tabs={[
                 { id: 'journal', label: 'Journal' },
+                { id: 'outcomes', label: 'Outcomes' },
                 { id: 'stats', label: 'Stats' },
               ]}
               active={reviewSubTab}
@@ -866,6 +868,17 @@ export default function App() {
                   schwabToken={schwabToken}
                   schwabAccount={schwabAccount}
                   onAddTrades={list => setTrades(prev => [...prev, ...list])}
+                />
+              </ErrorBoundary>
+            </div>
+
+            <div style={{ display: reviewSubTab === 'outcomes' ? 'block' : 'none' }}>
+              <ErrorBoundary label="Outcomes">
+                <OutcomesAnalyzer
+                  setups={setups}
+                  onSetupsChange={setSetups}
+                  apiKey={apiKey}
+                  onJumpToSetups={() => { setActiveTab('plan'); setPlanSubTab('setups') }}
                 />
               </ErrorBoundary>
             </div>
