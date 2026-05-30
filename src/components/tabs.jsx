@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Card, SLabel, Heading, Tile, Fld, Sel, Btn, Pill, CheckRow, Tip } from './ui.jsx'
 import { LIME, RED, YELLOW, BLUE, PURPLE, ORANGE, MONO, SANS, BORDER, DARK, PANEL, SETUP_TYPES, todayStr, tomorrowStr, uid, f2, fmtD, fmtU, rrColor, ivContext, calcOptionRR, bsCalc, getETMins, SESSION_LABELS, SESSION_COLORS, SESSION_TIPS } from '../constants.js'
 import { getOptionChain, getPrevDay, getHistoricalBars, getOptionsPCRatio, getTopMovers } from '../lib/massive.js'
-import { getOptionAsk, occSymbol, SCHWAB_TRADE_URL, SCHWAB_BLUE } from '../lib/schwab.js'
+import { occSymbol, SCHWAB_TRADE_URL, SCHWAB_BLUE } from '../lib/schwabClient.js'
 import { useLocalStorage } from '../hooks/useStore.js'
 
 const CL_ITEMS = [
@@ -530,7 +530,7 @@ export function IVAnalyzerTab({ apiKey, instrument }) {
 }
 
 // ── Calculator Tab ────────────────────────────────────────────────────────────
-export function CalculatorTab({ prefill, onLogTrade, checklistPassed, lockedOut, maxTradesReached, apiKey, instrument, schwabToken, schwabAccount, schwabAcctInfo, prep, liveData }) {
+export function CalculatorTab({ prefill, onLogTrade, checklistPassed, lockedOut, maxTradesReached, apiKey, instrument, schwab, prep, liveData }) {
   const [ticker, setTicker] = useState('')
   const [optType, setOptType] = useState('call')
   const [strike, setStrike] = useState('')
@@ -547,7 +547,8 @@ export function CalculatorTab({ prefill, onLogTrade, checklistPassed, lockedOut,
   const [expiry, setExpiry] = useState(todayStr())
 
   const isStock = instrument === 'stock'
-  const schwabConnected = !!schwabToken?.access_token
+  const schwabConnected = !!schwab?.isConnected
+  const schwabAcctInfo = schwab?.account || null
 
   useEffect(() => {
     if (!prefill) return
@@ -557,13 +558,20 @@ export function CalculatorTab({ prefill, onLogTrade, checklistPassed, lockedOut,
   }, [prefill])
 
   async function fetchSchwabAsk() {
-    if (!schwabToken?.access_token || !ticker || !strike) { setLiveAskError('Need Schwab connection, ticker, and strike.'); return }
+    if (!schwabConnected || !ticker || !strike) { setLiveAskError('Need Schwab connection, ticker, and strike.'); return }
     setLiveAskLoading(true); setLiveAskError(null); setAskDetail(null)
     try {
-      const quote = await getOptionAsk(schwabToken, { ticker, optType, strike, expiry })
-      if (!quote || quote.ask == null) { setLiveAskError('No contract found at that strike/expiry.'); setLiveAskLoading(false); return }
-      setEntry(f2(quote.ask))
-      setAskDetail({ bid: quote.bid, ask: quote.ask, spread: quote.ask - quote.bid })
+      const chain = await schwab.getChain(ticker, {
+        expiry,
+        type: optType.toLowerCase() === 'put' ? 'PUT' : 'CALL',
+        strike: parseFloat(strike),
+      })
+      const side = optType.toLowerCase() === 'put' ? chain.puts : chain.calls
+      const target = parseFloat(strike)
+      const match = (side || []).find(c => parseFloat(c.strike) === target) || side?.[0]
+      if (!match || match.ask == null) { setLiveAskError('No contract found at that strike/expiry.'); setLiveAskLoading(false); return }
+      setEntry(f2(match.ask))
+      setAskDetail({ bid: match.bid, ask: match.ask, spread: (match.ask || 0) - (match.bid || 0) })
     } catch (e) { setLiveAskError(e.message || 'Schwab quote failed') }
     setLiveAskLoading(false)
   }

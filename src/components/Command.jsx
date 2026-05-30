@@ -3,7 +3,7 @@ import { Card, SLabel, Heading, Tile, Fld, Sel, Btn, Tip } from './ui.jsx'
 import { LIME, RED, YELLOW, MONO, BORDER, SESSION_LABELS, SESSION_COLORS, SESSION_TIPS, getSession, getMarketHolidayName, todayStr, f2, fmtD, fmtU } from '../constants.js'
 import { rotationContextForTicker } from '../lib/sectors.js'
 
-export default function Command({ trades, settings, onSettingsChange, lockedOut, onUnlock, apiKey, onApiKeyChange, anthropicKey, onAnthropicKeyChange, liveData, marketEvents, instrument, ticker = 'QQQ', levelMap, todayEvents = [], schwabCreds, onSchwabCredsChange, schwabToken, onSchwabTokenChange, schwabAccount, schwabAcctInfo, schwabDayTrades = 0, schwabConnectError }) {
+export default function Command({ trades, settings, onSettingsChange, lockedOut, onUnlock, apiKey, onApiKeyChange, anthropicKey, onAnthropicKeyChange, liveData, marketEvents, instrument, ticker = 'QQQ', levelMap, todayEvents = [], schwab }) {
   const [time, setTime] = useState(new Date())
   useEffect(() => { const t = setInterval(() => setTime(new Date()), 1000); return () => clearInterval(t) }, [])
 
@@ -605,22 +605,21 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
         <div style={{ fontSize: 9, color: '#444', fontFamily: MONO, marginTop: 8 }}>Key stored in your browser only. Calls go directly to api.anthropic.com.</div>
       </Card>
 
-      {/* ── Broker — Schwab ─────────────────────────────────────────────── */}
+      {/* ── Broker, Schwab ─────────────────────────────────────────────── */}
       {(() => {
         const BLUE = '#3B82F6'
-        const connected = !!schwabToken?.access_token
-        const masked = schwabAccount?.number ? '••••' + String(schwabAccount.number).slice(-4) : null
-        function connect() {
-          if (!schwabCreds?.app_key || !schwabCreds?.app_secret) return
-          window.location.href = `/api/schwab-auth?app_key=${encodeURIComponent(schwabCreds.app_key)}&redirect_uri=${encodeURIComponent(window.location.origin + '/callback')}`
-        }
+        const connected = !!schwab?.isConnected
+        const acct = schwab?.account || null
+        const dayTrades = schwab?.dayTrades || 0
+        const acctNum = acct?.accountNumber
+        const masked = acctNum ? '****' + String(acctNum).slice(-4) : null
         function disconnect() {
-          if (!confirm('Disconnect Schwab? You\'ll need to re-authorize to use Schwab features.')) return
-          onSchwabTokenChange(null)
+          if (!confirm('Disconnect Schwab? You will need to re-authorize to use Schwab features.')) return
+          schwab?.disconnect?.()
         }
         return (
           <Card style={{ border: connected ? `1px solid ${BLUE}33` : `1px solid ${BORDER}` }}>
-            <SLabel>Broker — Schwab</SLabel>
+            <SLabel>Broker, Schwab</SLabel>
 
             {!connected ? (
               <>
@@ -629,12 +628,12 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14, fontSize: 10, fontFamily: MONO, color: '#666' }}>
-                  <div style={{ color: '#aaa', fontWeight: 700 }}>Setup required:</div>
+                  <div style={{ color: '#aaa', fontWeight: 700 }}>One-time setup:</div>
                   {[
-                    'Register an app at developer.schwab.com with Accounts+Trading AND Market Data',
-                    `Set callback URL to ${typeof window !== 'undefined' ? window.location.origin : 'https://trade-hub-1.vercel.app'}/callback`,
-                    'Wait for Schwab approval (1–3 business days)',
-                    'Paste your App Key + App Secret below and click Connect',
+                    'App registered at developer.schwab.com with Accounts+Trading AND Market Data',
+                    'App approved by Schwab (1 to 3 business days)',
+                    'SCHWAB_APP_KEY, SCHWAB_APP_SECRET, SCHWAB_CALLBACK_URL, SCHWAB_REDIRECT_AFTER_AUTH set in Vercel env',
+                    'KV_REST_API_URL and KV_REST_API_TOKEN set (Upstash Redis from Vercel Marketplace)',
                   ].map((s, i) => (
                     <div key={i} style={{ display: 'flex', gap: 8 }}>
                       <span style={{ color: '#333' }}>{i + 1}.</span>
@@ -643,31 +642,24 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
                   ))}
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
-                  <Fld label="App Key (Client ID)" value={schwabCreds?.app_key || ''} onChange={v => onSchwabCredsChange({ ...schwabCreds, app_key: v.trim() })} type="text" placeholder="from developer.schwab.com" mono />
-                  <Fld label="App Secret" value={schwabCreds?.app_secret || ''} onChange={v => onSchwabCredsChange({ ...schwabCreds, app_secret: v.trim() })} type="password" placeholder="••••••••••" mono />
-                </div>
-
                 <button
-                  onClick={connect}
-                  disabled={!schwabCreds?.app_key || !schwabCreds?.app_secret}
+                  onClick={() => schwab?.connect?.()}
                   style={{
-                    background: schwabCreds?.app_key && schwabCreds?.app_secret ? BLUE : '#1a1a1a',
-                    color: schwabCreds?.app_key && schwabCreds?.app_secret ? '#fff' : '#444',
+                    background: BLUE, color: '#fff',
                     border: 'none', borderRadius: 4, padding: '10px 18px',
                     fontFamily: MONO, fontSize: 11, fontWeight: 700, letterSpacing: '0.14em',
-                    cursor: schwabCreds?.app_key && schwabCreds?.app_secret ? 'pointer' : 'not-allowed',
+                    cursor: 'pointer',
                   }}
                 >
                   Connect Schwab →
                 </button>
 
-                {schwabConnectError && (
-                  <div style={{ fontSize: 10, fontFamily: MONO, color: RED, marginTop: 10 }}>{schwabConnectError}</div>
+                {schwab?.lastError && (
+                  <div style={{ fontSize: 10, fontFamily: MONO, color: RED, marginTop: 10 }}>{schwab.lastError.message || 'Schwab error'}</div>
                 )}
 
                 <div style={{ fontSize: 9, color: '#333', fontFamily: MONO, marginTop: 12, lineHeight: 1.6 }}>
-                  Credentials stored in your browser only. OAuth flow uses /api/schwab-callback to keep the token exchange off the browser.
+                  Credentials live in Vercel env vars. OAuth tokens live in Upstash Redis. The browser never sees the app secret or access token.
                 </div>
               </>
             ) : (
@@ -678,18 +670,22 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
                   {masked && <span style={{ fontSize: 10, fontFamily: MONO, color: '#888' }}>Account {masked}</span>}
                 </div>
 
+                {schwab?.warning && (
+                  <div style={{ fontSize: 10, fontFamily: MONO, color: YELLOW, marginBottom: 12, padding: '6px 10px', background: '#15100400', border: `1px solid ${YELLOW}33`, borderRadius: 3 }}>{schwab.warning}</div>
+                )}
+
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 14, fontFamily: MONO }}>
                   <div>
                     <div style={{ fontSize: 9, color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 3 }}>Buying Power</div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#e8e8e8' }}>{schwabAcctInfo?.buyingPower != null ? `$${schwabAcctInfo.buyingPower.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#e8e8e8' }}>{acct?.buyingPower != null ? `$${acct.buyingPower.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}</div>
                   </div>
                   <div>
                     <div style={{ fontSize: 9, color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 3 }}>Day Trades</div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: schwabDayTrades >= 3 ? RED : schwabDayTrades >= 2 ? YELLOW : LIME }}>{schwabDayTrades}/3 {schwabDayTrades >= 3 ? '— NO MORE' : 'remaining ' + (3 - schwabDayTrades)}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: dayTrades >= 3 ? RED : dayTrades >= 2 ? YELLOW : LIME }}>{dayTrades}/3 {dayTrades >= 3 ? 'NO MORE' : 'remaining ' + (3 - dayTrades)}</div>
                   </div>
                   <div>
                     <div style={{ fontSize: 9, color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 3 }}>PDT Status</div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: schwabAcctInfo?.isDayTrader ? LIME : '#aaa' }}>{schwabAcctInfo?.isDayTrader ? 'Marked PDT' : 'Standard'}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: acct?.isDayTrader ? LIME : '#aaa' }}>{acct?.isDayTrader ? 'Marked PDT' : 'Standard'}</div>
                   </div>
                 </div>
 

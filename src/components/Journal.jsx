@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useLocalStorage } from '../hooks/useStore.js'
 import { Card, SLabel, Heading, Btn, Pill } from './ui.jsx'
 import { LIME, RED, YELLOW, ORANGE, MONO, BORDER, PANEL, todayStr, f2, fmtD, fmtU } from '../constants.js'
-import { getTodaysFilledOrders, ordersToTrades, SCHWAB_BLUE } from '../lib/schwab.js'
+import { ordersToTrades, SCHWAB_BLUE } from '../lib/schwabClient.js'
 
 const SETUP_OPTIONS = ['ORB Breakout', 'VWAP Bounce', 'Level Touch', 'Pivot Break', 'Golden Pocket', 'Other']
 
@@ -226,7 +226,7 @@ function TradeRow({ trade, onUpdate, onEdit, onDelete }) {
 
 // ── Main Journal component ───────────────────────────────────────────────────
 
-export default function Journal({ trades, onUpdate, onDelete, onEdit, onOpenQuickLog, anthropicKey, prep, schwabToken, schwabAccount, onAddTrades }) {
+export default function Journal({ trades, onUpdate, onDelete, onEdit, onOpenQuickLog, anthropicKey, prep, schwab, onAddTrades }) {
   const [_, setTick] = useState(0)
   useEffect(() => { const id = setInterval(() => setTick(t => t + 1), 30000); return () => clearInterval(id) }, [])
 
@@ -240,13 +240,13 @@ export default function Journal({ trades, onUpdate, onDelete, onEdit, onOpenQuic
   const [coachError, setCoachError] = useState('')
   const [syncStatus, setSyncStatus] = useState({ state: 'idle', msg: '', at: null })
 
-  const schwabConnected = !!schwabToken?.access_token && !!schwabAccount?.hash
+  const schwabConnected = !!schwab?.isConnected
 
   async function syncFromSchwab() {
     if (!schwabConnected || !onAddTrades) return
     setSyncStatus({ state: 'loading', msg: 'Fetching from Schwab...', at: null })
     try {
-      const orders = await getTodaysFilledOrders(schwabToken, schwabAccount.hash)
+      const orders = await schwab.getOrdersToday()
       const newTrades = ordersToTrades(orders, trades)
       if (newTrades.length === 0) {
         setSyncStatus({ state: 'ok', msg: 'No new filled orders to sync.', at: Date.now() })

@@ -20,7 +20,8 @@ import WheelScanner from './components/WheelScanner.jsx'
 import Bot from './components/Bot.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
 import { getAllEvents, highImpactToday } from './lib/calendar.js'
-import { exchangeCode, refreshTokens, getAccountNumbers, getAccountSummary, getTodaysFilledOrders, countDayTrades, SCHWAB_BLUE } from './lib/schwab.js'
+import { SCHWAB_BLUE } from './lib/schwabClient.js'
+import { useSchwab } from './hooks/useSchwab.js'
 import { getHistoricalBars } from './lib/massive.js'
 import { bootstrapSetups, saveSetups } from './lib/setupStorage.js'
 import { evaluateAllSetups, derivePutThesesProjection, computeStagedTrade } from './lib/setupEngine.js'
@@ -102,13 +103,17 @@ export default function App() {
   const [showGlossary, setShowGlossary] = useState(false)
   const [quickLogOpen, setQuickLogOpen] = useState(false)
   const [editingTrade, setEditingTrade] = useState(null)
-  const [schwabCreds, setSchwabCreds] = useLocalStorage('th-schwab-creds', { app_key: '', app_secret: '' })
-  const [schwabToken, setSchwabToken] = useLocalStorage('th-schwab-token', null)
-  const [schwabAccount, setSchwabAccount] = useLocalStorage('th-schwab-account', null)
-  const [schwabAcctInfo, setSchwabAcctInfo] = useState(null)
-  const [schwabDayTrades, setSchwabDayTrades] = useState(0)
+  const schwab = useSchwab()
   const [schwabToast, setSchwabToast] = useState('')
-  const [schwabConnectError, setSchwabConnectError] = useState('')
+  // The connected-toast fires once when the hook transitions to connected.
+  const schwabPrevConnectedRef = useRef(schwab.isConnected)
+  useEffect(() => {
+    if (!schwabPrevConnectedRef.current && schwab.isConnected) {
+      setSchwabToast('Schwab connected successfully')
+      setTimeout(() => setSchwabToast(''), 4500)
+    }
+    schwabPrevConnectedRef.current = schwab.isConnected
+  }, [schwab.isConnected])
   // Setups: generic trade-trigger engine. State seeded via bootstrapSetups on
   // first mount (migrates legacy th-short-theses into short setups, adds four
   // example seeds if storage is empty afterwards). Every mutation persists.
@@ -155,92 +160,8 @@ export default function App() {
   const [_priceTick, setPriceTick] = useState(0)
   useEffect(() => { const id = setInterval(() => setPriceTick(t => t + 1), 5000); return () => clearInterval(id) }, [])
 
-  // ── Schwab OAuth callback handler ─────────────────────────────────────────
-  // Schwab redirects browser to /callback?code=... after auth. Exchange the
-  // code via /api/schwab-callback and store the tokens.
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    if (!window.location.pathname.startsWith('/callback')) return
-    const params = new URLSearchParams(window.location.search)
-    const code = params.get('code')
-    const errParam = params.get('error')
-    if (errParam) {
-      setSchwabConnectError(`Schwab auth error: ${errParam}`)
-      window.history.replaceState({}, '', '/')
-      return
-    }
-    if (!code) return
-    if (!schwabCreds?.app_key || !schwabCreds?.app_secret) {
-      setSchwabConnectError('App Key / App Secret missing — set them in the Broker section before connecting.')
-      window.history.replaceState({}, '', '/')
-      return
-    }
-    exchangeCode({ code, app_key: schwabCreds.app_key, app_secret: schwabCreds.app_secret })
-      .then(async tokens => {
-        // Look up account hash for subsequent API calls
-        let acctHash = null, acctNum = null
-        try {
-          const list = await getAccountNumbers(tokens)
-          if (list[0]) {
-            acctHash = list[0].hashValue
-            acctNum = list[0].accountNumber
-          }
-        } catch {}
-        setSchwabToken(tokens)
-        setSchwabAccount({ hash: acctHash, number: acctNum })
-        setSchwabToast('Schwab connected successfully ✓')
-        setTimeout(() => setSchwabToast(''), 4500)
-        setActiveTab('trade')
-        setTradeSubTab('command')
-        window.history.replaceState({}, '', '/')
-      })
-      .catch(err => {
-        setSchwabConnectError(err.message || 'Token exchange failed')
-        window.history.replaceState({}, '', '/')
-      })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // ── Schwab token auto-refresh ─────────────────────────────────────────────
-  useEffect(() => {
-    if (!schwabToken?.refresh_token || !schwabCreds?.app_key || !schwabCreds?.app_secret) return
-    const id = setInterval(async () => {
-      const ms = (schwabToken.expires_at || 0) - Date.now()
-      if (ms > 5 * 60 * 1000) return  // more than 5 min left, skip
-      try {
-        const fresh = await refreshTokens({ refresh_token: schwabToken.refresh_token, app_key: schwabCreds.app_key, app_secret: schwabCreds.app_secret })
-        setSchwabToken(fresh)
-      } catch {
-        setSchwabConnectError('Schwab session expired — reconnect')
-        setSchwabToken(null)
-      }
-    }, 60_000)
-    return () => clearInterval(id)
-  }, [schwabToken, schwabCreds, setSchwabToken])
-
-  // ── Periodic account info + day-trade count ───────────────────────────────
-  useEffect(() => {
-    if (!schwabToken?.access_token || !schwabAccount?.hash) {
-      setSchwabAcctInfo(null)
-      setSchwabDayTrades(0)
-      return
-    }
-    let alive = true
-    async function pull() {
-      try {
-        const [info, orders] = await Promise.all([
-          getAccountSummary(schwabToken, schwabAccount.hash),
-          getTodaysFilledOrders(schwabToken, schwabAccount.hash).catch(() => []),
-        ])
-        if (!alive) return
-        setSchwabAcctInfo(info)
-        setSchwabDayTrades(countDayTrades(orders))
-      } catch {}
-    }
-    pull()
-    const id = setInterval(pull, 60_000)
-    return () => { alive = false; clearInterval(id) }
-  }, [schwabToken, schwabAccount])
+  // Schwab connection state (account, positions, PDT count, refresh-before-call,
+  // CSRF state binding, session cookie) lives entirely in the useSchwab hook.
 
   // Build level map for alert checking
   const levelMapInput = useMemo(() => ({
@@ -577,11 +498,11 @@ export default function App() {
                 </button>
               )
             })()}
-            {schwabToken?.access_token && schwabDayTrades > 0 && (() => {
-              const c = schwabDayTrades >= 3 ? RED : schwabDayTrades >= 2 ? YELLOW : '#888'
+            {schwab.isConnected && schwab.dayTrades > 0 && (() => {
+              const c = schwab.dayTrades >= 3 ? RED : schwab.dayTrades >= 2 ? YELLOW : '#888'
               return (
-                <span title="Pattern Day Trader count — round-trip option trades today" style={{ fontSize: 9, color: c, fontFamily: MONO, border: `1px solid ${c}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.1em' }}>
-                  PDT: {schwabDayTrades}/3{schwabDayTrades >= 3 ? ' — NO MORE' : ''}
+                <span title="Pattern Day Trader count, round-trip option trades today" style={{ fontSize: 9, color: c, fontFamily: MONO, border: `1px solid ${c}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.1em' }}>
+                  PDT: {schwab.dayTrades}/3{schwab.dayTrades >= 3 ? ' NO MORE' : ''}
                 </span>
               )
             })()}
@@ -908,9 +829,7 @@ export default function App() {
                 maxTradesReached={maxTradesReached}
                 apiKey={apiKey}
                 instrument={prep.instrument || 'options'}
-                schwabToken={schwabToken}
-                schwabAccount={schwabAccount}
-                schwabAcctInfo={schwabAcctInfo}
+                schwab={schwab}
                 prep={prep}
                 liveData={liveData}
               />
@@ -933,14 +852,7 @@ export default function App() {
                 ticker={prep.ticker || 'QQQ'}
                 levelMap={fullLevelMap}
                 todayEvents={todayHighImpact}
-                schwabCreds={schwabCreds}
-                onSchwabCredsChange={setSchwabCreds}
-                schwabToken={schwabToken}
-                onSchwabTokenChange={setSchwabToken}
-                schwabAccount={schwabAccount}
-                schwabAcctInfo={schwabAcctInfo}
-                schwabDayTrades={schwabDayTrades}
-                schwabConnectError={schwabConnectError}
+                schwab={schwab}
               />
             </div>
           </div>
@@ -968,8 +880,7 @@ export default function App() {
                   onOpenQuickLog={openQuickLog}
                   anthropicKey={anthropicKey}
                   prep={prep}
-                  schwabToken={schwabToken}
-                  schwabAccount={schwabAccount}
+                  schwab={schwab}
                   onAddTrades={list => setTrades(prev => [...prev, ...list])}
                 />
               </ErrorBoundary>
