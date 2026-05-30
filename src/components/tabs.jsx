@@ -1153,11 +1153,17 @@ function scoreSnapshot(snap) {
   }
 }
 
+// Layer 1 fetch timeout. The Polygon gainers/losers calls normally return in
+// under a second; 10s is generous and avoids leaving the UI in SCANNING for a
+// hung socket.
+const LAYER1_FETCH_TIMEOUT_MS = 10000
+
 export function WatchlistTab({ apiKey, onSendToPrep, savedPreps, onLoadSavedPrep }) {
   const [tickers, setTickers] = useLocalStorage('th-scanner-tickers', DEFAULT_TICKERS)
   // Layer 1 — auto universe
   const [autoResults, setAutoResults] = useState([])
   const [autoScanning, setAutoScanning] = useState(false)
+  const [autoScanError, setAutoScanError] = useState(null)
   const [autoScanTime, setAutoScanTime] = useState(() => {
     try { const t = localStorage.getItem('th-auto-scan-time'); return t ? parseInt(t) : null } catch { return null }
   })
@@ -1172,11 +1178,32 @@ export function WatchlistTab({ apiKey, onSendToPrep, savedPreps, onLoadSavedPrep
   const initialized = useRef(false)
 
   // ── Layer 1: auto universe scan ───────────────────────────────────────────
+  // Single attempt with AbortController-backed timeout. On any failure (timeout,
+  // network, 429), retries once with a fresh controller before surfacing the
+  // error. Loading state always clears in finally so the UI cannot get stuck
+  // in SCANNING.
   async function runAutoScan() {
     if (!apiKey || autoScanning) return
     setAutoScanning(true)
+    setAutoScanError(null)
+    async function attempt() {
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), LAYER1_FETCH_TIMEOUT_MS)
+      try {
+        const snaps = await getTopMovers(apiKey, { signal: controller.signal })
+        if (controller.signal.aborted) throw new Error('timeout')
+        return snaps
+      } finally {
+        clearTimeout(timer)
+      }
+    }
     try {
-      const snaps = await getTopMovers(apiKey)
+      let snaps
+      try {
+        snaps = await attempt()
+      } catch {
+        snaps = await attempt()
+      }
       const minsElapsed = Math.max(1, getETMins() - 570)
       const filtered = snaps
         .filter(snap => {
@@ -1205,8 +1232,11 @@ export function WatchlistTab({ apiKey, onSendToPrep, savedPreps, onLoadSavedPrep
       const ts = Date.now()
       setAutoScanTime(ts)
       try { localStorage.setItem('th-auto-scan-time', String(ts)) } catch {}
-    } catch {}
-    setAutoScanning(false)
+    } catch (err) {
+      setAutoScanError(err?.message || 'fetch failed')
+    } finally {
+      setAutoScanning(false)
+    }
   }
 
   // ── Layer 2: manual watchlist scan ────────────────────────────────────────
@@ -1390,7 +1420,7 @@ export function WatchlistTab({ apiKey, onSendToPrep, savedPreps, onLoadSavedPrep
             <div style={{ fontSize: 14, fontWeight: 700, fontFamily: MONO, color: '#e8e8e8', letterSpacing: '-0.01em' }}>Today's Top Setups</div>
           </div>
           <div style={{ textAlign: 'right' }}>
-            {ageLbl(autoScanTime) && <div style={{ fontSize: 9, fontFamily: MONO, color: '#2a2a2a' }}>Updated {ageLbl(autoScanTime)}</div>}
+            {ageLbl(autoScanTime) && autoResults.length > 0 && <div style={{ fontSize: 9, fontFamily: MONO, color: '#2a2a2a' }}>Updated {ageLbl(autoScanTime)}</div>}
             <div style={{ fontSize: 8, fontFamily: MONO, color: '#1a1a1a', marginTop: 2 }}>Auto-refreshes every 30 min</div>
           </div>
         </div>
@@ -1399,6 +1429,16 @@ export function WatchlistTab({ apiKey, onSendToPrep, savedPreps, onLoadSavedPrep
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Scanning gainers + losers universe...</div>
             {[...Array(5)].map((_, i) => <SkeletonRow key={i} label="···" />)}
+          </div>
+        )}
+
+        {!autoScanning && autoScanError && autoResults.length === 0 && (
+          <div style={{ background: '#1a0d05', border: '1px solid #3a1a08', borderRadius: 5, padding: '16px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ fontSize: 10, fontFamily: MONO, color: RED, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Scan failed</div>
+              <div style={{ fontSize: 11, fontFamily: MONO, color: '#888' }}>{autoScanError}. Hit Retry to try again.</div>
+            </div>
+            <Btn small variant="ghost" onClick={runAutoScan}>Retry</Btn>
           </div>
         )}
 
@@ -1424,7 +1464,7 @@ export function WatchlistTab({ apiKey, onSendToPrep, savedPreps, onLoadSavedPrep
           </div>
         )}
 
-        {!autoScanning && autoResults.length === 0 && (
+        {!autoScanning && !autoScanError && autoResults.length === 0 && (
           <div style={{ background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 5, padding: '20px 24px', textAlign: 'center' }}>
             <div style={{ fontSize: 11, fontFamily: MONO, color: '#2a2a2a' }}>
               {apiKey ? 'No setups found in today\'s universe. Try scanning again after market open.' : 'Add your Massive API key in Command to enable auto-scanning.'}
@@ -1544,10 +1584,25 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState('')
   const [dataLoaded, setDataLoaded] = useState(false)
+  const [missingFields, setMissingFields] = useState({})
   const [justSaved, setJustSaved] = useState(false)
 
   const dc = ROUTINE.filter((_, i) => rc[i]).length
   const upd = (k, v) => onPrepChange({ ...prep, [k]: v })
+
+  // Changing the primary ticker invalidates every level/strike/IV value, all
+  // of which are ticker-specific. Clear them in the same update so the form
+  // can never display the prior ticker's data attached to a new ticker.
+  function updateTicker(v) {
+    const next = (v || '').toUpperCase()
+    const prev = (prep.ticker || '').toUpperCase()
+    if (next === prev) {
+      onPrepChange({ ...prep, ticker: next })
+      return
+    }
+    onPrepChange({ ...prep, ticker: next, orbHigh: '', orbLow: '', keyLevel: '', plannedStrike: '', ivNote: '' })
+    setMissingFields({})
+  }
 
   const canSave = !!(prep.ticker && prep.orbHigh && prep.orbLow && prep.gamePlan)
   const hasSaved = savedPreps && Object.keys(savedPreps).length > 0
@@ -1577,12 +1632,19 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
 
   function loadMarketData() {
     const { prevDay, pivots, price } = liveData || {}
-    const updates = {}
-    if (prevDay?.high) updates.orbHigh = f2(prevDay.high)
-    if (prevDay?.low) updates.orbLow = f2(prevDay.low)
-    if (pivots?.pp) updates.keyLevel = f2(pivots.pp)
-    if (price) updates.plannedStrike = String(Math.round(price))
-    onPrepChange({ ...prep, ...updates })
+    const next = {
+      orbHigh: prevDay?.high != null ? f2(prevDay.high) : '',
+      orbLow: prevDay?.low != null ? f2(prevDay.low) : '',
+      keyLevel: pivots?.pp != null ? f2(pivots.pp) : '',
+      plannedStrike: price != null ? String(Math.round(price)) : '',
+    }
+    onPrepChange({ ...prep, ...next })
+    setMissingFields({
+      orbHigh: !next.orbHigh,
+      orbLow: !next.orbLow,
+      keyLevel: !next.keyLevel,
+      plannedStrike: !next.plannedStrike,
+    })
     setDataLoaded(true)
     setTimeout(() => setDataLoaded(false), 4000)
   }
@@ -1789,7 +1851,7 @@ STRUCTURED (parsing block, do not modify the format): output exactly one JSON ob
           {dataLoaded && <span style={{ fontSize: 9, fontFamily: MONO, color: LIME }}>✓ PDH/PDL/PP/Strike loaded from Massive</span>}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 12, marginBottom: 14, alignItems: 'end' }}>
-          <Fld label="Primary Ticker" value={prep.ticker || ''} onChange={v => upd('ticker', v.toUpperCase())} type="text" placeholder="QQQ" mono />
+          <Fld label="Primary Ticker" value={prep.ticker || ''} onChange={updateTicker} type="text" placeholder="QQQ" mono />
           <div>
             <div style={{ fontSize: 9, letterSpacing: '0.14em', color: '#3a3a3a', textTransform: 'uppercase', fontFamily: MONO, marginBottom: 6 }}>Instrument</div>
             <div style={{ display: 'flex', border: `1px solid ${BORDER}`, borderRadius: 4, overflow: 'hidden' }}>
@@ -1806,10 +1868,22 @@ STRUCTURED (parsing block, do not modify the format): output exactly one JSON ob
           <Sel label="OR Period" value={prep.orPeriod || settings.orPeriod || '15'} onChange={v => upd('orPeriod', v)} options={[{ value: '5', label: '5 min (8:35 CT)' }, { value: '15', label: '15 min (8:45 CT)' }, { value: '30', label: '30 min (9:00 CT)' }]} />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12, marginBottom: 14 }}>
-          <Fld label="Prior Day High" value={prep.orbHigh || ''} onChange={v => upd('orbHigh', v)} placeholder="714.00" prefix="$" />
-          <Fld label="Prior Day Low" value={prep.orbLow || ''} onChange={v => upd('orbLow', v)} placeholder="711.50" prefix="$" />
-          <Fld label="Key Level (PP)" value={prep.keyLevel || ''} onChange={v => upd('keyLevel', v)} placeholder="712.67" prefix="$" />
-          <Fld label="Strike Plan" value={prep.plannedStrike || ''} onChange={v => upd('plannedStrike', v)} placeholder="714" prefix="$" mono />
+          <div>
+            <Fld label="Prior Day High" value={prep.orbHigh || ''} onChange={v => upd('orbHigh', v)} prefix="$" />
+            {missingFields.orbHigh && <div style={{ fontSize: 8, fontFamily: MONO, color: YELLOW, letterSpacing: '0.08em', marginTop: 4 }}>no live value</div>}
+          </div>
+          <div>
+            <Fld label="Prior Day Low" value={prep.orbLow || ''} onChange={v => upd('orbLow', v)} prefix="$" />
+            {missingFields.orbLow && <div style={{ fontSize: 8, fontFamily: MONO, color: YELLOW, letterSpacing: '0.08em', marginTop: 4 }}>no live value</div>}
+          </div>
+          <div>
+            <Fld label="Key Level (PP)" value={prep.keyLevel || ''} onChange={v => upd('keyLevel', v)} prefix="$" />
+            {missingFields.keyLevel && <div style={{ fontSize: 8, fontFamily: MONO, color: YELLOW, letterSpacing: '0.08em', marginTop: 4 }}>no live value</div>}
+          </div>
+          <div>
+            <Fld label="Strike Plan" value={prep.plannedStrike || ''} onChange={v => upd('plannedStrike', v)} prefix="$" mono />
+            {missingFields.plannedStrike && <div style={{ fontSize: 8, fontFamily: MONO, color: YELLOW, letterSpacing: '0.08em', marginTop: 4 }}>no live value</div>}
+          </div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
           {(() => {

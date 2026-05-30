@@ -201,9 +201,9 @@ function buildUrl(apiKey, path, params = {}) {
   return url.toString()
 }
 
-async function get(apiKey, path, params = {}) {
+async function get(apiKey, path, params = {}, options = {}) {
   const urlStr = buildUrl(apiKey, path, params)
-  const res = await throttledFetch(urlStr)
+  const res = await throttledFetch(urlStr, options)
   if (!res.ok) {
     const text = await res.text().catch(() => '')
     // 403 is already recorded as 'unavailable' by throttledFetch; don't
@@ -362,10 +362,10 @@ export async function getOptionsPCRatio(apiKey, ticker) {
   }
 }
 
-export async function getTopMovers(apiKey) {
+export async function getTopMovers(apiKey, { signal } = {}) {
   const [gData, lData] = await Promise.all([
-    get(apiKey, '/v2/snapshot/locale/us/markets/stocks/gainers', { include_otc: 'false' }).catch(() => ({ tickers: [] })),
-    get(apiKey, '/v2/snapshot/locale/us/markets/stocks/losers', { include_otc: 'false' }).catch(() => ({ tickers: [] })),
+    get(apiKey, '/v2/snapshot/locale/us/markets/stocks/gainers', { include_otc: 'false' }, { signal }).catch(() => ({ tickers: [] })),
+    get(apiKey, '/v2/snapshot/locale/us/markets/stocks/losers', { include_otc: 'false' }, { signal }).catch(() => ({ tickers: [] })),
   ])
   const all = [...(gData.tickers || []), ...(lData.tickers || [])]
   const seen = new Set()
