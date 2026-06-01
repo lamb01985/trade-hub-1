@@ -125,6 +125,7 @@ function buildPaperTrade(position, ticker) {
   return {
     id,
     date: new Date(position.closedAt || Date.now()).toISOString(),
+    tradeDate: new Date(position.closedAt || Date.now()).toISOString().slice(0, 10),
     ticker: (ticker || position.ticker || 'QQQ').toUpperCase(),
     optType: position.optionDirection || (position.direction === 'long' ? 'call' : 'put'),
     strike: position.optionStrike ?? null,

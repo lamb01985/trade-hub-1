@@ -111,6 +111,15 @@ export function getSession() {
 
 export const todayStr = () => new Date().toISOString().slice(0, 10)
 export const tomorrowStr = () => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10) }
+// Local-timezone YYYY-MM-DD for fields the user thinks of in their own day
+// (trade dates entered via the Log Trade form). Differs from todayStr() near
+// UTC midnight, which falls in CT evening.
+export const localDateStr = (d = new Date()) => {
+  const yyyy = d.getFullYear()
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
+}
 export const uid = () => Math.random().toString(36).slice(2, 10)
 export const f2 = (n, d = 2) => n == null || isNaN(n) ? '—' : Number(n).toFixed(d)
 export const fmtD = n => n == null || isNaN(n) ? '—' : `${n >= 0 ? '+' : '-'}$${Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`

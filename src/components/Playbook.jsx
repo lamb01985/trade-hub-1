@@ -223,7 +223,7 @@ export default function Playbook({ trades, settings, lockedOut, prep }) {
   // ── Status data ─────────────────────────────────────────────────────────────
   const session = getSession()
   const sessionLabel = SESSION_LABELS[session]
-  const tt = trades.filter(t => t.date?.slice(0, 10) === today)
+  const tt = trades.filter(t => (t.tradeDate || t.date?.slice(0, 10)) === today)
   const todayPnl = tt.reduce((a, t) => a + (t.pnl || 0), 0)
   const lossUsed = Math.abs(Math.min(todayPnl, 0))
   const lossRemaining = Math.max(0, (settings.dailyLossLimit || 0) - lossUsed)

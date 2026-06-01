@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useLocalStorage } from '../hooks/useStore.js'
 import { Card, SLabel, Heading, Btn, Pill } from './ui.jsx'
-import { LIME, RED, YELLOW, ORANGE, MONO, BORDER, PANEL, todayStr, f2, fmtD, fmtU } from '../constants.js'
+import { LIME, RED, YELLOW, ORANGE, MONO, BORDER, PANEL, todayStr, localDateStr, f2, fmtD, fmtU } from '../constants.js'
 import { ordersToTrades, SCHWAB_BLUE } from '../lib/schwabClient.js'
 
 const SETUP_OPTIONS = ['ORB Breakout', 'VWAP Bounce', 'Level Touch', 'Pivot Break', 'Golden Pocket', 'Other']
@@ -30,9 +30,9 @@ function downloadCsv(filename, csv) {
 }
 
 function buildCsv(trades, gradeByDate) {
-  const head = ['Date', 'Time', 'Ticker', 'Strike', 'Expiry', 'Type', 'Contracts', 'Entry', 'Exit', 'P&L', 'R:R', 'Setup', 'Notes', 'Grade']
+  const head = ['Trade Date', 'Time', 'Ticker', 'Strike', 'Expiry', 'Type', 'Contracts', 'Entry', 'Exit', 'P&L', 'R:R', 'Setup', 'Notes', 'Grade']
   const rows = trades.map(t => {
-    const day = t.date?.slice(0, 10) || ''
+    const day = t.tradeDate || t.date?.slice(0, 10) || ''
     return [
       day,
       t.entryTime || (t.date ? fmtTime(t.date) : ''),
@@ -157,11 +157,16 @@ function TradeRow({ trade, onUpdate, onEdit, onDelete }) {
 
   const sideColor = trade.status === 'win' ? LIME : trade.status === 'loss' ? RED : '#555'
   const time = trade.entryTime || (trade.date ? fmtTime(trade.date) : '—')
+  const tradeDate = trade.tradeDate || trade.date?.slice(0, 10) || ''
+  const dateLabel = tradeDate === localDateStr()
+    ? 'Today'
+    : tradeDate ? `${tradeDate.slice(5, 7)}/${tradeDate.slice(8, 10)}` : '—'
 
   return (
     <div style={{ borderLeft: `3px solid ${sideColor}`, background: '#0a0a0a', borderBottom: '1px solid #111' }}>
-      <div onClick={() => setOpen(o => !o)} style={{ display: 'grid', gridTemplateColumns: '50px 56px 56px 50px 50px 70px 70px 78px 60px 1fr 30px', gap: 8, padding: '10px 14px', cursor: 'pointer', alignItems: 'center', fontFamily: MONO, fontSize: 11 }}>
+      <div onClick={() => setOpen(o => !o)} style={{ display: 'grid', gridTemplateColumns: '50px 50px 56px 56px 50px 50px 70px 70px 78px 60px 1fr 30px', gap: 8, padding: '10px 14px', cursor: 'pointer', alignItems: 'center', fontFamily: MONO, fontSize: 11 }}>
         <span style={{ color: '#666' }}>{time}</span>
+        <span style={{ color: '#888' }} title={tradeDate}>{dateLabel}</span>
         <span style={{ color: LIME, fontWeight: 700 }}>{trade.ticker || '—'}</span>
         <span style={{ color: '#666' }}>{trade.strike ? `$${trade.strike}` : '—'}</span>
         <span style={{ color: trade.optType === 'call' ? LIME : trade.optType === 'put' ? RED : '#666', fontWeight: 700, fontSize: 10 }}>{(trade.optType || '—').toUpperCase()}</span>
@@ -259,18 +264,31 @@ export default function Journal({ trades, onUpdate, onDelete, onEdit, onOpenQuic
     }
   }
 
-  const today = todayStr()
+  const today = localDateStr()
   const openTrades = trades.filter(t => t.status === 'open')
 
   // ── Period filter ──────────────────────────────────────────────────────────
+  // ISO week starts Monday. We compare tradeDate strings (YYYY-MM-DD) directly
+  // since they sort lexicographically the same as chronologically.
   const periodTrades = useMemo(() => {
     if (period === 'all') return trades
-    const now = Date.now()
-    let cutoff = 0
-    if (period === 'today') cutoff = new Date(today).getTime()
-    else if (period === 'week') cutoff = now - 7 * 86400000
-    else if (period === 'month') cutoff = now - 30 * 86400000
-    return trades.filter(t => t.date && new Date(t.date).getTime() >= cutoff)
+    const tradeDateOf = t => t.tradeDate || t.date?.slice(0, 10) || ''
+    if (period === 'today') return trades.filter(t => tradeDateOf(t) === today)
+    if (period === 'month') {
+      const monthPrefix = today.slice(0, 7)
+      return trades.filter(t => tradeDateOf(t).startsWith(monthPrefix))
+    }
+    if (period === 'week') {
+      const d = new Date(today)
+      const dow = d.getDay() || 7  // Sun=0 → 7
+      d.setDate(d.getDate() - (dow - 1))
+      const weekStart = localDateStr(d)
+      return trades.filter(t => {
+        const td = tradeDateOf(t)
+        return td >= weekStart && td <= today
+      })
+    }
+    return trades
   }, [trades, period, today])
 
   const tickers = useMemo(() => [...new Set(periodTrades.map(t => t.ticker).filter(Boolean))], [periodTrades])
@@ -284,7 +302,18 @@ export default function Journal({ trades, onUpdate, onDelete, onEdit, onOpenQuic
   })
 
   const closedFiltered = filtered.filter(t => t.status !== 'open')
-  const visibleSorted = useMemo(() => [...closedFiltered].sort((a, b) => new Date(b.date) - new Date(a.date)), [closedFiltered])
+  // Sort by tradeDate desc, then entryTime desc within the same day. Both are
+  // string compares (YYYY-MM-DD and HH:MM both sort lexicographically). Trades
+  // missing a tradeDate fall back to date.slice(0, 10) so legacy entries still
+  // order correctly before migration completes.
+  const visibleSorted = useMemo(() => [...closedFiltered].sort((a, b) => {
+    const da = a.tradeDate || a.date?.slice(0, 10) || ''
+    const db = b.tradeDate || b.date?.slice(0, 10) || ''
+    if (da !== db) return db.localeCompare(da)
+    const ta = a.entryTime || ''
+    const tb = b.entryTime || ''
+    return tb.localeCompare(ta)
+  }), [closedFiltered])
 
   // ── Summary stats ──────────────────────────────────────────────────────────
   const summary = useMemo(() => {
@@ -315,7 +344,7 @@ export default function Journal({ trades, onUpdate, onDelete, onEdit, onOpenQuic
     // Best/worst day
     const byDay = {}
     for (const t of c) {
-      const d = t.date?.slice(0, 10) || ''
+      const d = t.tradeDate || t.date?.slice(0, 10) || ''
       byDay[d] = (byDay[d] || 0) + (t.pnl || 0)
     }
     const dayEntries = Object.entries(byDay).sort((a, b) => b[1] - a[1])
@@ -325,7 +354,7 @@ export default function Journal({ trades, onUpdate, onDelete, onEdit, onOpenQuic
   }, [closedFiltered])
 
   // ── EOD Coach ──────────────────────────────────────────────────────────────
-  const todayTrades = trades.filter(t => t.date?.slice(0, 10) === today)
+  const todayTrades = trades.filter(t => (t.tradeDate || t.date?.slice(0, 10)) === today)
   const hasClosedToday = todayTrades.some(t => t.status !== 'open')
   const todayNote = eodNotes[today]
 
@@ -452,8 +481,8 @@ Be direct and specific. No generic advice. Max 150 words total. End with "GRADE:
         </div>
       ) : (
         <div style={{ background: '#090909', border: `1px solid ${BORDER}`, borderRadius: 5, overflow: 'hidden' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '50px 56px 56px 50px 50px 70px 70px 78px 60px 1fr 30px', gap: 8, padding: '9px 14px', borderBottom: '1px solid #111', background: '#0a0a0a' }}>
-            {['Time', 'Ticker', 'Strike', 'Type', 'DTE', 'Entry', 'Exit', 'P&L', 'R:R', 'Setup', ''].map(h => <span key={h} style={{ fontSize: 9, letterSpacing: '0.1em', color: '#333', textTransform: 'uppercase', fontFamily: MONO }}>{h}</span>)}
+          <div style={{ display: 'grid', gridTemplateColumns: '50px 50px 56px 56px 50px 50px 70px 70px 78px 60px 1fr 30px', gap: 8, padding: '9px 14px', borderBottom: '1px solid #111', background: '#0a0a0a' }}>
+            {['Time', 'Date', 'Ticker', 'Strike', 'Type', 'DTE', 'Entry', 'Exit', 'P&L', 'R:R', 'Setup', ''].map(h => <span key={h} style={{ fontSize: 9, letterSpacing: '0.1em', color: '#333', textTransform: 'uppercase', fontFamily: MONO }}>{h}</span>)}
           </div>
           {visibleSorted.map(t => <TradeRow key={t.id} trade={t} onUpdate={onUpdate} onEdit={onEdit} onDelete={onDelete} />)}
         </div>

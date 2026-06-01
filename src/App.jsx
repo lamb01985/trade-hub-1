@@ -34,7 +34,7 @@ import { ORBTab, IVAnalyzerTab, CalculatorTab, StatsTab, WatchlistTab, PrepTab }
 import Journal from './components/Journal.jsx'
 import QuickLog from './components/QuickLog.jsx'
 import GlossaryModal from './components/Glossary.jsx'
-import { LIME, RED, YELLOW, BLUE, MONO, SANS, DARK, BORDER, PANEL, todayStr, uid, getSession, f2 } from './constants.js'
+import { LIME, RED, YELLOW, BLUE, MONO, SANS, DARK, BORDER, PANEL, todayStr, localDateStr, uid, getSession, f2 } from './constants.js'
 
 const TABS = [
   { id: 'plan', label: 'Plan', desc: 'Pre-market game plan' },
@@ -394,8 +394,24 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [_priceTick])
 
+  // One-time migration: backfill tradeDate on any existing trade that predates
+  // the field. Falls back to today for trades that somehow have neither tradeDate
+  // nor a date timestamp. Runs once per session; useLocalStorage takes care of
+  // persisting the migrated array.
+  useEffect(() => {
+    setTrades(prev => {
+      let changed = false
+      const next = prev.map(t => {
+        if (t.tradeDate) return t
+        changed = true
+        return { ...t, tradeDate: t.date?.slice(0, 10) || localDateStr() }
+      })
+      return changed ? next : prev
+    })
+  }, [])  // eslint-disable-line react-hooks/exhaustive-deps
+
   // Loss limit lockout
-  const todayTrades = trades.filter(t => t.date?.slice(0, 10) === todayStr())
+  const todayTrades = trades.filter(t => (t.tradeDate || t.date?.slice(0, 10)) === localDateStr())
   const todayPnl = todayTrades.reduce((a, t) => a + (t.pnl || 0), 0)
   const lockedOut = settings.dailyLossLimit > 0 && todayPnl <= -settings.dailyLossLimit
   const maxTradesReached = settings.maxTradesPerDay > 0 && todayTrades.length >= settings.maxTradesPerDay

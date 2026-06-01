@@ -110,6 +110,7 @@ export function ordersToTrades(orders, existingTrades = []) {
       currentPrice: null,
       notes: `Synced from Schwab, ${sym}`,
       date: ref.time || new Date().toISOString(),
+      tradeDate: (ref.time || new Date().toISOString()).slice(0, 10),
     })
   }
   return result

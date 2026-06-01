@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { LIME, RED, YELLOW, MONO, BORDER, PANEL, uid, f2, todayStr } from '../constants.js'
+import { LIME, RED, YELLOW, MONO, BORDER, PANEL, uid, f2, todayStr, localDateStr } from '../constants.js'
 
 const SETUP_OPTIONS = ['ORB Breakout', 'VWAP Bounce', 'Level Touch', 'Pivot Break', 'Golden Pocket', 'Other']
 
@@ -54,6 +54,7 @@ export default function QuickLog({ open, onClose, onSubmit, prep, editing }) {
   const [target, setTarget] = useState('')
   const [status, setStatus] = useState('open')
   const [exitPrice, setExitPrice] = useState('')
+  const [tradeDate, setTradeDate] = useState(localDateStr())
   const [entryTime, setEntryTime] = useState(nowHHMM())
   const [exitTime, setExitTime] = useState('')
   const [setupType, setSetupType] = useState('ORB Breakout')
@@ -75,6 +76,7 @@ export default function QuickLog({ open, onClose, onSubmit, prep, editing }) {
       setTarget(editing.target != null ? String(editing.target) : '')
       setStatus(editing.status || 'open')
       setExitPrice(editing.exitPrice != null ? String(editing.exitPrice) : '')
+      setTradeDate(editing.tradeDate || editing.date?.slice(0, 10) || localDateStr())
       setEntryTime(editing.entryTime || (editing.date ? new Date(editing.date).toTimeString().slice(0, 5) : nowHHMM()))
       setExitTime(editing.exitTime || '')
       setSetupType(editing.setupType || 'ORB Breakout')
@@ -92,6 +94,7 @@ export default function QuickLog({ open, onClose, onSubmit, prep, editing }) {
       setTarget('')
       setStatus('open')
       setExitPrice('')
+      setTradeDate(localDateStr())
       setEntryTime(nowHHMM())
       setExitTime('')
       setSetupType('ORB Breakout')
@@ -115,8 +118,10 @@ export default function QuickLog({ open, onClose, onSubmit, prep, editing }) {
     const e = parseFloat(entry)
     const ex = exitPrice ? parseFloat(exitPrice) : null
     const pnl = (status === 'win' || status === 'loss') && ex != null && !isNaN(ex) ? (ex - e) * n * 100 : (status === 'scratch' ? 0 : null)
-    // Build a Date for the entry. Use today's date + entryTime so the time field shows up in the trade list.
-    const entryDateStr = editing?.date ? editing.date.slice(0, 10) : todayStr()
+    // Build a Date for the entry. Combine the user-entered tradeDate with
+    // entryTime so the time field shows up in the trade list and the trade
+    // sorts by its real entry moment, not "now".
+    const entryDateStr = tradeDate || localDateStr()
     const [hh, mm] = (entryTime || nowHHMM()).split(':').map(Number)
     const entryDate = new Date(entryDateStr)
     entryDate.setHours(hh || 0, mm || 0, 0, 0)
@@ -156,6 +161,7 @@ export default function QuickLog({ open, onClose, onSubmit, prep, editing }) {
       notes,
       whatWell,
       whatImprove,
+      tradeDate: entryDateStr,
       date: entryDate.toISOString(),
     }
     onSubmit(data)
@@ -164,7 +170,7 @@ export default function QuickLog({ open, onClose, onSubmit, prep, editing }) {
   if (!open) return null
 
   const showExitFields = status === 'win' || status === 'loss'
-  const valid = !!ticker.trim() && !!entry && !isNaN(parseFloat(entry))
+  const valid = !!ticker.trim() && !!entry && !isNaN(parseFloat(entry)) && !!tradeDate && tradeDate <= localDateStr()
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.82)', zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', overflow: 'auto' }}>
@@ -219,7 +225,8 @@ export default function QuickLog({ open, onClose, onSubmit, prep, editing }) {
             </div>
           )}
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+            <Field label="Trade Date"><input type="date" value={tradeDate} max={localDateStr()} onChange={e => setTradeDate(e.target.value)} style={inputStyle} required /></Field>
             <Field label="Entry Time (CT)"><input type="time" value={entryTime} onChange={e => setEntryTime(e.target.value)} style={inputStyle} /></Field>
             <Field label="Setup">
               <select value={setupType} onChange={e => setSetupType(e.target.value)} style={{ ...inputStyle, appearance: 'none' }}>

@@ -1,7 +1,7 @@
 // ── ORB Tab ───────────────────────────────────────────────────────────────────
 import { useState, useEffect, useRef } from 'react'
 import { Card, SLabel, Heading, Tile, Fld, Sel, Btn, Pill, CheckRow, Tip } from './ui.jsx'
-import { LIME, RED, YELLOW, BLUE, PURPLE, ORANGE, MONO, SANS, BORDER, DARK, PANEL, SETUP_TYPES, todayStr, tomorrowStr, uid, f2, fmtD, fmtU, rrColor, ivContext, calcOptionRR, bsCalc, getETMins, SESSION_LABELS, SESSION_COLORS, SESSION_TIPS } from '../constants.js'
+import { LIME, RED, YELLOW, BLUE, PURPLE, ORANGE, MONO, SANS, BORDER, DARK, PANEL, SETUP_TYPES, todayStr, localDateStr, tomorrowStr, uid, f2, fmtD, fmtU, rrColor, ivContext, calcOptionRR, bsCalc, getETMins, SESSION_LABELS, SESSION_COLORS, SESSION_TIPS } from '../constants.js'
 import { getOptionChain, getPrevDay, getHistoricalBars, getOptionsPCRatio, getTopMovers } from '../lib/massive.js'
 import { occSymbol, SCHWAB_TRADE_URL, SCHWAB_BLUE } from '../lib/schwabClient.js'
 import { useLocalStorage } from '../hooks/useStore.js'
@@ -754,7 +754,7 @@ export function CalculatorTab({ prefill, onLogTrade, checklistPassed, lockedOut,
       <div style={{ display: 'flex', gap: 10 }}>
         <Btn disabled={!valid || blocked} onClick={() => {
           if (!valid || blocked) return
-          onLogTrade({ id: uid(), ticker: ticker || '—', instrument: instrument || 'options', optType: isStock ? null : optType, strike: isStock ? null : (parseFloat(strike) || null), dte: isStock ? null : (parseInt(dte) || null), expiry: isStock ? null : expiry, setupType, entry: parseFloat(entry), stop: parseFloat(stop), target: parseFloat(target), contracts: parseInt(contracts) || 1, rr: calc.rr, dollarRisk: calc.dollarRisk, dollarReward: calc.dollarReward, totalCost: calc.totalCost, status: 'open', pnl: null, notes: '', date: new Date().toISOString() })
+          onLogTrade({ id: uid(), ticker: ticker || '—', instrument: instrument || 'options', optType: isStock ? null : optType, strike: isStock ? null : (parseFloat(strike) || null), dte: isStock ? null : (parseInt(dte) || null), expiry: isStock ? null : expiry, setupType, entry: parseFloat(entry), stop: parseFloat(stop), target: parseFloat(target), contracts: parseInt(contracts) || 1, rr: calc.rr, dollarRisk: calc.dollarRisk, dollarReward: calc.dollarReward, totalCost: calc.totalCost, status: 'open', pnl: null, notes: '', date: new Date().toISOString(), tradeDate: localDateStr() })
         }}>{blocked ? 'Trading Locked' : !valid ? (isStock ? 'Enter share prices above' : 'Enter premium prices above') : 'Log This Trade →'}</Btn>
         {schwabConnected && valid && !isStock && checklistPassed && !blocked && (
           <button onClick={() => setStageOpen(true)} style={{ background: SCHWAB_BLUE, color: '#fff', border: 'none', borderRadius: 4, padding: '12px 18px', fontFamily: MONO, fontSize: 11, fontWeight: 900, letterSpacing: '0.14em', cursor: 'pointer' }}>
@@ -888,7 +888,17 @@ export function StatsTab({ trades: allTrades }) {
   const exp = winRate != null && avgWin != null && avgLoss != null ? (winRate / 100) * avgWin - ((100 - winRate) / 100) * avgLoss : null
   const calls = closed.filter(t => t.optType === 'call'), puts = closed.filter(t => t.optType === 'put')
   let cum = 0
-  const curve = trades.slice().sort((a, b) => new Date(a.date) - new Date(b.date)).filter(t => t.pnl != null).map(t => { cum += t.pnl; return cum })
+  // Sort chronologically by tradeDate then entryTime, falling back to date.
+  // Same comparator shape as Journal but ascending so the equity curve plots
+  // oldest-to-newest left-to-right.
+  const curve = trades.slice().sort((a, b) => {
+    const da = a.tradeDate || a.date?.slice(0, 10) || ''
+    const db = b.tradeDate || b.date?.slice(0, 10) || ''
+    if (da !== db) return da.localeCompare(db)
+    const ta = a.entryTime || ''
+    const tb = b.entryTime || ''
+    return ta.localeCompare(tb)
+  }).filter(t => t.pnl != null).map(t => { cum += t.pnl; return cum })
   const cH = 90, cW = 520, maxV = Math.max(...curve, 0.01), minV = Math.min(...curve, -0.01), rng = maxV - minV
   const pts = curve.map((v, i) => `${curve.length === 1 ? cW / 2 : (i / (curve.length - 1)) * cW},${cH - ((v - minV) / rng) * cH}`)
   if (closed.length === 0) {
@@ -994,7 +1004,7 @@ export function StatsTab({ trades: allTrades }) {
         // P&L + trade count per day from trades
         const dayTrades = {}
         for (const t of trades) {
-          const k = t.date?.slice(0, 10)
+          const k = t.tradeDate || t.date?.slice(0, 10)
           if (!k) continue
           if (!dayTrades[k]) dayTrades[k] = { pnl: 0, count: 0 }
           dayTrades[k].pnl += (t.pnl || 0)
