@@ -90,6 +90,9 @@ export default function App() {
   const [planSubTab, setPlanSubTab] = useState('watchlist')
   const [tradeSubTab, setTradeSubTab] = useState('chart')
   const [reviewSubTab, setReviewSubTab] = useState('journal')
+  // Increments whenever something external (Layer 2 → Prep, etc.) wants
+  // PrepTab to auto-fire Load Market Data after the tab switch settles.
+  const [autoLoadPrepTrigger, setAutoLoadPrepTrigger] = useState(0)
   const [apiKey, setApiKey] = useLocalStorage('th-apikey', '')
   const [anthropicKey, setAnthropicKey] = useLocalStorage('th-anthropic-key', '')
   const [trades, setTrades] = useLocalStorage('th-trades', [])
@@ -625,7 +628,30 @@ export default function App() {
               <WatchlistTab
                 apiKey={apiKey}
                 savedPreps={savedPreps}
-                onSendToPrep={entry => { setPrep(p => ({ ...p, ticker: entry.ticker, orbHigh: entry.priorHigh || '', orbLow: entry.priorLow || '', plannedStrike: entry.plannedStrike || '', plannedDTE: entry.plannedDTE || '', ivNote: entry.ivNote || '' })); setPlanSubTab('prep') }}
+                onSendToPrep={entry => {
+                  setPrep(p => {
+                    const next = (entry.ticker || '').toUpperCase()
+                    const prev = (p.ticker || '').toUpperCase()
+                    if (next === prev) {
+                      return { ...p, ticker: next, orbHigh: entry.priorHigh || p.orbHigh, orbLow: entry.priorLow || p.orbLow }
+                    }
+                    return {
+                      ...p,
+                      ticker: next,
+                      orbHigh: entry.priorHigh || '',
+                      orbLow: entry.priorLow || '',
+                      keyLevel: '',
+                      plannedStrike: entry.plannedStrike || '',
+                      plannedDTE: entry.plannedDTE || '',
+                      ivNote: entry.ivNote || '',
+                      gamePlan: '',
+                      avoidNotes: '',
+                      marketEvents: '',
+                    }
+                  })
+                  setPlanSubTab('prep')
+                  setAutoLoadPrepTrigger(n => n + 1)
+                }}
                 onLoadSavedPrep={saved => { const { dateSaved, ...data } = saved; setPrep(p => ({ ...p, ...data })); setPlanSubTab('prep') }}
               />
             </div>
@@ -671,6 +697,7 @@ export default function App() {
                 levelMap={fullLevelMap}
                 mtfAlignment={mtfAlignment}
                 onVolumeThresholdsChange={setVolumeThresholds}
+                autoLoadTrigger={autoLoadPrepTrigger}
               />
             </div>
 

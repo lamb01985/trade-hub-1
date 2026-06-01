@@ -1587,7 +1587,13 @@ const ROUTINE = [
   { time: '10:30 CT', label: 'Chop starts. No new entries. Trailing winner? Decide now: trail stop or close. Do not hold through chop.' },
 ]
 
-export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, anthropicKey, savedPreps, onSavedPrepsChange, levelMap, mtfAlignment, onVolumeThresholdsChange }) {
+// Delay before auto-firing Load Market Data after an external trigger (e.g.
+// Layer 2 → Prep). Gives useLiveData time to refetch for a new ticker before
+// loadMarketData reads from liveData. Typical Massive refetch is <800ms; this
+// adds slack for slower connections without making the UX feel sluggish.
+const PREP_AUTOLOAD_DELAY_MS = 1500
+
+export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, anthropicKey, savedPreps, onSavedPrepsChange, levelMap, mtfAlignment, onVolumeThresholdsChange, autoLoadTrigger }) {
   const [rc, setRc] = useState({})
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState('')
@@ -1608,7 +1614,7 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
       onPrepChange({ ...prep, ticker: next })
       return
     }
-    onPrepChange({ ...prep, ticker: next, orbHigh: '', orbLow: '', keyLevel: '', plannedStrike: '', ivNote: '' })
+    onPrepChange({ ...prep, ticker: next, orbHigh: '', orbLow: '', keyLevel: '', plannedStrike: '', ivNote: '', gamePlan: '', avoidNotes: '', marketEvents: '' })
     setMissingFields({})
   }
 
@@ -1656,6 +1662,19 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
     setDataLoaded(true)
     setTimeout(() => setDataLoaded(false), 4000)
   }
+
+  // External callers (Layer 2 → Prep, etc.) bump autoLoadTrigger to request an
+  // auto-fire of Load Market Data after the parent has updated prep.ticker.
+  // We keep a ref to the latest loadMarketData so the deferred call always
+  // reads the current prep + liveData, even if several renders happened during
+  // the delay window.
+  const loadMarketDataRef = useRef(loadMarketData)
+  useEffect(() => { loadMarketDataRef.current = loadMarketData })
+  useEffect(() => {
+    if (!autoLoadTrigger) return
+    const timer = setTimeout(() => loadMarketDataRef.current?.(), PREP_AUTOLOAD_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [autoLoadTrigger])
 
   async function generateBrief() {
     if (!anthropicKey) return
