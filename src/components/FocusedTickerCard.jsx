@@ -20,6 +20,7 @@ import { buildSnapshot } from '../lib/conditionEvaluators.js'
 import { estimatePremium, computeHV30 } from '../lib/wheelOptions.js'
 import { CONDITIONS_BY_ID } from '../lib/conditionLibrary.js'
 import { getRecentNews } from '../lib/massive.js'
+import { occSymbol, SCHWAB_TRADE_URL, SCHWAB_BLUE } from '../lib/schwabClient.js'
 
 const FG = '#e8e8e8'
 const DIM = '#888'
@@ -135,6 +136,13 @@ function StagedTradeInline({ trigger, setup, snapshot, accountValue }) {
     ].filter(Boolean).join('\n')
     navigator.clipboard.writeText(lines).catch(() => {})
   }
+  function executeInSchwab() {
+    if (plan.optionType) {
+      const sym = occSymbol({ ticker: trigger.ticker, expiry: plan.expiration, strike: plan.strike, optType: plan.optionType })
+      if (sym && navigator?.clipboard) navigator.clipboard.writeText(sym).catch(() => {})
+    }
+    window.open(SCHWAB_TRADE_URL, '_blank', 'noopener,noreferrer')
+  }
   const cost = plan.optionType && plan.estPremium != null
     ? plan.estPremium * 100 * (plan.contracts || 1)
     : (plan.shares ? plan.shares * (price || 0) : null)
@@ -162,11 +170,11 @@ function StagedTradeInline({ trigger, setup, snapshot, accountValue }) {
           padding: '6px 12px', borderRadius: 3, fontFamily: MONO, fontSize: 10,
           cursor: 'pointer', letterSpacing: '0.12em', textTransform: 'uppercase',
         }}>Copy plan</button>
-        <a href="https://digital.fidelity.com/prgw/digital/trade-equity/options-trading" target="_blank" rel="noopener noreferrer" style={{
-          background: RED, color: '#fff', textDecoration: 'none', padding: '6px 12px',
+        <button onClick={executeInSchwab} title={plan.optionType ? 'Copies the OCC symbol and opens the Schwab trade page' : 'Opens the Schwab trade page'} style={{
+          background: SCHWAB_BLUE, color: '#fff', border: 'none', padding: '6px 12px',
           borderRadius: 3, fontFamily: MONO, fontSize: 10, fontWeight: 800,
-          letterSpacing: '0.12em', textTransform: 'uppercase',
-        }}>Execute in Fidelity →</a>
+          letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer',
+        }}>Execute in Schwab →</button>
       </div>
     </div>
   )

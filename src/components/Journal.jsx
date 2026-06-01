@@ -424,7 +424,7 @@ Be direct and specific. No generic advice. Max 150 words total. End with "GRADE:
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={exportCsv} style={{ background: 'transparent', border: `1px solid ${BORDER}`, color: '#aaa', fontFamily: MONO, fontSize: 10, padding: '6px 12px', borderRadius: 3, cursor: 'pointer', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Export CSV</button>
-          <button disabled title="Coming soon — Schwab/Fidelity sync" style={{ background: 'transparent', border: `1px solid #222`, color: '#333', fontFamily: MONO, fontSize: 10, padding: '6px 12px', borderRadius: 3, cursor: 'not-allowed', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Import CSV — soon</button>
+          <button disabled title="Coming soon, Schwab sync" style={{ background: 'transparent', border: `1px solid #222`, color: '#333', fontFamily: MONO, fontSize: 10, padding: '6px 12px', borderRadius: 3, cursor: 'not-allowed', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Import CSV, soon</button>
         </div>
       </div>
 

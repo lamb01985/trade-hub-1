@@ -16,6 +16,7 @@ import { computeStagedTrade } from '../lib/setupEngine.js'
 import { resolveUniverseTickers } from '../lib/universeResolver.js'
 import { estimatePremium, computeHV30 } from '../lib/wheelOptions.js'
 import { backtestSetup } from '../lib/setupBacktest.js'
+import { occSymbol, SCHWAB_TRADE_URL, SCHWAB_BLUE } from '../lib/schwabClient.js'
 import BacktestResults from './BacktestResults.jsx'
 
 const FG = '#e8e8e8'
@@ -69,6 +70,13 @@ function StagedTradeBanner({ trigger, setup, accountValue }) {
     ].filter(Boolean).join('\n')
     navigator.clipboard.writeText(lines).catch(() => {})
   }
+  function executeInSchwab() {
+    if (plan.optionType) {
+      const sym = occSymbol({ ticker: trigger.ticker, expiry: plan.expiration, strike: plan.strike, optType: plan.optionType })
+      if (sym && navigator?.clipboard) navigator.clipboard.writeText(sym).catch(() => {})
+    }
+    window.open(SCHWAB_TRADE_URL, '_blank', 'noopener,noreferrer')
+  }
   return (
     <div style={{
       background: '#150505', border: `1px solid ${RED}55`, borderRadius: 5,
@@ -91,11 +99,11 @@ function StagedTradeBanner({ trigger, setup, accountValue }) {
             padding: '6px 12px', borderRadius: 3, fontFamily: MONO, fontSize: 10,
             cursor: 'pointer', letterSpacing: '0.12em', textTransform: 'uppercase',
           }}>Copy plan</button>
-          <a href="https://digital.fidelity.com/prgw/digital/trade-equity/options-trading" target="_blank" rel="noopener noreferrer" style={{
-            background: RED, color: '#fff', textDecoration: 'none', padding: '6px 12px',
+          <button onClick={executeInSchwab} title={plan.optionType ? 'Copies the OCC symbol and opens the Schwab trade page' : 'Opens the Schwab trade page'} style={{
+            background: SCHWAB_BLUE, color: '#fff', border: 'none', padding: '6px 12px',
             borderRadius: 3, fontFamily: MONO, fontSize: 10, fontWeight: 800,
-            letterSpacing: '0.12em', textTransform: 'uppercase',
-          }}>Execute in Fidelity →</a>
+            letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer',
+          }}>Execute in Schwab →</button>
         </div>
       </div>
       <div style={{ fontSize: 10, color: '#cbd5e1', fontFamily: MONO, lineHeight: 1.6 }}>
