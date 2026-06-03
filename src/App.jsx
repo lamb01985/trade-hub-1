@@ -395,16 +395,17 @@ export default function App() {
   }, [_priceTick])
 
   // One-time migration: backfill tradeDate on any existing trade that predates
-  // the field. Falls back to today for trades that somehow have neither tradeDate
-  // nor a date timestamp. Runs once per session; useLocalStorage takes care of
-  // persisting the migrated array.
+  // the field. Converts the legacy date timestamp into the user's local
+  // calendar date so it matches the localDateStr() that new trades set on
+  // creation; date.slice(0, 10) alone would give the UTC date and split
+  // late-evening CT trades onto the wrong day.
   useEffect(() => {
     setTrades(prev => {
       let changed = false
       const next = prev.map(t => {
         if (t.tradeDate) return t
         changed = true
-        return { ...t, tradeDate: t.date?.slice(0, 10) || localDateStr() }
+        return { ...t, tradeDate: t.date ? localDateStr(new Date(t.date)) : localDateStr() }
       })
       return changed ? next : prev
     })

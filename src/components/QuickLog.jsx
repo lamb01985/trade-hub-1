@@ -3,11 +3,6 @@ import { LIME, RED, YELLOW, MONO, BORDER, PANEL, uid, f2, todayStr, localDateStr
 
 const SETUP_OPTIONS = ['ORB Breakout', 'VWAP Bounce', 'Level Touch', 'Pivot Break', 'Golden Pocket', 'Other']
 
-function nowHHMM() {
-  const d = new Date()
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-}
-
 function Field({ label, children }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -55,7 +50,7 @@ export default function QuickLog({ open, onClose, onSubmit, prep, editing }) {
   const [status, setStatus] = useState('open')
   const [exitPrice, setExitPrice] = useState('')
   const [tradeDate, setTradeDate] = useState(localDateStr())
-  const [entryTime, setEntryTime] = useState(nowHHMM())
+  const [entryTime, setEntryTime] = useState('')
   const [exitTime, setExitTime] = useState('')
   const [setupType, setSetupType] = useState('ORB Breakout')
   const [notes, setNotes] = useState('')
@@ -76,8 +71,12 @@ export default function QuickLog({ open, onClose, onSubmit, prep, editing }) {
       setTarget(editing.target != null ? String(editing.target) : '')
       setStatus(editing.status || 'open')
       setExitPrice(editing.exitPrice != null ? String(editing.exitPrice) : '')
-      setTradeDate(editing.tradeDate || editing.date?.slice(0, 10) || localDateStr())
-      setEntryTime(editing.entryTime || (editing.date ? new Date(editing.date).toTimeString().slice(0, 5) : nowHHMM()))
+      setTradeDate(editing.tradeDate || (editing.date ? localDateStr(new Date(editing.date)) : localDateStr()))
+      // Show the stored entry/exit times verbatim. No fallback to date.toTimeString
+      // (which is "when the record was created" for Calculator-logged trades, not
+      // the actual entry moment) and no fallback to nowHHMM (which corrupted
+      // trades by stamping save-time as entry-time).
+      setEntryTime(editing.entryTime || '')
       setExitTime(editing.exitTime || '')
       setSetupType(editing.setupType || 'ORB Breakout')
       setNotes(editing.notes || '')
@@ -95,7 +94,7 @@ export default function QuickLog({ open, onClose, onSubmit, prep, editing }) {
       setStatus('open')
       setExitPrice('')
       setTradeDate(localDateStr())
-      setEntryTime(nowHHMM())
+      setEntryTime('')
       setExitTime('')
       setSetupType('ORB Breakout')
       setNotes('')
@@ -119,12 +118,15 @@ export default function QuickLog({ open, onClose, onSubmit, prep, editing }) {
     const ex = exitPrice ? parseFloat(exitPrice) : null
     const pnl = (status === 'win' || status === 'loss') && ex != null && !isNaN(ex) ? (ex - e) * n * 100 : (status === 'scratch' ? 0 : null)
     // Build a Date for the entry. Combine the user-entered tradeDate with
-    // entryTime so the time field shows up in the trade list and the trade
-    // sorts by its real entry moment, not "now".
+    // entryTime using the local-time constructor so date.slice(0, 10) always
+    // matches tradeDate (the UTC parse path produces midnight UTC which can
+    // roll back a day in CT). If entryTime is empty, fall back to midnight of
+    // the trade date rather than current time, so an unfilled time field never
+    // silently records the moment of save as the entry moment.
     const entryDateStr = tradeDate || localDateStr()
-    const [hh, mm] = (entryTime || nowHHMM()).split(':').map(Number)
-    const entryDate = new Date(entryDateStr)
-    entryDate.setHours(hh || 0, mm || 0, 0, 0)
+    const [hh, mm] = entryTime ? entryTime.split(':').map(Number) : [0, 0]
+    const [yy, mo, dd] = entryDateStr.split('-').map(Number)
+    const entryDate = new Date(yy, (mo || 1) - 1, dd || 1, hh || 0, mm || 0, 0, 0)
 
     // Stamp closedAt on the moment a trade transitions out of 'open'. Preserve
     // an existing closedAt when editing a closed trade so the holding period
@@ -150,7 +152,7 @@ export default function QuickLog({ open, onClose, onSubmit, prep, editing }) {
       target: parseFloat(target) || null,
       exitPrice: ex,
       entryTime,
-      exitTime: exitTime || (status !== 'open' ? nowHHMM() : ''),
+      exitTime,
       status,
       pnl,
       rr: calc?.rr || editing?.rr || null,
@@ -170,7 +172,14 @@ export default function QuickLog({ open, onClose, onSubmit, prep, editing }) {
   if (!open) return null
 
   const showExitFields = status === 'win' || status === 'loss'
-  const valid = !!ticker.trim() && !!entry && !isNaN(parseFloat(entry)) && !!tradeDate && tradeDate <= localDateStr()
+  // If both times are filled and exit is not after entry, flag it. We treat the
+  // single tradeDate as covering both legs of the trade, so a lower-or-equal
+  // exit time is a data error (likely save-time auto-fill rather than a real
+  // overnight hold, which this model can't express anyway).
+  const timeWarning = entryTime && exitTime && exitTime <= entryTime
+    ? 'Exit time must be after entry time.'
+    : null
+  const valid = !!ticker.trim() && !!entry && !isNaN(parseFloat(entry)) && !!tradeDate && tradeDate <= localDateStr() && !timeWarning
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.82)', zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', overflow: 'auto' }}>
@@ -181,8 +190,9 @@ export default function QuickLog({ open, onClose, onSubmit, prep, editing }) {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
             <Field label="Ticker"><input type="text" value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())} style={inputStyle} placeholder="QQQ" /></Field>
+            <Field label="Trade Date"><input type="date" value={tradeDate} max={localDateStr()} onChange={e => setTradeDate(e.target.value)} style={inputStyle} required /></Field>
             <Field label="Type">
               <ToggleGroup options={[
                 { value: 'call', label: 'CALL', activeBg: LIME, activeText: '#000' },
@@ -221,13 +231,12 @@ export default function QuickLog({ open, onClose, onSubmit, prep, editing }) {
           {showExitFields && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <Field label="Exit $"><input type="number" step="0.01" value={exitPrice} onChange={e => setExitPrice(e.target.value)} style={inputStyle} placeholder="4.80" /></Field>
-              <Field label="Exit Time (CT)"><input type="time" value={exitTime} onChange={e => setExitTime(e.target.value)} style={inputStyle} /></Field>
+              <Field label="Exit Time (CT)"><input type="time" title="Times are in Central Time (CT)" value={exitTime} onChange={e => setExitTime(e.target.value)} style={inputStyle} /></Field>
             </div>
           )}
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-            <Field label="Trade Date"><input type="date" value={tradeDate} max={localDateStr()} onChange={e => setTradeDate(e.target.value)} style={inputStyle} required /></Field>
-            <Field label="Entry Time (CT)"><input type="time" value={entryTime} onChange={e => setEntryTime(e.target.value)} style={inputStyle} /></Field>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <Field label="Entry Time (CT)"><input type="time" title="Times are in Central Time (CT)" value={entryTime} onChange={e => setEntryTime(e.target.value)} style={inputStyle} /></Field>
             <Field label="Setup">
               <select value={setupType} onChange={e => setSetupType(e.target.value)} style={{ ...inputStyle, appearance: 'none' }}>
                 {SETUP_OPTIONS.map(s => <option key={s} value={s} style={{ background: '#0a0a0a' }}>{s}</option>)}
@@ -242,6 +251,12 @@ export default function QuickLog({ open, onClose, onSubmit, prep, editing }) {
               <Field label="What went well"><input type="text" value={whatWell} onChange={e => setWhatWell(e.target.value)} style={inputStyle} placeholder="Waited for the candle close" /></Field>
               <Field label="What to improve"><input type="text" value={whatImprove} onChange={e => setWhatImprove(e.target.value)} style={inputStyle} placeholder="Could have sized smaller" /></Field>
             </>
+          )}
+
+          {timeWarning && (
+            <div style={{ fontSize: 11, fontFamily: MONO, color: RED, padding: '6px 12px', background: '#1a0505', border: `1px solid ${RED}33`, borderRadius: 4 }}>
+              {timeWarning}
+            </div>
           )}
 
           <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
