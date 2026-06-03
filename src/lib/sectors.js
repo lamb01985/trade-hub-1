@@ -75,11 +75,11 @@ export function sectorForTicker(ticker) {
 
 // ── Fetch one ETF's raw data ─────────────────────────────────────────────────
 
-async function fetchOne(apiKey, etf, today, from5, from20) {
+async function fetchOne(etf, today, from5, from20) {
   const [snapshot, week, month] = await Promise.all([
-    getSnapshot(apiKey, etf).catch(() => null),
-    getDayBars(apiKey, etf, from5, today).catch(() => []),
-    getDayBars(apiKey, etf, from20, today).catch(() => []),
+    getSnapshot(etf).catch(() => null),
+    getDayBars(etf, from5, today).catch(() => []),
+    getDayBars(etf, from20, today).catch(() => []),
   ])
   return { etf, snapshot, week, month }
 }
@@ -222,16 +222,14 @@ export function rotationContextForTicker(ticker) {
   return { ...row, stale: cache.stale, fetchedAt: cache.fetchedAt }
 }
 
-export async function getRotationSnapshot(apiKey) {
-  if (!apiKey) throw new Error('Missing Massive API key')
-
+export async function getRotationSnapshot() {
   const today = ymd(new Date())
   const from5 = ymd(new Date(Date.now() - 7 * 86400000))   // 7 cal days to catch 5 trading days
   const from20 = ymd(new Date(Date.now() - 32 * 86400000)) // ~20 trading days
 
   // Fetch all sectors + SPY in parallel
   const tickers = [...SECTORS.map(s => s.etf), BENCHMARK]
-  const raws = await Promise.all(tickers.map(t => fetchOne(apiKey, t, today, from5, from20)))
+  const raws = await Promise.all(tickers.map(t => fetchOne(t, today, from5, from20)))
 
   const spyRaw = raws.find(r => r.etf === BENCHMARK)
   const spyMetrics = spyRaw ? computeMetrics(spyRaw, { todayChangePct: 0 }) : null

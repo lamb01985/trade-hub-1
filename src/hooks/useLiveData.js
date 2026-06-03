@@ -5,7 +5,7 @@ import { computePreMarketStats } from '../lib/premarket.js'
 import { checkLevelAlerts } from '../lib/alerts.js'
 import { todayStr, getETMins } from '../constants.js'
 
-export function useLiveData(apiKey, ticker = 'QQQ', levelMap = null, settings = {}) {
+export function useLiveData(ticker = 'QQQ', levelMap = null, settings = {}) {
   const [price, setPrice] = useState(null)
   const [bid, setBid] = useState(null)
   const [ask, setAsk] = useState(null)
@@ -36,9 +36,9 @@ export function useLiveData(apiKey, ticker = 'QQQ', levelMap = null, settings = 
 
   // ── WebSocket connection ────────────────────────────────────────────────────
   useEffect(() => {
-    if (!apiKey || !ticker) return
+    if (!ticker) return
 
-    const stream = new MassiveStream(apiKey, {
+    const stream = new MassiveStream({
       onConnected: () => {
         setConnected(true)
         setWsError(null)
@@ -66,7 +66,7 @@ export function useLiveData(apiKey, ticker = 'QQQ', levelMap = null, settings = 
       stream.disconnect()
       streamRef.current = null
     }
-  }, [apiKey, ticker])
+  }, [ticker])
 
   // ── Alert checking on price update ─────────────────────────────────────────
   useEffect(() => {
@@ -77,16 +77,16 @@ export function useLiveData(apiKey, ticker = 'QQQ', levelMap = null, settings = 
 
   // ── REST: load market context (VWAP, prev day, weekly, pivots, S/D zones) ──
   const loadContext = useCallback(async () => {
-    if (!apiKey || !ticker) return
+    if (!ticker) return
     setLoadingContext(true)
     setContextError(null)
 
     try {
       const [intradayBars, pd, wd, histBars] = await Promise.all([
-        getIntradayBars(apiKey, ticker, 1, 'minute').catch(() => []),
-        getPrevDay(apiKey, ticker).catch(() => null),
-        getWeeklyData(apiKey, ticker).catch(() => null),
-        getHistoricalBars(apiKey, ticker, 25).catch(() => []),
+        getIntradayBars(ticker, 1, 'minute').catch(() => []),
+        getPrevDay(ticker).catch(() => null),
+        getWeeklyData(ticker).catch(() => null),
+        getHistoricalBars(ticker, 25).catch(() => []),
       ])
 
       vwapBarsRef.current = intradayBars
@@ -98,7 +98,7 @@ export function useLiveData(apiKey, ticker = 'QQQ', levelMap = null, settings = 
         setIntradayBars(intradayBars)
         setIsHistoricalFallback(false)
       } else {
-        const fallback = await getIntradayBarsForDate(apiKey, ticker, priorTradingDayStr()).catch(() => [])
+        const fallback = await getIntradayBarsForDate(ticker, priorTradingDayStr()).catch(() => [])
         setIntradayBars(fallback)
         setIsHistoricalFallback(fallback.length > 0)
       }
@@ -138,11 +138,10 @@ export function useLiveData(apiKey, ticker = 'QQQ', levelMap = null, settings = 
     } finally {
       setLoadingContext(false)
     }
-  }, [apiKey, ticker])
+  }, [ticker])
 
   // Load context on mount and refresh every 5 min (VWAP needs frequent refresh)
   useEffect(() => {
-    if (!apiKey) return
     loadContext()
     const interval = setInterval(loadContext, 5 * 60 * 1000)
     return () => clearInterval(interval)
@@ -150,17 +149,17 @@ export function useLiveData(apiKey, ticker = 'QQQ', levelMap = null, settings = 
 
   // Fallback REST poll for price if WebSocket fails
   useEffect(() => {
-    if (connected || !apiKey) return
+    if (connected) return
     const poll = async () => {
       try {
-        const p = await getLastTrade(apiKey, ticker)
+        const p = await getLastTrade(ticker)
         if (p) setPrice(p)
       } catch {}
     }
     poll()
     const iv = setInterval(poll, 10000)
     return () => clearInterval(iv)
-  }, [connected, apiKey, ticker])
+  }, [connected, ticker])
 
   return {
     price,

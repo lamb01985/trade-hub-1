@@ -122,15 +122,15 @@ function qualityBadge(rvol, dollarVol) {
 
 // ── Hydration ─────────────────────────────────────────────────────────────
 
-async function hydrateRow(apiKey, row, timeframeDays, cache) {
+async function hydrateRow(row, timeframeDays, cache) {
   if (cache[row.ticker] && Date.now() - cache[row.ticker].hydratedAt < 30 * 60 * 1000) {
     return { ...row, ...cache[row.ticker] }
   }
   const enriched = { ticker: row.ticker, hydratedAt: Date.now() }
   try {
     const [bars, details] = await Promise.all([
-      getHistoricalBars(apiKey, row.ticker, 252).catch(() => []),
-      getTickerDetails(apiKey, row.ticker).catch(() => null),
+      getHistoricalBars(row.ticker, 252).catch(() => []),
+      getTickerDetails(row.ticker).catch(() => null),
     ])
     if (bars?.length) {
       const closes = bars.map(b => b?.c).filter(v => v != null && v > 0)
@@ -261,7 +261,7 @@ function ExpandedRow({ row, onAddToSetup, setupsForMenu, apiKey }) {
     if (!apiKey) return
     let alive = true
     setLoading(true)
-    getRecentNews(apiKey, row.ticker, 5).catch(() => []).then(n => {
+    getRecentNews(row.ticker, 5).catch(() => []).then(n => {
       if (!alive) return
       setNews(n || [])
       setLoading(false)
@@ -361,7 +361,7 @@ export default function MoversScanner({ apiKey, setups = [], onSetupsChange, sav
     if (!apiKey) { setError('Add a Massive API key in Command first.'); return }
     setLoading(true); setError(null); setHydrating({ done: 0, total: 0 })
     try {
-      const all = await getTopMovers(apiKey)
+      const all = await getTopMovers()
       const split = { gainers: [], losers: [] }
       for (const s of all) {
         const chg = s?.todaysChangePerc ?? s?.day?.todaysChangePerc ?? 0
@@ -384,7 +384,7 @@ export default function MoversScanner({ apiKey, setups = [], onSetupsChange, sav
       setHydrating({ done: 0, total: all30.length })
       let done = 0
       await Promise.all(all30.map(async (row) => {
-        const enriched = await hydrateRow(apiKey, row, tfDef.days, hydrationCacheRef.current)
+        const enriched = await hydrateRow(row, tfDef.days, hydrationCacheRef.current)
         setMovers(prev => ({
           gainers: prev.gainers.map(r => r.ticker === row.ticker ? { ...r, ...enriched } : r),
           losers: prev.losers.map(r => r.ticker === row.ticker ? { ...r, ...enriched } : r),

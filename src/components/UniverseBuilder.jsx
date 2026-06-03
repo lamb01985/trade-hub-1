@@ -69,10 +69,10 @@ function uid() {
   return `u_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
 }
 
-async function hydrateOne(apiKey, ticker) {
+async function hydrateOne(ticker) {
   const out = { ticker, hydratedAt: Date.now() }
   try {
-    const bars = await getHistoricalBars(apiKey, ticker, 252)
+    const bars = await getHistoricalBars(ticker, 252)
     if (bars?.length) {
       const closes = bars.map(b => b?.c).filter(v => v != null && v > 0)
       out.closes = closes.slice(-60)
@@ -96,7 +96,7 @@ async function hydrateOne(apiKey, ticker) {
     }
   } catch {}
   try {
-    const d = await getTickerDetails(apiKey, ticker)
+    const d = await getTickerDetails(ticker)
     if (d) {
       out.marketCap = d.market_cap ?? null
       out.sector = d.sic_description ? d.sic_description.split(/[ -]/).slice(0, 3).join(' ') : null
@@ -400,7 +400,7 @@ export default function UniverseBuilder({
       const t = queue.shift()
       const cached = cache[t]
       const fresh = cached && (Date.now() - (cached.hydratedAt || 0)) < HYDRATION_MAX_AGE_MS
-      const row = fresh ? cached : await hydrateOne(apiKey, t)
+      const row = fresh ? cached : await hydrateOne(t)
       cache[t] = row
       out.push(row)
       done += 1

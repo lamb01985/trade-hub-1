@@ -65,11 +65,10 @@ function TemplateInlineBacktest({ template, apiKey, cacheRef }) {
   const [error, setError] = useState(null)
   const [result, setResult] = useState(null)
   async function run() {
-    if (!apiKey) { setError('Add a Massive API key in Command first.'); return }
     setRunning(true); setError(null); setProgress({ pct: 0, ticker: null, stage: 'starting' })
     try {
       const synth = createSetup(templateToSetupPartial(template))
-      const r = await backtestSetup(synth, apiKey, {
+      const r = await backtestSetup(synth, {
         barsCache: cacheRef.current,
         onProgress: (p) => setProgress({ pct: p.progressPct, ticker: p.ticker, stage: p.stage }),
       })

@@ -272,7 +272,7 @@ export default function FocusedTickerCard({
     if (!apiKey) return
     let alive = true
     setNewsLoading(true)
-    getRecentNews(apiKey, ticker, 5).then(n => { if (alive) { setNews(n || []); setNewsLoading(false) } }).catch(() => { if (alive) { setNews([]); setNewsLoading(false) } })
+    getRecentNews(ticker, 5).then(n => { if (alive) { setNews(n || []); setNewsLoading(false) } }).catch(() => { if (alive) { setNews([]); setNewsLoading(false) } })
     return () => { alive = false }
   }, [apiKey, ticker])
 

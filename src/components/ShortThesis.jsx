@@ -73,11 +73,11 @@ function ExpandedAnalysis({ result, apiKey, anthropicKey, theses, onSaveThesis }
   const existing = theses?.[result.ticker]
 
   useEffect(() => {
-    if (!apiKey || !d?.ticker) return
+    if (!d?.ticker) return
     let alive = true
-    getRecentNews(apiKey, d.ticker, 3).then(n => { if (alive) setNews(n) }).catch(() => { if (alive) setNews([]) })
+    getRecentNews(d.ticker, 3).then(n => { if (alive) setNews(n) }).catch(() => { if (alive) setNews([]) })
     return () => { alive = false }
-  }, [apiKey, d?.ticker])
+  }, [d?.ticker])
 
   if (!d) return <div style={{ padding: '14px 18px', fontSize: 11, fontFamily: MONO, color: '#555' }}>No data available for {result.ticker}.</div>
 
@@ -398,7 +398,7 @@ export default function ShortThesis({ apiKey, anthropicKey, theses, onThesesChan
     setScanState({ state: 'running', current: universe[0] || '', done: 0, total: universe.length, error: '' })
     setResults([])
     try {
-      await scanUniverse(apiKey, universe, ({ done, total, current, all }) => {
+      await scanUniverse(universe, ({ done, total, current, all }) => {
         setResults(all.slice().sort((a, b) => b.score - a.score))
         setScanState({ state: 'running', current, done, total, error: '' })
       })

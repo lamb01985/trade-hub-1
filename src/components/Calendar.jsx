@@ -285,10 +285,9 @@ function SectorRotationView({ apiKey }) {
   const [error, setError] = useState('')
 
   async function load() {
-    if (!apiKey) { setError('Add a Massive API key in Command to activate sector rotation.'); return }
     setLoading(true); setError('')
     try {
-      const snap = await getRotationSnapshot(apiKey)
+      const snap = await getRotationSnapshot()
       setData(snap)
       writeSectorCache(snap)
     } catch (e) {

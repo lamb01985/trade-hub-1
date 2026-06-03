@@ -3,9 +3,21 @@ import { Card, SLabel, Heading, Tile, Fld, Sel, Btn, Tip } from './ui.jsx'
 import { LIME, RED, YELLOW, MONO, BORDER, SESSION_LABELS, SESSION_COLORS, SESSION_TIPS, getSession, getMarketHolidayName, todayStr, f2, fmtD, fmtU } from '../constants.js'
 import { rotationContextForTicker } from '../lib/sectors.js'
 
-export default function Command({ trades, settings, onSettingsChange, lockedOut, onUnlock, apiKey, onApiKeyChange, anthropicKey, onAnthropicKeyChange, liveData, marketEvents, instrument, ticker = 'QQQ', levelMap, todayEvents = [], schwab }) {
+export default function Command({ trades, settings, onSettingsChange, lockedOut, onUnlock, anthropicKey, onAnthropicKeyChange, liveData, marketEvents, instrument, ticker = 'QQQ', levelMap, todayEvents = [], schwab }) {
   const [time, setTime] = useState(new Date())
   useEffect(() => { const t = setInterval(() => setTime(new Date()), 1000); return () => clearInterval(t) }, [])
+
+  // Probe the Polygon proxy once on mount to verify POLYGON_API_KEY is set on
+  // the server. 'configured' = proxy returned 200 for a cheap reference call;
+  // 'env_missing' = proxy returned 500 (env var not set on Vercel).
+  const [polygonStatus, setPolygonStatus] = useState('checking')
+  useEffect(() => {
+    let alive = true
+    fetch('/api/polygon/proxy?path=/v3/reference/tickers/AAPL')
+      .then(r => { if (!alive) return; setPolygonStatus(r.ok ? 'configured' : r.status === 500 ? 'env_missing' : 'error') })
+      .catch(() => { if (alive) setPolygonStatus('error') })
+    return () => { alive = false }
+  }, [])
 
   const ts = todayStr()
   const tt = trades.filter(t => t.date.slice(0, 10) === ts)
@@ -49,78 +61,42 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
         </div>
       )}
 
-      {/* Onboarding — shown when no API key */}
-      {!apiKey && (() => {
-        const step1Done = !!apiKey
-        const step2Done = !!anthropicKey
-        const step3Done = settings.dailyLossLimit > 0 && settings.maxTradesPerDay > 0
-        const doneCount = [step1Done, step2Done, step3Done].filter(Boolean).length
-
-        const steps = [
-          { n: 1, title: 'Connect Live Data', subtitle: 'Required', done: step1Done },
-          { n: 2, title: 'Connect AI', subtitle: 'Optional but powerful', done: step2Done },
-          { n: 3, title: 'Set Your Risk Rules', subtitle: 'Required', done: step3Done },
-        ]
-
-        return (
-          <div style={{ background: '#0c1408', border: `1px solid ${LIME}33`, borderRadius: 5, padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
-            <div>
-              <div style={{ fontSize: 9, color: '#5a7a5a', fontFamily: MONO, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 6 }}>Getting Started</div>
-              <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
-                {steps.map((s, i) => (
-                  <div key={s.n} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <div style={{ width: 22, height: 22, borderRadius: '50%', background: s.done ? LIME : '#1a2a18', border: `1px solid ${s.done ? LIME : '#2a3a28'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <span style={{ fontSize: 9, fontFamily: MONO, fontWeight: 900, color: s.done ? '#000' : '#3a5a38' }}>{s.done ? '✓' : s.n}</span>
-                    </div>
-                    {i < 2 && <div style={{ width: 32, height: 1, background: '#1e2e1e' }} />}
-                  </div>
-                ))}
-                <span style={{ fontSize: 10, fontFamily: MONO, color: '#4a6a48', marginLeft: 6, alignSelf: 'center' }}>{doneCount}/3 complete</span>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-              <div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: LIME, fontFamily: MONO, letterSpacing: '0.08em', marginBottom: 4 }}>Step 1 of 3 — Connect Data</div>
-                <div style={{ fontSize: 12, color: '#666', fontFamily: MONO, lineHeight: 1.7, marginBottom: 10 }}>Add your Massive API key below. This connects live price, VWAP, pivot levels, and the level map. Everything activates automatically.</div>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
-                  <div style={{ flex: 1 }}>
-                    <Fld label="Massive API Key" value={apiKey || ''} onChange={v => onApiKeyChange(v.trim())} type="text" placeholder="paste your key here — levels activate immediately" mono />
-                  </div>
-                </div>
-                <div style={{ fontSize: 9, color: '#333', fontFamily: MONO, marginTop: 6 }}>Key stored in your browser only. Calls go to api.polygon.io.</div>
-              </div>
-
-              <div style={{ borderTop: '1px solid #1a2a18', paddingTop: 16 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: step2Done ? LIME : '#666', fontFamily: MONO, letterSpacing: '0.08em', marginBottom: 4 }}>Step 2 of 3 — Connect AI <span style={{ color: '#3a4a38', fontWeight: 400 }}>(optional)</span></div>
-                <div style={{ fontSize: 12, color: '#555', fontFamily: MONO, lineHeight: 1.7, marginBottom: 10 }}>Add your Claude API key to enable AI morning briefs. Claude reads your market data and writes your full game plan each morning.</div>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
-                  <div style={{ flex: 1 }}>
-                    <Fld label="Anthropic API Key" value={anthropicKey || ''} onChange={v => onAnthropicKeyChange(v.trim())} type="text" placeholder="sk-ant-..." mono />
-                  </div>
-                </div>
-                <div style={{ fontSize: 9, color: '#333', fontFamily: MONO, marginTop: 6 }}>Calls go directly to api.anthropic.com. Same account as claude.ai.</div>
-              </div>
-
-              <div style={{ borderTop: '1px solid #1a2a18', paddingTop: 16 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: step3Done ? LIME : '#666', fontFamily: MONO, letterSpacing: '0.08em', marginBottom: 4 }}>Step 3 of 3 — Set Your Risk Rules</div>
-                <div style={{ fontSize: 12, color: '#555', fontFamily: MONO, lineHeight: 1.7, marginBottom: 10 }}>Set your daily loss limit and max trades. The app locks you out automatically when hit. This is non-negotiable.</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <Fld label="Daily Loss Limit" value={settings.dailyLossLimit || ''} onChange={v => onSettingsChange({ ...settings, dailyLossLimit: parseFloat(v) || 0 })} placeholder="500" prefix="$" />
-                  <Fld label="Max Trades Per Day" value={settings.maxTradesPerDay || ''} onChange={v => onSettingsChange({ ...settings, maxTradesPerDay: parseInt(v) || 0 })} placeholder="5" step="1" />
-                </div>
-              </div>
-
-              {doneCount === 3 && (
-                <div style={{ background: '#071208', border: `1px solid ${LIME}44`, borderRadius: 4, padding: '12px 16px', textAlign: 'center' }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: LIME, fontFamily: MONO, marginBottom: 3 }}>You're ready.</div>
-                  <div style={{ fontSize: 11, color: '#5a7a5a', fontFamily: MONO }}>Start each day in the Prep tab.</div>
-                </div>
-              )}
-            </div>
-          </div>
-        )
-      })()}
+      {/* Polygon API status. The key is configured server-side via Vercel env
+          var POLYGON_API_KEY and never reaches the browser. */}
+      <Card style={{ border: polygonStatus === 'configured' ? `1px solid ${LIME}33` : polygonStatus === 'env_missing' ? `1px solid ${YELLOW}33` : '1px solid #222' }}>
+        <SLabel>Polygon API Connection</SLabel>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
+          {polygonStatus === 'checking' && (
+            <>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#666' }} />
+              <span style={{ fontSize: 12, fontFamily: MONO, color: '#aaa' }}>Checking server configuration...</span>
+            </>
+          )}
+          {polygonStatus === 'configured' && (
+            <>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: LIME, boxShadow: `0 0 6px ${LIME}` }} />
+              <span style={{ fontSize: 12, fontFamily: MONO, color: LIME, fontWeight: 700 }}>Polygon: Connected</span>
+            </>
+          )}
+          {polygonStatus === 'env_missing' && (
+            <>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: YELLOW }} />
+              <span style={{ fontSize: 12, fontFamily: MONO, color: YELLOW, fontWeight: 700 }}>Polygon: Not configured</span>
+            </>
+          )}
+          {polygonStatus === 'error' && (
+            <>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: RED }} />
+              <span style={{ fontSize: 12, fontFamily: MONO, color: RED, fontWeight: 700 }}>Polygon: Proxy error</span>
+            </>
+          )}
+        </div>
+        <div style={{ fontSize: 10, color: '#666', fontFamily: MONO, marginTop: 10, lineHeight: 1.6 }}>
+          {polygonStatus === 'env_missing'
+            ? 'Set POLYGON_API_KEY as a Sensitive env var in the Vercel project (Production + Preview), then redeploy. The key is read server-side only and never reaches the browser.'
+            : 'API key is managed server-side via POLYGON_API_KEY in Vercel env. REST calls are proxied through /api/polygon/proxy. The WebSocket fetches its auth from /api/polygon/ws-auth on connect, so no Polygon key is persisted in browser storage.'}
+        </div>
+      </Card>
 
       {/* Live price + VWAP */}
       {liveData?.price && (
@@ -565,24 +541,16 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
         </div>
       </Card>
 
-      {/* Massive API key — shown here when already set, for editing */}
-      {apiKey && (
-        <Card style={{ border: '1px solid #222' }}>
-          <SLabel>Massive API Connection</SLabel>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
-            <div style={{ flex: 1 }}>
-              <Fld label="API Key" value={apiKey || ''} onChange={v => onApiKeyChange(v.trim())} type="text" placeholder="paste your Massive API key here" mono />
-            </div>
-            <Btn small variant="ghost" onClick={() => onApiKeyChange('')}>Clear</Btn>
-          </div>
-          <div style={{ display: 'flex', gap: 12, marginTop: 10, alignItems: 'center' }}>
-            <div style={{ width: 7, height: 7, borderRadius: '50%', background: liveData?.connected ? LIME : liveData?.price ? YELLOW : '#444', boxShadow: liveData?.connected ? `0 0 6px ${LIME}` : 'none' }} />
-            <span style={{ fontSize: 10, fontFamily: MONO, color: liveData?.connected ? LIME : liveData?.price ? YELLOW : '#666' }}>
-              {liveData?.connected ? 'WebSocket connected — real-time streaming' : liveData?.price ? 'REST polling — 10s updates' : 'Connecting...'}
-            </span>
-          </div>
-        </Card>
-      )}
+      {/* Live data connection status */}
+      <Card style={{ border: '1px solid #222' }}>
+        <SLabel>Live Data Stream</SLabel>
+        <div style={{ display: 'flex', gap: 12, marginTop: 6, alignItems: 'center' }}>
+          <div style={{ width: 7, height: 7, borderRadius: '50%', background: liveData?.connected ? LIME : liveData?.price ? YELLOW : '#444', boxShadow: liveData?.connected ? `0 0 6px ${LIME}` : 'none' }} />
+          <span style={{ fontSize: 10, fontFamily: MONO, color: liveData?.connected ? LIME : liveData?.price ? YELLOW : '#666' }}>
+            {liveData?.connected ? 'WebSocket connected, real-time streaming' : liveData?.price ? 'REST polling, 10s updates' : 'Connecting...'}
+          </span>
+        </div>
+      </Card>
 
       {/* Claude API key */}
       <Card style={{ border: anthropicKey ? '1px solid #1e2a1e' : '1px solid #222' }}>

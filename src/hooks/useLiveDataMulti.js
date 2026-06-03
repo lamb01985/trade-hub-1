@@ -60,7 +60,7 @@ function emptyBundle() {
   }
 }
 
-export function useLiveDataMulti(apiKey, tickers = []) {
+export function useLiveDataMulti(tickers = []) {
   // Normalize incoming tickers: uppercase, unique, stable.
   const normalized = useMemo(() => {
     const seen = new Set()
@@ -85,13 +85,12 @@ export function useLiveDataMulti(apiKey, tickers = []) {
   const streamRef = useRef(null)
   const subscribedRef = useRef(new Set())
 
-  // ── WebSocket: one connection per apiKey, subscriptions reconciled on
-  // tickers change. Stream is destroyed only when apiKey clears.
+  // ── WebSocket: one shared connection, subscriptions reconciled on tickers
+  // change. Stream is created once on mount.
   useEffect(() => {
-    if (!apiKey) return
     if (streamRef.current) return // existing connection survives ticker changes
 
-    const stream = new MassiveStream(apiKey, {
+    const stream = new MassiveStream({
       onConnected: () => {
         setConnected(true)
         setWsError(null)
@@ -122,11 +121,10 @@ export function useLiveDataMulti(apiKey, tickers = []) {
       streamRef.current = null
       subscribedRef.current = new Set()
     }
-  }, [apiKey])
+  }, [])
 
   // ── Subscription reconciliation: add new tickers, drop removed ones.
   useEffect(() => {
-    if (!apiKey) return
     const stream = streamRef.current
     const want = new Set(normalized)
     const have = subscribedRef.current
@@ -161,27 +159,27 @@ export function useLiveDataMulti(apiKey, tickers = []) {
       }
       return changed ? next : prev
     })
-  }, [apiKey, tickersKey, normalized])
+  }, [tickersKey, normalized])
 
   // ── REST context per ticker, parallel. Mirrors useLiveData's loadContext.
   const loadContext = useCallback(async () => {
-    if (!apiKey || normalized.length === 0) return
+    if (normalized.length === 0) return
     setLoadingContext(true)
     setContextError(null)
     try {
       await Promise.all(normalized.map(async (ticker) => {
         try {
           const [intradayBars, pd, wd, histBars] = await Promise.all([
-            getIntradayBars(apiKey, ticker, 1, 'minute').catch(() => []),
-            getPrevDay(apiKey, ticker).catch(() => null),
-            getWeeklyData(apiKey, ticker).catch(() => null),
-            getHistoricalBars(apiKey, ticker, 25).catch(() => []),
+            getIntradayBars(ticker, 1, 'minute').catch(() => []),
+            getPrevDay(ticker).catch(() => null),
+            getWeeklyData(ticker).catch(() => null),
+            getHistoricalBars(ticker, 25).catch(() => []),
           ])
 
           let bars = intradayBars
           let isHistoricalFallback = false
           if (!bars.length) {
-            const fallback = await getIntradayBarsForDate(apiKey, ticker, priorTradingDayStr()).catch(() => [])
+            const fallback = await getIntradayBarsForDate(ticker, priorTradingDayStr()).catch(() => [])
             bars = fallback
             isHistoricalFallback = fallback.length > 0
           }
@@ -235,10 +233,9 @@ export function useLiveDataMulti(apiKey, tickers = []) {
     } finally {
       setLoadingContext(false)
     }
-  }, [apiKey, tickersKey])
+  }, [tickersKey])
 
   useEffect(() => {
-    if (!apiKey) return
     loadContext()
     const iv = setInterval(loadContext, 5 * 60 * 1000)
     return () => clearInterval(iv)
@@ -246,12 +243,12 @@ export function useLiveDataMulti(apiKey, tickers = []) {
 
   // ── REST poll fallback for price if WebSocket is down.
   useEffect(() => {
-    if (connected || !apiKey || normalized.length === 0) return
+    if (connected || normalized.length === 0) return
     let cancelled = false
     const poll = async () => {
       await Promise.all(normalized.map(async (ticker) => {
         try {
-          const p = await getLastTrade(apiKey, ticker)
+          const p = await getLastTrade(ticker)
           if (cancelled) return
           if (p != null) {
             setData(prev => {
@@ -265,7 +262,7 @@ export function useLiveDataMulti(apiKey, tickers = []) {
     poll()
     const iv = setInterval(poll, 10000)
     return () => { cancelled = true; clearInterval(iv) }
-  }, [connected, apiKey, tickersKey])
+  }, [connected, tickersKey])
 
   return {
     data,

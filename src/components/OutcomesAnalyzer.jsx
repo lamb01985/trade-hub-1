@@ -174,7 +174,7 @@ export default function OutcomesAnalyzer({ setups = [], onSetupsChange = null, a
       const s = targets[i]
       setProgress({ done: i, total: targets.length, current: s.name })
       try {
-        const result = await backtestSetup(s, apiKey, { barsCache: cacheRef.current })
+        const result = await backtestSetup(s, { barsCache: cacheRef.current })
         if (!result?.error) {
           onSetupsChange?.(prev => (prev || []).map(x => x.id === s.id ? { ...x, backtest: result, updatedAt: new Date().toISOString() } : x))
         }

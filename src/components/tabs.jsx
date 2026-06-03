@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Card, SLabel, Heading, Tile, Fld, Sel, Btn, Pill, CheckRow, Tip } from './ui.jsx'
 import { LIME, RED, YELLOW, BLUE, PURPLE, ORANGE, MONO, SANS, BORDER, DARK, PANEL, SETUP_TYPES, todayStr, localDateStr, tomorrowStr, uid, f2, fmtD, fmtU, rrColor, ivContext, calcOptionRR, bsCalc, getETMins, SESSION_LABELS, SESSION_COLORS, SESSION_TIPS } from '../constants.js'
-import { getOptionChain, getPrevDay, getHistoricalBars, getOptionsPCRatio, getTopMovers } from '../lib/massive.js'
+import { getPrevDay, getHistoricalBars, getTopMovers } from '../lib/massive.js'
 import { occSymbol, SCHWAB_TRADE_URL, SCHWAB_BLUE } from '../lib/schwabClient.js'
 import { useLocalStorage } from '../hooks/useStore.js'
 
@@ -329,22 +329,11 @@ export function IVAnalyzerTab({ apiKey, instrument }) {
   const [ivRank, setIvRank] = useLocalStorage('th-iv-rank-input', '')
 
   async function doFetch() {
-    if (!apiKey) { setFetchError('No API key — enter it in the Command tab.'); return }
-    setFetching(true); setFetchError(null); setFetchResults([])
-    try {
-      const results = await getOptionChain(apiKey, fetchTicker, fetchExpiry, fetchStrike || null, fetchType)
-      if (!results.length) { setFetchError('No contracts found. Check strike and expiry.'); setFetching(false); return }
-      setFetchResults(results)
-      const top = results[0]
-      if (top.last_quote?.ask) setMp(f2(top.last_quote.ask))
-      if (top.implied_volatility) setIv(f2(top.implied_volatility * 100))
-      if (top.details?.strike_price) setStrike(String(top.details.strike_price))
-      if (top.underlying_asset?.value) setUnderlying(f2(top.underlying_asset.value))
-      const dteVal = top.details?.expiration_date ? Math.max(0, Math.round((new Date(top.details.expiration_date) - new Date()) / (1000 * 60 * 60 * 24))) : null
-      if (dteVal != null) setDte(String(dteVal))
-      setOptType(top.details?.contract_type || fetchType)
-    } catch (e) { setFetchError(e.message) }
-    setFetching(false)
+    // Options endpoints are not in the current Polygon plan and are blocked
+    // by the proxy allowlist. Keep the UI in place for a future restoration
+    // but surface a clear error so the user knows why nothing is loading.
+    setFetchError('Options chain unavailable: current Polygon plan does not include options data.')
+    setFetchResults([])
   }
 
   const S = parseFloat(underlying), K = parseFloat(strike), T = parseFloat(dte) / 365, sigma = parseFloat(iv) / 100, r = 0.045, mpp = parseFloat(mp), n = parseInt(contracts) || 1
@@ -1208,7 +1197,7 @@ export function WatchlistTab({ apiKey, onSendToPrep, savedPreps, onLoadSavedPrep
       const controller = new AbortController()
       const timer = setTimeout(() => controller.abort(), LAYER1_FETCH_TIMEOUT_MS)
       try {
-        const snaps = await getTopMovers(apiKey, { signal: controller.signal })
+        const snaps = await getTopMovers({ signal: controller.signal })
         if (controller.signal.aborted) throw new Error('timeout')
         return snaps
       } finally {
@@ -1264,20 +1253,19 @@ export function WatchlistTab({ apiKey, onSendToPrep, savedPreps, onLoadSavedPrep
     setScanErrors(0)
     const settled = await Promise.allSettled(
       tickers.map(async ticker => {
-        let pd = null, hist = [], pcr = {}, fetchError = null
-        try { pd = await getPrevDay(apiKey, ticker) } catch (e) { fetchError = e.message }
-        try { hist = await getHistoricalBars(apiKey, ticker, 21) } catch {}
-        try { pcr = await getOptionsPCRatio(apiKey, ticker) } catch {}
+        let pd = null, hist = [], fetchError = null
+        try { pd = await getPrevDay(ticker) } catch (e) { fetchError = e.message }
+        try { hist = await getHistoricalBars(ticker, 21) } catch {}
         const histBars = Array.isArray(hist) && hist.length > 1 ? hist.slice(0, -1) : (hist || [])
         const avgVol = histBars.length > 0 ? histBars.reduce((s, b) => s + b.v, 0) / histBars.length : null
         const score = pd ? calcSetupScore(pd, avgVol) : null
-        return { ticker, pd, avgVol, score, pcr, fetchError }
+        return { ticker, pd, avgVol, score, fetchError }
       })
     )
     const data = settled
       .filter(r => r.status === 'fulfilled')
       .map(r => r.value)
-      .concat(settled.filter(r => r.status === 'rejected').map(r => ({ ticker: '?', pd: null, score: null, pcr: {}, fetchError: r.reason?.message || 'Request failed' })))
+      .concat(settled.filter(r => r.status === 'rejected').map(r => ({ ticker: '?', pd: null, score: null, fetchError: r.reason?.message || 'Request failed' })))
       .sort((a, b) => (b.score?.total ?? -1) - (a.score?.total ?? -1))
     setScanErrors(data.filter(r => !r.pd).length)
     setResults(data)
@@ -1343,7 +1331,7 @@ export function WatchlistTab({ apiKey, onSendToPrep, savedPreps, onLoadSavedPrep
   }
 
   // Shared result row (used for both layers)
-  function ResultRow({ ticker, pd, score, pcr, fetchError, volRatioOverride, dayVol, rank, isTop3 }) {
+  function ResultRow({ ticker, pd, score, fetchError, volRatioOverride, dayVol, rank, isTop3 }) {
     if (!pd) {
       return (
         <div style={{ background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 5, padding: '12px 18px', display: 'flex', alignItems: 'center', gap: 16, opacity: 0.4 }}>
@@ -1367,8 +1355,6 @@ export function WatchlistTab({ apiKey, onSendToPrep, savedPreps, onLoadSavedPrep
     const volColor = volRatio >= 1.5 ? LIME : volRatio >= 1.0 ? '#777' : '#444'
     const obs = buildObservation(pd, score)
     const unusualVol = volRatio >= 2.0
-    const hasPCR = pcr && !pcr.planError && !pcr.error && pcr.pcRatio != null
-    const pcrColor = hasPCR ? (pcr.pcRatio > 1.2 ? RED : pcr.pcRatio < 0.8 ? LIME : '#888') : '#444'
     const absVol = dayVol || pd.volume
     return (
       <div style={{ background: PANEL, border: `1px solid ${isTop3 ? LIME + '44' : BORDER}`, borderRadius: 5, overflow: 'hidden' }}>
@@ -1389,7 +1375,6 @@ export function WatchlistTab({ apiKey, onSendToPrep, savedPreps, onLoadSavedPrep
               tip="Relative Volume — today's volume vs. the projected daily average. Above 1.5x means institutional conviction. Below 0.8x means low conviction — don't chase breakouts."
             />
             <DataChip label="Structure" value={closeLbl} color={closeLblColor} />
-            {pcr && <DataChip label="P/C Ratio" value={hasPCR ? pcr.pcRatio.toFixed(2) : '—'} color={pcrColor} />}
           </div>
           <div style={{ textAlign: 'right', flexShrink: 0, minWidth: 60 }}>
             <div style={{ fontSize: 8, color: '#333', fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>Score</div>
@@ -1471,7 +1456,6 @@ export function WatchlistTab({ apiKey, onSendToPrep, savedPreps, onLoadSavedPrep
                 ticker={r.ticker}
                 pd={r.prevDay}
                 score={r.score}
-                pcr={null}
                 fetchError={null}
                 volRatioOverride={r.rvol}
                 dayVol={r.dayVol}
@@ -1548,14 +1532,12 @@ export function WatchlistTab({ apiKey, onSendToPrep, savedPreps, onLoadSavedPrep
               </div>
             )}
             {scanErrors > 0 && <div style={{ fontSize: 9, color: '#4a3a2a', fontFamily: MONO }}>⚠ {scanErrors} ticker{scanErrors > 1 ? 's' : ''} returned no data</div>}
-            {results.some(r => r.pcr?.planError) && <div style={{ fontSize: 9, color: '#333', fontFamily: MONO }}>◦ P/C ratio requires Options Advanced plan</div>}
-            {myResults.map(({ ticker, pd, score, pcr, fetchError, avgVol }, idx) => (
+            {myResults.map(({ ticker, pd, score, fetchError, avgVol }, idx) => (
               <ResultRow
                 key={ticker + idx}
                 ticker={ticker}
                 pd={pd}
                 score={score}
-                pcr={pcr}
                 fetchError={fetchError}
                 volRatioOverride={null}
                 dayVol={null}

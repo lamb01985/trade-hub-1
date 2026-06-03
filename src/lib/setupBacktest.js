@@ -252,8 +252,8 @@ function summarize(trades) {
 //
 // options.barsCache: { [TICKER]: bars } reusable cache so re-running the
 // backtest doesn't re-fetch. The function writes into it.
-export async function backtestSetup(setup, apiKey, options = {}) {
-  if (!setup || !apiKey) return { error: 'Missing setup or apiKey' }
+export async function backtestSetup(setup, options = {}) {
+  if (!setup) return { error: 'Missing setup' }
   if (!setup.conditions?.length) return { error: 'Setup has no conditions' }
   const tickers = resolveUniverseTickers(setup.universe, options.savedUniverses || [])
   if (!tickers.length) return { error: 'Setup has no universe' }
@@ -274,7 +274,7 @@ export async function backtestSetup(setup, apiKey, options = {}) {
     let fetchError = null
     if (!bars) {
       try {
-        bars = await getHistoricalBars(apiKey, ticker, 252)
+        bars = await getHistoricalBars(ticker, 252)
         cache[ticker] = bars || []
       } catch (e) {
         cache[ticker] = []

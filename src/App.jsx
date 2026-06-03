@@ -93,7 +93,14 @@ export default function App() {
   // Increments whenever something external (Layer 2 → Prep, etc.) wants
   // PrepTab to auto-fire Load Market Data after the tab switch settles.
   const [autoLoadPrepTrigger, setAutoLoadPrepTrigger] = useState(0)
-  const [apiKey, setApiKey] = useLocalStorage('th-apikey', '')
+  // The Polygon API key is managed server-side via POLYGON_API_KEY in Vercel
+  // env vars. src/lib/massive.js routes every REST call through
+  // /api/polygon/proxy and the WebSocket fetches its auth from
+  // /api/polygon/ws-auth on connect. A truthy sentinel is passed down so
+  // existing apiKey-gated UI in child components stays clean without forcing
+  // a sweep of every gate in this commit. Child components no longer call
+  // any data-fetch function with this value.
+  const apiKey = 'server-managed'
   const [anthropicKey, setAnthropicKey] = useLocalStorage('th-anthropic-key', '')
   const [trades, setTrades] = useLocalStorage('th-trades', [])
   const [settings, setSettings] = useLocalStorage('th-settings', defaultSettings)
@@ -172,14 +179,14 @@ export default function App() {
     orbLow: parseFloat(orbPrefill?.orbLow || prep.orbLow) || null,
   }), [orbPrefill, prep])
 
-  const liveData = useLiveData(apiKey, prep.ticker || 'QQQ', null, settings)
+  const liveData = useLiveData(prep.ticker || 'QQQ', null, settings)
 
   // Multi-ticker bundle for the bot's watchlist. Independent of the active
   // ticker (the active ticker is in liveData above).
-  const liveDataMulti = useLiveDataMulti(apiKey, botWatchlist)
+  const liveDataMulti = useLiveDataMulti(botWatchlist)
 
   // Multi-ticker bundle for the wheel scanner's watchlist (separate from bot).
-  const wheelDataMulti = useLiveDataMulti(apiKey, wheelWatchlist)
+  const wheelDataMulti = useLiveDataMulti(wheelWatchlist)
 
   // Setup engine: live-subscribe to the union of every active setup's
   // universe PLUS the symbols of every focused ticker so the Focus tab
@@ -203,7 +210,7 @@ export default function App() {
     }
     return out
   }, [setups, savedUniverses, focusedTickers])
-  const setupDataMulti = useLiveDataMulti(apiKey, setupTickers)
+  const setupDataMulti = useLiveDataMulti(setupTickers)
 
   // 252-day daily bars per setup ticker, used by buildSnapshot for EMAs, RSI,
   // MACD, and 52W high/low. Cached in a ref; refreshed when tickers change
@@ -220,7 +227,7 @@ export default function App() {
         const cached = setupHistRef.current[t]
         if (cached && (Date.now() - cached.fetchedAt) < MAX_AGE) continue
         try {
-          const bars = await getHistoricalBars(apiKey, t, 252)
+          const bars = await getHistoricalBars(t, 252)
           if (cancelled) return
           setupHistRef.current[t] = { bars: bars || [], fetchedAt: Date.now() }
         } catch {}
@@ -394,6 +401,19 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [_priceTick])
 
+  // One-time cleanup: clear any Polygon API key that earlier versions of the
+  // app persisted client-side. Server-side key management means these entries
+  // are dead weight and a leak surface. Gated by a flag so the cleanup only
+  // runs once per browser.
+  useEffect(() => {
+    try {
+      if (localStorage.getItem('polygon-cleanup-v1-done')) return
+      const stale = ['th-apikey', 'th-polygon-key', 'polygon-api-key']
+      for (const k of stale) localStorage.removeItem(k)
+      localStorage.setItem('polygon-cleanup-v1-done', '1')
+    } catch {}
+  }, [])
+
   // One-time migration: backfill tradeDate on any existing trade that predates
   // the field. Converts the legacy date timestamp into the user's local
   // calendar date so it matches the localDateStr() that new trades set on
@@ -534,23 +554,6 @@ export default function App() {
             })()}
           </div>
         </div>
-
-        {/* Setup banner — shown when no API key */}
-        {!apiKey && (
-          <div style={{ background: '#0c1408', borderTop: `1px solid ${LIME}22`, borderBottom: `1px solid ${LIME}22` }}>
-            <div style={{ maxWidth: 960, margin: '0 auto', padding: '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-              <span style={{ fontSize: 11, fontFamily: MONO, color: '#7a9a6a' }}>
-                ↳ Add your Massive API key in the <strong style={{ color: LIME }}>Trade</strong> tab (Command section) to activate live price, VWAP, and level intelligence.
-              </span>
-              <button
-                onClick={() => { setActiveTab('trade'); setTradeSubTab('command') }}
-                style={{ background: LIME, color: '#000', border: 'none', borderRadius: 3, padding: '5px 14px', fontFamily: MONO, fontSize: 10, fontWeight: 900, letterSpacing: '0.1em', cursor: 'pointer', whiteSpace: 'nowrap' }}
-              >
-                Go to Trade →
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* Tabs */}
         <div style={{ maxWidth: 960, margin: '0 auto', padding: '0 20px', display: 'flex', gap: 0, overflowX: 'auto' }}>
@@ -886,8 +889,6 @@ export default function App() {
                 onSettingsChange={setSettings}
                 lockedOut={lockedOut}
                 onUnlock={() => setSettings(s => ({ ...s, dailyLossLimit: 0 }))}
-                apiKey={apiKey}
-                onApiKeyChange={setApiKey}
                 anthropicKey={anthropicKey}
                 onAnthropicKeyChange={setAnthropicKey}
                 liveData={liveData}

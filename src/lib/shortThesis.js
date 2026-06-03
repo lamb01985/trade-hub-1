@@ -40,13 +40,13 @@ function pickFCF(q) {
 
 // ── Pull all data for one ticker ─────────────────────────────────────────────
 
-export async function fetchTickerData(apiKey, ticker) {
+export async function fetchTickerData(ticker) {
   const [snapshot, financials, weekly, details, shortInt] = await Promise.all([
-    getSnapshot(apiKey, ticker).catch(() => null),
-    getFinancials(apiKey, ticker, 'quarterly', 8).catch(() => null),
-    getWeeklyBarsRange(apiKey, ticker, 52).catch(() => []),
-    getTickerDetails(apiKey, ticker).catch(() => null),
-    getShortInterest(apiKey, ticker).catch(() => null),
+    getSnapshot(ticker).catch(() => null),
+    getFinancials(ticker, 'quarterly', 8).catch(() => null),
+    getWeeklyBarsRange(ticker, 52).catch(() => []),
+    getTickerDetails(ticker).catch(() => null),
+    getShortInterest(ticker).catch(() => null),
   ])
 
   const price = snapshot?.day?.c || snapshot?.lastTrade?.p || snapshot?.prevDay?.c || null
@@ -317,12 +317,12 @@ export function scoreLabel(score) {
 
 // ── Scan universe with progress callback ─────────────────────────────────────
 
-export async function scanUniverse(apiKey, tickers, onProgress) {
+export async function scanUniverse(tickers, onProgress) {
   const results = []
   for (let i = 0; i < tickers.length; i++) {
     const ticker = tickers[i]
     try {
-      const data = await fetchTickerData(apiKey, ticker)
+      const data = await fetchTickerData(ticker)
       const scored = scoreTicker(data)
       const stage = setupStage(data)
       const timing = timingRisk(data)

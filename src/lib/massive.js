@@ -13,7 +13,14 @@
 
 import { recordSuccess, recordFailure, recordRateLimit, recordUnavailable } from './apiHealth.js'
 
-const BASE = 'https://api.polygon.io'
+// Polygon REST calls are proxied through /api/polygon/proxy so the
+// POLYGON_API_KEY never reaches the browser. The proxy takes the original
+// Polygon path as a `path` query param and forwards everything else, then
+// injects the key from env on the server side. WebSocket auth still needs the
+// key client-side (Polygon has no token alternative); MassiveStream fetches it
+// from /api/polygon/ws-auth on connect rather than keeping it in localStorage.
+const PROXY_PATH = '/api/polygon/proxy'
+const WS_AUTH_PATH = '/api/polygon/ws-auth'
 
 // ── Plan-tier 403 tracking ─────────────────────────────────────────────────
 // Polygon returns 403 for endpoints not included in the user's plan tier.
@@ -142,10 +149,11 @@ async function throttledFetch(url, options = {}) {
   throw new Error('Polygon throttledFetch: exhausted retries')
 }
 
-// Short, log-friendly URL (drops apiKey query param).
+// Short, log-friendly URL. Drops apiKey if it somehow shows up (it shouldn't
+// after the server-side migration, but harmless to keep the scrub).
 function shortUrl(u) {
   try {
-    const url = new URL(u)
+    const url = new URL(u, window.location.origin)
     url.searchParams.delete('apiKey')
     return `${url.pathname}${url.search ? url.search : ''}`
   } catch { return String(u).slice(0, 120) }
@@ -192,17 +200,17 @@ export function clearMassiveCache() {
 
 // ── REST helpers ─────────────────────────────────────────────────────────────
 
-function buildUrl(apiKey, path, params = {}) {
-  const url = new URL(`${BASE}${path}`)
-  url.searchParams.set('apiKey', apiKey)
+function buildUrl(path, params = {}) {
+  const url = new URL(PROXY_PATH, window.location.origin)
+  url.searchParams.set('path', path)
   for (const [k, v] of Object.entries(params)) {
     if (v != null && v !== '') url.searchParams.set(k, String(v))
   }
   return url.toString()
 }
 
-async function get(apiKey, path, params = {}, options = {}) {
-  const urlStr = buildUrl(apiKey, path, params)
+async function get(path, params = {}, options = {}) {
+  const urlStr = buildUrl(path, params)
   const res = await throttledFetch(urlStr, options)
   if (!res.ok) {
     const text = await res.text().catch(() => '')
@@ -212,7 +220,7 @@ async function get(apiKey, path, params = {}, options = {}) {
     if (res.status !== 403) {
       recordFailure({ url: shortUrl(urlStr), status: res.status })
     }
-    const err = new Error(`Massive API ${res.status}: ${text.slice(0, 120)}`)
+    const err = new Error(`Polygon API ${res.status}: ${text.slice(0, 120)}`)
     err.status = res.status
     err.unavailable = res.status === 403
     throw err
@@ -222,74 +230,74 @@ async function get(apiKey, path, params = {}, options = {}) {
 }
 
 // Cache wrapper: pass an endpoint key so the right TTL applies.
-async function getCachedJson(apiKey, path, params, endpoint) {
-  const urlStr = buildUrl(apiKey, path, params)
+async function getCachedJson(path, params, endpoint) {
+  const urlStr = buildUrl(path, params)
   const ttl = CACHE_TTL_MS[endpoint]
   if (ttl) {
     const cached = getCached(urlStr, ttl)
     if (cached) return cached
   }
-  const data = await get(apiKey, path, params)
+  const data = await get(path, params)
   if (ttl) setCache(urlStr, data)
   return data
 }
 
 // ── Market data ───────────────────────────────────────────────────────────────
 
-export async function getLastTrade(apiKey, ticker) {
-  const d = await get(apiKey, `/v2/last/trade/${ticker}`)
+export async function getLastTrade(ticker) {
+  const d = await get(`/v2/last/trade/${ticker}`)
   return d.results?.p ?? null
 }
 
-export async function getDayBars(apiKey, ticker, from, to) {
-  const d = await getCachedJson(apiKey, `/v2/aggs/ticker/${ticker}/range/1/day/${from}/${to}`, { adjusted: 'true', sort: 'asc', limit: '50' }, 'historicalBars')
+export async function getDayBars(ticker, from, to) {
+  const d = await getCachedJson(`/v2/aggs/ticker/${ticker}/range/1/day/${from}/${to}`, { adjusted: 'true', sort: 'asc', limit: '50' }, 'historicalBars')
   return d.results || []
 }
 
-export async function getIntradayBars(apiKey, ticker, multiplier = 1, span = 'minute') {
+export async function getIntradayBars(ticker, multiplier = 1, span = 'minute') {
   const today = new Date().toISOString().slice(0, 10)
-  const d = await get(apiKey, `/v2/aggs/ticker/${ticker}/range/${multiplier}/${span}/${today}/${today}`, { adjusted: 'true', sort: 'asc', limit: '500' })
+  const d = await get(`/v2/aggs/ticker/${ticker}/range/${multiplier}/${span}/${today}/${today}`, { adjusted: 'true', sort: 'asc', limit: '500' })
   return d.results || []
 }
 
-export async function getIntradayBarsForDate(apiKey, ticker, dateStr, multiplier = 1, span = 'minute') {
-  const d = await get(apiKey, `/v2/aggs/ticker/${ticker}/range/${multiplier}/${span}/${dateStr}/${dateStr}`, { adjusted: 'true', sort: 'asc', limit: '500' })
+export async function getIntradayBarsForDate(ticker, dateStr, multiplier = 1, span = 'minute') {
+  const d = await get(`/v2/aggs/ticker/${ticker}/range/${multiplier}/${span}/${dateStr}/${dateStr}`, { adjusted: 'true', sort: 'asc', limit: '500' })
   return d.results || []
 }
 
 // ── Fundamentals & reference (Short Thesis screener) ─────────────────────────
 
-export async function getFinancials(apiKey, ticker, timeframe = 'quarterly', limit = 8) {
-  const d = await getCachedJson(apiKey, '/vX/reference/financials', { ticker, timeframe, limit, order: 'desc' }, 'financials')
+export async function getFinancials(ticker, timeframe = 'quarterly', limit = 8) {
+  const d = await getCachedJson('/vX/reference/financials', { ticker, timeframe, limit, order: 'desc' }, 'financials')
   return d.results || []
 }
 
-export async function getTickerDetails(apiKey, ticker) {
-  const d = await getCachedJson(apiKey, `/v3/reference/tickers/${ticker}`, {}, 'tickerDetails')
+export async function getTickerDetails(ticker) {
+  const d = await getCachedJson(`/v3/reference/tickers/${ticker}`, {}, 'tickerDetails')
   return d.results || null
 }
 
-export async function getSnapshot(apiKey, ticker) {
-  const d = await getCachedJson(apiKey, `/v2/snapshot/locale/us/markets/stocks/tickers/${ticker}`, {}, 'snapshot')
+export async function getSnapshot(ticker) {
+  const d = await getCachedJson(`/v2/snapshot/locale/us/markets/stocks/tickers/${ticker}`, {}, 'snapshot')
   return d.ticker || null
 }
 
-export async function getWeeklyBarsRange(apiKey, ticker, weeks = 52) {
+export async function getWeeklyBarsRange(ticker, weeks = 52) {
   const to = new Date().toISOString().slice(0, 10)
   const from = new Date(Date.now() - weeks * 7 * 86400000).toISOString().slice(0, 10)
-  const d = await getCachedJson(apiKey, `/v2/aggs/ticker/${ticker}/range/1/week/${from}/${to}`, { adjusted: 'true', sort: 'asc', limit: '300' }, 'weekly')
+  const d = await getCachedJson(`/v2/aggs/ticker/${ticker}/range/1/week/${from}/${to}`, { adjusted: 'true', sort: 'asc', limit: '300' }, 'weekly')
   return d.results || []
 }
 
-export async function getRecentNews(apiKey, ticker, limit = 5) {
-  const d = await get(apiKey, '/v2/reference/news', { ticker, limit, order: 'desc', sort: 'published_utc' })
+export async function getRecentNews(ticker, limit = 5) {
+  const d = await get('/v2/reference/news', { ticker, limit, order: 'desc', sort: 'published_utc' })
   return d.results || []
 }
 
 // Short interest is paid-tier on Polygon — we attempt and gracefully return null.
-export async function getShortInterest(apiKey, ticker) {
+export async function getShortInterest(ticker) {
   try {
-    const d = await get(apiKey, '/v3/reference/short-interest', { 'ticker.eq': ticker, limit: 1, order: 'desc' })
+    const d = await get('/v3/reference/short-interest', { 'ticker.eq': ticker, limit: 1, order: 'desc' })
     return d.results?.[0] || null
   } catch {
     return null
@@ -303,33 +311,24 @@ export function priorTradingDayStr(refDate = new Date()) {
   return d.toISOString().slice(0, 10)
 }
 
-export async function getPremarketBars(apiKey, ticker) {
+export async function getPremarketBars(ticker) {
   // Last trade and premarket high/low via snapshot
-  const d = await get(apiKey, `/v2/snapshot/locale/us/markets/stocks/tickers/${ticker}`)
+  const d = await get(`/v2/snapshot/locale/us/markets/stocks/tickers/${ticker}`)
   return d.ticker ?? null
 }
 
-export async function getOptionChain(apiKey, ticker, expiry, strike, type, limit = 10) {
-  const params = { limit: String(Math.max(1, Math.min(250, limit))) }
-  if (expiry) params.expiration_date = expiry
-  if (strike) params.strike_price = strike
-  if (type) params.contract_type = type
-  const d = await get(apiKey, `/v3/snapshot/options/${ticker}`, params)
-  return d.results || []
-}
-
-export async function getPrevDay(apiKey, ticker) {
-  const d = await get(apiKey, `/v2/aggs/ticker/${ticker}/prev`, { adjusted: 'true' })
+export async function getPrevDay(ticker) {
+  const d = await get(`/v2/aggs/ticker/${ticker}/prev`, { adjusted: 'true' })
   const bar = d.results?.[0]
   if (!bar) return null
   return { open: bar.o, high: bar.h, low: bar.l, close: bar.c, volume: bar.v }
 }
 
-export async function getWeeklyData(apiKey, ticker) {
+export async function getWeeklyData(ticker) {
   // Get last 7 days to find weekly high/low
   const to = new Date().toISOString().slice(0, 10)
   const from = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
-  const bars = await getDayBars(apiKey, ticker, from, to)
+  const bars = await getDayBars(ticker, from, to)
   if (!bars.length) return null
   return {
     high: Math.max(...bars.map(b => b.h)),
@@ -338,34 +337,16 @@ export async function getWeeklyData(apiKey, ticker) {
   }
 }
 
-export async function getHistoricalBars(apiKey, ticker, days = 20) {
+export async function getHistoricalBars(ticker, days = 20) {
   const to = new Date().toISOString().slice(0, 10)
   const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
-  return getDayBars(apiKey, ticker, from, to)
+  return getDayBars(ticker, from, to)
 }
 
-export async function getOptionsPCRatio(apiKey, ticker) {
-  try {
-    const d = await get(apiKey, `/v3/snapshot/options/${ticker}`, { limit: '250' })
-    const results = d.results || []
-    let callVol = 0, putVol = 0
-    for (const r of results) {
-      const vol = r.day?.volume || 0
-      const type = r.details?.contract_type || ''
-      if (type === 'call') callVol += vol
-      else if (type === 'put') putVol += vol
-    }
-    if (callVol + putVol === 0) return { callVol: 0, putVol: 0, pcRatio: null }
-    return { callVol, putVol, pcRatio: callVol > 0 ? putVol / callVol : null }
-  } catch (e) {
-    return { planError: e.unavailable === true || e.status === 403, error: e.message }
-  }
-}
-
-export async function getTopMovers(apiKey, { signal } = {}) {
+export async function getTopMovers({ signal } = {}) {
   const [gData, lData] = await Promise.all([
-    get(apiKey, '/v2/snapshot/locale/us/markets/stocks/gainers', { include_otc: 'false' }, { signal }).catch(() => ({ tickers: [] })),
-    get(apiKey, '/v2/snapshot/locale/us/markets/stocks/losers', { include_otc: 'false' }, { signal }).catch(() => ({ tickers: [] })),
+    get('/v2/snapshot/locale/us/markets/stocks/gainers', { include_otc: 'false' }, { signal }).catch(() => ({ tickers: [] })),
+    get('/v2/snapshot/locale/us/markets/stocks/losers', { include_otc: 'false' }, { signal }).catch(() => ({ tickers: [] })),
   ])
   const all = [...(gData.tickers || []), ...(lData.tickers || [])]
   const seen = new Set()
@@ -375,8 +356,8 @@ export async function getTopMovers(apiKey, { signal } = {}) {
 // ── WebSocket ────────────────────────────────────────────────────────────────
 
 export class MassiveStream {
-  constructor(apiKey, { onTrade, onQuote, onConnected, onDisconnected, onError } = {}) {
-    this.apiKey = apiKey
+  constructor({ onTrade, onQuote, onConnected, onDisconnected, onError } = {}) {
+    this.apiKey = null
     this.handlers = { onTrade, onQuote, onConnected, onDisconnected, onError }
     this.ws = null
     this.subscriptions = new Set()
@@ -384,9 +365,22 @@ export class MassiveStream {
     this.intentionalClose = false
   }
 
-  connect() {
+  async connect() {
     if (this.ws?.readyState === WebSocket.OPEN) return
     this.intentionalClose = false
+    // Fetch the Polygon key from our server-side endpoint. The key is held in
+    // memory for the WebSocket auth frame and never persisted to storage.
+    if (!this.apiKey) {
+      try {
+        const res = await fetch(WS_AUTH_PATH)
+        if (!res.ok) throw new Error(`ws-auth ${res.status}`)
+        const data = await res.json()
+        this.apiKey = data.apiKey
+      } catch (err) {
+        this.handlers.onError?.(`WebSocket auth failed: ${err?.message || 'unknown'}`)
+        return
+      }
+    }
     this.ws = new WebSocket('wss://socket.polygon.io/stocks')
 
     this.ws.onopen = () => {

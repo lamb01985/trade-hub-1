@@ -124,10 +124,9 @@ function BacktestRunner({ setup, apiKey, backtestCache, onResult }) {
   const [progress, setProgress] = useState({ pct: 0, ticker: null, stage: 'idle' })
   const [error, setError] = useState(null)
   async function run() {
-    if (!apiKey) { setError('Add a Massive API key in Command first.'); return }
     setRunning(true); setError(null); setProgress({ pct: 0, ticker: null, stage: 'starting' })
     try {
-      const result = await backtestSetup(setup, apiKey, {
+      const result = await backtestSetup(setup, {
         barsCache: backtestCache,
         onProgress: (p) => setProgress({ pct: p.progressPct, ticker: p.ticker, stage: p.stage }),
       })

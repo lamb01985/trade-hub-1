@@ -4,7 +4,7 @@
 // Data layer: Trade Hub's stock-data Massive plan (no options chain access).
 //   - Technicals (price, prevDay, pivots, rvol, vwap) come from
 //     useLiveDataMulti via the liveDataMulti prop.
-//   - 252-day daily bars from getHistoricalBars(apiKey, ticker, 252) feed
+//   - 252-day daily bars from getHistoricalBars(ticker, 252) feed
 //     both 52W high/low and the 30-day historical volatility used by the
 //     options estimator (src/lib/wheelOptions.js).
 //   - Options data (strike + premium + delta) is HV-based Black-Scholes,
@@ -313,7 +313,7 @@ ${JSON.stringify(summary, null, 2)}`
       // ticker; feeds both the 52W range and the HV30 used by the estimator.
       const histPairs = await Promise.all(watchlist.map(async (ticker) => {
         try {
-          const bars = await getHistoricalBars(apiKey, ticker, 252)
+          const bars = await getHistoricalBars(ticker, 252)
           return [ticker, bars || []]
         } catch {
           return [ticker, []]
