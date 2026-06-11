@@ -4,8 +4,6 @@ import { Card, SLabel, Heading, Btn, Pill } from './ui.jsx'
 import { LIME, RED, YELLOW, ORANGE, MONO, BORDER, PANEL, todayStr, localDateStr, f2, fmtD, fmtU } from '../constants.js'
 import { ordersToTrades, SCHWAB_BLUE } from '../lib/schwabClient.js'
 
-const SETUP_OPTIONS = ['ORB Breakout', 'VWAP Bounce', 'Level Touch', 'Pivot Break', 'Golden Pocket', 'Other']
-
 function fmtTime(date) {
   if (!date) return '—'
   const d = new Date(date)

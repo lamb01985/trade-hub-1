@@ -89,6 +89,24 @@ export function getETDayOfWeek(date = new Date()) {
 
 export const SETUP_TYPES = ['ORB','Trend Continuation','VWAP Bounce','VWAP Band Touch','Pivot Level','Fibonacci','Supply/Demand Zone','Reversal','Bull Flag','Bear Flag','Gap Fill','Other']
 
+// Journal Log Trade setup dropdown. Tied to the Core Playbook (ORB / Break and
+// Retest / Pullback / S-R Reversal) with Long/Short variants. Centralized here
+// so QuickLog and Journal stay in sync without two arrays drifting apart.
+// Existing trades with legacy setupType strings (e.g. 'VWAP Bounce') are
+// preserved on the record; the dropdown prepends the legacy value as an
+// option when editing so the user sees what was originally logged.
+export const JOURNAL_SETUP_OPTIONS = [
+  'ORB - Long',
+  'ORB - Short',
+  'Break and Retest - Long',
+  'Break and Retest - Short',
+  'Pullback - Long',
+  'Pullback - Short',
+  'S/R Reversal - Long',
+  'S/R Reversal - Short',
+  'Other',
+]
+
 export function getETMins() {
   const s = new Date().toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false, hour: '2-digit', minute: '2-digit' })
   const [h, m] = s.split(':').map(Number)

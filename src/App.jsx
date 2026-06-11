@@ -10,7 +10,14 @@ import ChartTab from './components/Chart.jsx'
 import InlineCheckGate from './components/InlineCheckGate.jsx'
 import CalendarTab from './components/Calendar.jsx'
 import Playbook from './components/Playbook.jsx'
-import Setups from './components/Setups.jsx'
+// Trigger engine retired in favor of the Core Playbook (ORB, Break and Retest,
+// Pullback, S/R Reversal). The Setups component and its supporting files
+// (SetupCard, SetupBuilder, SetupTemplatesLibrary, AdjustSetupsModal, plus
+// setupEngine / setupStorage libs) are preserved in the tree for later
+// re-activation. The underlying `setups` state below still hydrates because
+// the header chip and PutThesis projection read from it.
+// import Setups from './components/Setups.jsx'
+import CorePlaybook from './components/CorePlaybook.jsx'
 import MoversScanner from './components/MoversScanner.jsx'
 import UniverseBuilder from './components/UniverseBuilder.jsx'
 import OutcomesAnalyzer from './components/OutcomesAnalyzer.jsx'
@@ -778,17 +785,21 @@ export default function App() {
 
             <div style={{ display: planSubTab === 'setups' ? 'block' : 'none' }}>
               <ErrorBoundary label="Setups">
-                <Setups
-                  setups={setups}
-                  onSetupsChange={setSetups}
-                  evaluation={setupEvaluation}
-                  accountValue={accountValue}
-                  apiKey={apiKey}
-                  savedUniverses={savedUniverses}
-                  suggestionTickers={[...new Set([...botWatchlist, ...wheelWatchlist, ...setupTickers])]}
-                  pendingSeed={pendingSetupSeed}
-                  onConsumeSeed={() => setPendingSetupSeed(null)}
-                />
+                {/* Trigger engine UI archived. Original render kept as a
+                    reference comment so re-enabling is a one-block paste back.
+                    <Setups
+                      setups={setups}
+                      onSetupsChange={setSetups}
+                      evaluation={setupEvaluation}
+                      accountValue={accountValue}
+                      apiKey={apiKey}
+                      savedUniverses={savedUniverses}
+                      suggestionTickers={[...new Set([...botWatchlist, ...wheelWatchlist, ...setupTickers])]}
+                      pendingSeed={pendingSetupSeed}
+                      onConsumeSeed={() => setPendingSetupSeed(null)}
+                    />
+                */}
+                <CorePlaybook />
               </ErrorBoundary>
             </div>
           </div>

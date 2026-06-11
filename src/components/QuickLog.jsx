@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
-import { LIME, RED, YELLOW, MONO, BORDER, PANEL, uid, f2, todayStr, localDateStr } from '../constants.js'
+import { LIME, RED, YELLOW, MONO, BORDER, PANEL, uid, f2, todayStr, localDateStr, JOURNAL_SETUP_OPTIONS } from '../constants.js'
 
-const SETUP_OPTIONS = ['ORB Breakout', 'VWAP Bounce', 'Level Touch', 'Pivot Break', 'Golden Pocket', 'Other']
+const SETUP_OPTIONS = JOURNAL_SETUP_OPTIONS
 
 function Field({ label, children }) {
   return (
@@ -52,7 +52,7 @@ export default function QuickLog({ open, onClose, onSubmit, prep, editing }) {
   const [tradeDate, setTradeDate] = useState(localDateStr())
   const [entryTime, setEntryTime] = useState('')
   const [exitTime, setExitTime] = useState('')
-  const [setupType, setSetupType] = useState('ORB Breakout')
+  const [setupType, setSetupType] = useState(SETUP_OPTIONS[0])
   const [notes, setNotes] = useState('')
   const [whatWell, setWhatWell] = useState('')
   const [whatImprove, setWhatImprove] = useState('')
@@ -78,7 +78,7 @@ export default function QuickLog({ open, onClose, onSubmit, prep, editing }) {
       // trades by stamping save-time as entry-time).
       setEntryTime(editing.entryTime || '')
       setExitTime(editing.exitTime || '')
-      setSetupType(editing.setupType || 'ORB Breakout')
+      setSetupType(editing.setupType || SETUP_OPTIONS[0])
       setNotes(editing.notes || '')
       setWhatWell(editing.whatWell || '')
       setWhatImprove(editing.whatImprove || '')
@@ -96,7 +96,7 @@ export default function QuickLog({ open, onClose, onSubmit, prep, editing }) {
       setTradeDate(localDateStr())
       setEntryTime('')
       setExitTime('')
-      setSetupType('ORB Breakout')
+      setSetupType(SETUP_OPTIONS[0])
       setNotes('')
       setWhatWell('')
       setWhatImprove('')
@@ -239,6 +239,12 @@ export default function QuickLog({ open, onClose, onSubmit, prep, editing }) {
             <Field label="Entry Time (CT)"><input type="time" title="Times are in Central Time (CT)" value={entryTime} onChange={e => setEntryTime(e.target.value)} style={inputStyle} /></Field>
             <Field label="Setup">
               <select value={setupType} onChange={e => setSetupType(e.target.value)} style={{ ...inputStyle, appearance: 'none' }}>
+                {/* Editing an older trade with a legacy setupType: prepend it as
+                    an option so the dropdown reflects what was originally logged
+                    without forcing a rewrite. */}
+                {!SETUP_OPTIONS.includes(setupType) && setupType && (
+                  <option value={setupType} style={{ background: '#0a0a0a' }}>{setupType} (legacy)</option>
+                )}
                 {SETUP_OPTIONS.map(s => <option key={s} value={s} style={{ background: '#0a0a0a' }}>{s}</option>)}
               </select>
             </Field>
