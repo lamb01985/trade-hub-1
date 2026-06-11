@@ -168,6 +168,103 @@ const HALO_FILL = 'rgba(209, 255, 121, 0.12)'
 const ABOVE_BG = '#15191A', ABOVE_BORDER = '#2A3320', ABOVE_TEXT = '#9DB877'
 const BELOW_BG = '#1A1515', BELOW_BORDER = '#332020', BELOW_TEXT = '#C77575'
 
+// Support/resistance overrides for level lines. Applied per-render in the
+// fade effect so the color follows the level's position relative to current
+// price rather than its static type (PDH stays red as resistance until price
+// crosses above it; PP can swap depending on the day's structure).
+const RESISTANCE_COLOR = '#ef4444'
+const SUPPORT_COLOR = '#22c55e'
+
+// Synthesize the four timeframe states into one bias label. Returns
+// { text, color } shaped for the top-right indicator. Distinguishes
+// "STRONGLY" (all 4 align) from a 3-of-4 majority (one dissenting timeframe
+// called out by name) from a mixed/no-bias condition.
+function synthesizeBias(mtf) {
+  const order = ['1h', '15m', '5m', '1m']
+  const states = order.map(tf => ({ tf, state: mtf?.[tf]?.state || null }))
+  const present = states.filter(s => s.state)
+  if (present.length === 0) return { text: '— NO DATA', color: '#666' }
+
+  const bulls = present.filter(s => s.state === 'BULLISH')
+  const bears = present.filter(s => s.state === 'BEARISH')
+
+  if (bulls.length === 4) return { text: '▲ STRONGLY BULLISH', color: LIME }
+  if (bears.length === 4) return { text: '▼ STRONGLY BEARISH', color: RED }
+  if (bulls.length === 3 && bears.length === 0) {
+    const dissent = present.find(s => s.state !== 'BULLISH')
+    return { text: `▲ BULLISH (${dissent.tf.toUpperCase()} mixed)`, color: LIME }
+  }
+  if (bears.length === 3 && bulls.length === 0) {
+    const dissent = present.find(s => s.state !== 'BEARISH')
+    return { text: `▼ BEARISH (${dissent.tf.toUpperCase()} mixed)`, color: RED }
+  }
+  return { text: '→ NEUTRAL / MIXED', color: YELLOW }
+}
+
+// Builds the action banner for the score band. score is the
+// mtfAlignment.score (0-100, weighted across timeframes); levelMap supplies
+// the nearest break levels we promote to entry / stop / target when the
+// score crosses 65. No new analysis: everything is read off existing fields.
+function buildActionBanner(mtfAlignment, levelMap) {
+  const score = mtfAlignment?.score ?? 0
+  const direction = mtfAlignment?.direction || 'NO BIAS'
+  const label = mtfAlignment?.label || 'NO SETUP'
+
+  if (score < 50) {
+    return {
+      tone: 'watch',
+      bg: '#141414',
+      border: '#252525',
+      color: '#888',
+      text: `WATCH ONLY — Setup Score ${score} / 100 — ${label}`,
+    }
+  }
+  if (score < 65) {
+    const above = levelMap?.nearestAbove
+    const below = levelMap?.nearestBelow
+    const trigger = direction === 'BULLISH' && above
+      ? `break above ${above.label || 'level'} $${f2(above.price)}`
+      : direction === 'BEARISH' && below
+      ? `break below ${below.label || 'level'} $${f2(below.price)}`
+      : 'confirmation on 5M'
+    return {
+      tone: 'approach',
+      bg: '#1a1605',
+      border: `${YELLOW}55`,
+      color: YELLOW,
+      text: `APPROACHING — Setup Score ${score} / 100 — Watch for ${trigger}`,
+    }
+  }
+
+  const above = levelMap?.nearestAbove
+  const below = levelMap?.nearestBelow
+  const levels = levelMap?.levels || []
+  const side = direction === 'BEARISH' ? 'SHORT' : 'LONG'
+  let entry = null, stop = null, target = null
+  if (direction === 'BULLISH' && above && below) {
+    entry = above.price
+    stop = below.price
+    const next = levels.find(l => l.price > above.price + 0.01)
+    target = next?.price ?? null
+  } else if (direction === 'BEARISH' && above && below) {
+    entry = below.price
+    stop = above.price
+    const sortedDesc = [...levels].sort((a, b) => b.price - a.price)
+    const next = sortedDesc.find(l => l.price < below.price - 0.01)
+    target = next?.price ?? null
+  }
+  const parts = entry != null ? [`Entry $${f2(entry)}`] : []
+  if (stop != null) parts.push(`Stop $${f2(stop)}`)
+  parts.push(target != null ? `Target $${f2(target)}` : 'Target open')
+  return {
+    tone: 'ready',
+    bg: '#071208',
+    border: `${LIME}55`,
+    color: LIME,
+    text: `SETUP READY — ${side} — ${parts.join(' / ')}`,
+  }
+}
+
 function shortName(label) {
   if (!label) return ''
   return label
@@ -242,6 +339,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
 
   const [timeframe, setTimeframe] = useState('5m')
   const [layers, setLayers] = useState({ pivots: true, vwap: true, fibs: true, zones: true, signals: true, structure: true, premarket: true, volprofile: true })
+  const [showAllSwings, setShowAllSwings] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const [newLabel, setNewLabel] = useState('')
   const [newPrice, setNewPrice] = useState('')
@@ -579,27 +677,41 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
     return () => { try { ts.unsubscribeVisibleLogicalRangeChange(handler) } catch {} }
   }, [liveData?.price, levelMap?.nearestAbove?.price, levelMap?.nearestBelow?.price])
 
-  // ── Fade distant level lines based on current price ──────────────────────
-  // Lines within FADE_DISTANCE stay opaque; further lines fade. Confluence
-  // lines fade less aggressively so they remain readable across the chart.
+  // ── Fade + S/R recolor distant level lines based on current price ───────
+  // Lines within FADE_DISTANCE stay opaque; further lines fade. Each line's
+  // color is also recomputed from the level's position relative to current
+  // price: above-price → resistance (red), below-price → support (green).
+  // The immediate next R and S levels (nearestAbove / nearestBelow) draw
+  // thicker so the two levels that matter for the next move stand out.
   useEffect(() => {
     if (!candleRef.current || !liveData?.price || !linesRef.current?.length) return
     const price = liveData.price
+    const nextAbove = levelMap?.nearestAbove?.price ?? null
+    const nextBelow = levelMap?.nearestBelow?.price ?? null
     for (const entry of linesRef.current) {
       if (!entry?.line || !entry.level) continue
       const near = Math.abs(entry.level.price - price) <= FADE_DISTANCE
-      if (entry.lastNear === near) continue
-      entry.lastNear = near
-      const alpha = near ? 1 : (entry.isConfluence ? 0.5 : 0.35)
-      const faded = withAlpha(entry.baseColor, alpha)
+      const srColor = entry.isConfluence
+        ? entry.baseColor
+        : entry.level.price >= price ? RESISTANCE_COLOR : SUPPORT_COLOR
+      const isImmediate = !entry.isConfluence && (
+        (nextAbove != null && Math.abs(entry.level.price - nextAbove) < 0.005)
+        || (nextBelow != null && Math.abs(entry.level.price - nextBelow) < 0.005)
+      )
+      const alpha = near ? 1 : (entry.isConfluence ? 0.5 : isImmediate ? 0.85 : 0.35)
+      const faded = withAlpha(srColor, alpha)
       try {
         entry.line.applyOptions({
           color: faded,
-          axisLabelTextColor: entry.isConfluence ? (near ? '#000' : 'rgba(0,0,0,0.6)') : faded,
+          lineWidth: isImmediate ? 2 : widthFor(entry.level.type, entry.level.label),
+          axisLabelTextColor: entry.isConfluence
+            ? (near ? '#000' : 'rgba(0,0,0,0.6)')
+            : isImmediate ? srColor : faded,
         })
       } catch {}
+      entry.lastNear = near
     }
-  }, [liveData?.price])
+  }, [liveData?.price, levelMap?.nearestAbove?.price, levelMap?.nearestBelow?.price])
 
   // ── Trade & signal markers ──────────────────────────────────────────────────
   useEffect(() => {
@@ -644,13 +756,30 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
     }
 
     if (layers.structure && currentAnalysis?.swings?.length) {
-      for (const s of currentAnalysis.swings) {
+      // Default view: keep only the most-recent 2 swing highs + 2 swing lows.
+      // The newest of each gets bright color + price label; the older sibling
+      // fades to gray. Toggle restores every detected swing.
+      const swings = currentAnalysis.swings
+      const highs = swings.filter(s => s.type === 'high')
+      const lows = swings.filter(s => s.type === 'low')
+      const toRender = showAllSwings
+        ? swings
+        : [...highs.slice(-2), ...lows.slice(-2)].sort((a, b) => a.time - b.time)
+      const newestHighTime = highs.length ? highs[highs.length - 1].time : null
+      const newestLowTime = lows.length ? lows[lows.length - 1].time : null
+      for (const s of toRender) {
+        const isNewest = (s.type === 'high' && s.time === newestHighTime)
+          || (s.type === 'low' && s.time === newestLowTime)
+        const color = isNewest ? (s.type === 'high' ? RED : LIME) : '#3a3a3a'
+        const text = isNewest
+          ? (s.type === 'high' ? `SH $${f2(s.price)}` : `SL $${f2(s.price)}`)
+          : (s.type === 'high' ? 'SH' : 'SL')
         markers.push({
           time: Math.floor(s.time / 1000),
           position: s.type === 'high' ? 'aboveBar' : 'belowBar',
-          color: s.type === 'high' ? RED : LIME,
+          color,
           shape: s.type === 'high' ? 'arrowDown' : 'arrowUp',
-          text: s.type === 'high' ? 'SH' : 'SL',
+          text,
         })
       }
       if (currentAnalysis.choch?.swing) {
@@ -674,7 +803,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
     } else {
       markersRef.current = createSeriesMarkers(candleRef.current, finalMarkers)
     }
-  }, [trades, layers.signals, layers.structure, layers.premarket, levelMap?.setupQuality, currentAnalysis, liveData?.intradayBars])
+  }, [trades, layers.signals, layers.structure, layers.premarket, levelMap?.setupQuality, currentAnalysis, liveData?.intradayBars, showAllSwings])
 
   // ── Stop / target lines for open trades ─────────────────────────────────────
   useEffect(() => {
@@ -874,6 +1003,12 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
             fontFamily: MONO, fontSize: 9, padding: '4px 10px', borderRadius: 3,
             cursor: 'pointer', letterSpacing: '0.1em', textTransform: 'uppercase',
           }}>Auto-fit</button>
+          <button onClick={() => setShowAllSwings(s => !s)} title="Toggle every detected swing vs only the most recent pair" style={{
+            background: showAllSwings ? '#1a1a1a' : 'transparent', border: `1px solid ${BORDER}`,
+            color: showAllSwings ? LIME : '#888',
+            fontFamily: MONO, fontSize: 9, padding: '4px 10px', borderRadius: 3,
+            cursor: 'pointer', letterSpacing: '0.1em', textTransform: 'uppercase',
+          }}>{showAllSwings ? 'All Swings ✓' : 'Show All Swings'}</button>
         </div>
       </div>
 
@@ -943,9 +1078,76 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
         )
       })()}
 
+      {/* ── Action banner. Always visible above the chart on this tab. ─────── */}
+      {(() => {
+        const banner = buildActionBanner(mtfAlignment, levelMap)
+        return (
+          <div style={{
+            background: banner.bg,
+            border: `1px solid ${banner.border}`,
+            borderRadius: 5,
+            padding: '12px 18px',
+            display: 'flex', alignItems: 'center', gap: 10,
+            fontFamily: MONO,
+          }}>
+            <span style={{
+              fontSize: 13, fontWeight: 800, letterSpacing: '0.08em',
+              color: banner.color,
+            }}>{banner.text}</span>
+          </div>
+        )
+      })()}
+
       <div style={{ position: 'relative', width: '100%', height: '70vh', minHeight: 480, background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 5 }}>
         <div ref={wrapRef} style={{ width: '100%', height: '100%' }} />
         <div ref={profileOverlayRef} style={{ position: 'absolute', top: 0, right: 60, width: 60, height: '100%', pointerEvents: 'none' }} />
+
+        {/* ── Top-right bias indicator + score panel ─────────────────────── */}
+        {mtfAlignment && (() => {
+          const a = mtfAlignment
+          const bias = synthesizeBias(a.mtf)
+          const c = a.score >= 85 ? LIME : a.score >= 70 ? LIME : a.score >= 55 ? YELLOW : a.score >= 40 ? ORANGE : RED
+          const states = a.mtf ? ['1h', '15m', '5m', '1m'].map(tf => ({ tf, state: a.mtf[tf]?.state })) : []
+          return (
+            <div style={{
+              position: 'absolute', top: 10, right: 70, width: 260,
+              background: 'rgba(10, 10, 10, 0.92)',
+              border: `1px solid ${c}55`, borderRadius: 5,
+              padding: '10px 12px',
+              fontFamily: MONO,
+              pointerEvents: 'none',
+              backdropFilter: 'blur(2px)',
+            }}>
+              <div style={{
+                fontSize: 12, fontWeight: 900, letterSpacing: '0.1em',
+                color: bias.color, marginBottom: 8,
+              }}>{bias.text}</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
+                <span style={{ fontSize: 32, fontWeight: 900, color: c, lineHeight: 1, letterSpacing: '-0.02em' }}>{a.score}</span>
+                <span style={{ fontSize: 10, color: '#666' }}>/ 100</span>
+                <span style={{ fontSize: 10, color: c, fontWeight: 700, marginLeft: 4, letterSpacing: '0.06em' }}>{a.label}</span>
+              </div>
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 6 }}>
+                {states.map(({ tf, state }) => {
+                  const sc = state === 'BULLISH' ? LIME : state === 'BEARISH' ? RED : state === 'TRANSITION' ? ORANGE : YELLOW
+                  const arrow = state === 'BULLISH' ? '▲' : state === 'BEARISH' ? '▼' : '◆'
+                  return (
+                    <span key={tf} style={{ fontSize: 8, color: sc, border: `1px solid ${sc}33`, borderRadius: 3, padding: '1px 5px', letterSpacing: '0.06em' }}>
+                      {tf.toUpperCase()} {arrow}
+                    </span>
+                  )
+                })}
+              </div>
+              <div style={{ display: 'flex', gap: 10, fontSize: 9, color: '#888', marginBottom: 6 }}>
+                <span><span style={{ color: '#555' }}>Dir:</span> <strong style={{ color: c }}>{a.direction}</strong></span>
+                <span><span style={{ color: '#555' }}>Conf:</span> <strong style={{ color: c }}>{a.confidence}</strong></span>
+              </div>
+              <div style={{ fontSize: 10, color: '#aaa', lineHeight: 1.45, fontStyle: 'italic' }}>
+                "{a.recommendation}"
+              </div>
+            </div>
+          )
+        })()}
 
         {/* ── Current-price overlay ───────────────────────────────────────── */}
         {priceOverlay && priceOverlay.currentY != null && (() => {
@@ -1087,50 +1289,6 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
                 <span style={{ fontSize: 13, fontFamily: MONO, color: col.color, fontWeight: 600 }}>{col.value}</span>
               </div>
             ))}
-          </div>
-        )
-      })()}
-
-      {/* Multi-Timeframe Alignment Score card */}
-      {mtfAlignment && mtfAlignment.score > 0 && (() => {
-        const a = mtfAlignment
-        const c = a.score >= 85 ? LIME : a.score >= 70 ? LIME : a.score >= 55 ? YELLOW : a.score >= 40 ? ORANGE : RED
-        const states = a.mtf ? ['1h', '15m', '5m', '1m'].map(tf => ({ tf, state: a.mtf[tf]?.state })) : []
-        return (
-          <div style={{ background: PANEL, border: `1px solid ${c}55`, borderRadius: 5, padding: '16px 20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-              <span style={{ fontSize: 9, fontFamily: MONO, color: '#666', letterSpacing: '0.16em', textTransform: 'uppercase' }}>Timeframe Alignment</span>
-              <div style={{ display: 'flex', gap: 6 }}>
-                {states.map(({ tf, state }) => {
-                  const sc = state === 'BULLISH' ? LIME : state === 'BEARISH' ? RED : state === 'TRANSITION' ? ORANGE : YELLOW
-                  const arrow = state === 'BULLISH' ? '▲' : state === 'BEARISH' ? '▼' : '◆'
-                  return (
-                    <span key={tf} style={{ fontSize: 9, fontFamily: MONO, color: sc, border: `1px solid ${sc}33`, borderRadius: 3, padding: '2px 7px', letterSpacing: '0.06em' }}>
-                      {tf.toUpperCase()} {arrow} {state || '—'}
-                    </span>
-                  )
-                })}
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 10 }}>
-              <span style={{ fontSize: 42, fontWeight: 900, fontFamily: MONO, color: c, lineHeight: 1, letterSpacing: '-0.02em' }}>{a.score}</span>
-              <span style={{ fontSize: 12, fontFamily: MONO, color: '#666' }}>/ 100</span>
-              <span style={{ fontSize: 12, fontFamily: MONO, color: c, fontWeight: 700, marginLeft: 12, letterSpacing: '0.06em' }}>{a.label}</span>
-            </div>
-
-            <div style={{ height: 6, background: '#1a1a1a', borderRadius: 3, overflow: 'hidden', marginBottom: 12 }}>
-              <div style={{ height: '100%', width: `${a.score}%`, background: c, transition: 'width 0.4s' }} />
-            </div>
-
-            <div style={{ display: 'flex', gap: 18, fontSize: 10, fontFamily: MONO, color: '#888' }}>
-              <span><span style={{ color: '#555' }}>Direction:</span> <strong style={{ color: c }}>{a.direction}</strong></span>
-              <span><span style={{ color: '#555' }}>Confidence:</span> <strong style={{ color: c }}>{a.confidence}</strong></span>
-            </div>
-
-            <div style={{ marginTop: 10, fontSize: 11, fontFamily: MONO, color: '#aaa', lineHeight: 1.55, fontStyle: 'italic' }}>
-              "{a.recommendation}"
-            </div>
           </div>
         )
       })()}

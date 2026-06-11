@@ -794,17 +794,34 @@ export default function App() {
           </div>
         )}
 
-        {activeTab === 'trade' && (
+        {activeTab === 'trade' && (() => {
+          // Trade sub-tab catalog. Add a tab id to HIDDEN_TRADE_SUBTABS to hide
+          // it from the sub-tab bar without deleting any code. The underlying
+          // tab pane keeps mounting (so state survives) but the chip in the bar
+          // is removed.
+          //
+          //   'chart'   live chart, key levels, S/R, bias indicator. Primary view.
+          //   'bot'     bot universe + paper trade output, used when the bot is on.
+          //   'orb'     opening range checklist + ORB level entry. Day-trading window.
+          //   'iv'      IV analyzer + Black-Scholes calc. Less used now that the
+          //             plan is stocks-only and options pricing is a side concern.
+          //   'calc'    position sizing calculator. Overlaps with Stage Order modal
+          //             that Schwab integration surfaces. Candidate to hide.
+          //   'command' risk controls + Polygon status + Schwab connection.
+          const HIDDEN_TRADE_SUBTABS = []
+          const TRADE_SUBTAB_CATALOG = [
+            { id: 'chart', label: 'Chart' },
+            { id: 'bot', label: 'Bot' },
+            { id: 'orb', label: 'ORB' },
+            { id: 'iv', label: 'IV' },
+            { id: 'calc', label: 'Calculator' },
+            { id: 'command', label: 'Command' },
+          ]
+          const tradeSubTabs = TRADE_SUBTAB_CATALOG.filter(t => !HIDDEN_TRADE_SUBTABS.includes(t.id))
+          return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             <SubNav
-              tabs={[
-                { id: 'chart', label: 'Chart' },
-                { id: 'bot', label: 'Bot' },
-                { id: 'orb', label: 'ORB' },
-                { id: 'iv', label: 'IV' },
-                { id: 'calc', label: 'Calculator' },
-                { id: 'command', label: 'Command' },
-              ]}
+              tabs={tradeSubTabs}
               active={tradeSubTab}
               onChange={setTradeSubTab}
             />
@@ -901,7 +918,8 @@ export default function App() {
               />
             </div>
           </div>
-        )}
+          )
+        })()}
 
         {activeTab === 'review' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
