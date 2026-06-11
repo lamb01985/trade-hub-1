@@ -18,6 +18,7 @@ import Playbook from './components/Playbook.jsx'
 // the header chip and PutThesis projection read from it.
 // import Setups from './components/Setups.jsx'
 import CorePlaybook from './components/CorePlaybook.jsx'
+import GlossaryReference from './components/GlossaryReference.jsx'
 import MoversScanner from './components/MoversScanner.jsx'
 import UniverseBuilder from './components/UniverseBuilder.jsx'
 import OutcomesAnalyzer from './components/OutcomesAnalyzer.jsx'
@@ -645,6 +646,7 @@ export default function App() {
                 { id: 'movers', label: 'Movers' },
                 { id: 'universe', label: 'Universe' },
                 { id: 'setups', label: 'Setups' },
+                { id: 'glossary', label: 'Glossary' },
               ]}
               active={planSubTab}
               onChange={setPlanSubTab}
@@ -800,6 +802,12 @@ export default function App() {
                     />
                 */}
                 <CorePlaybook onOpenChart={() => { setActiveTab('trade'); setTradeSubTab('chart') }} />
+              </ErrorBoundary>
+            </div>
+
+            <div style={{ display: planSubTab === 'glossary' ? 'block' : 'none' }}>
+              <ErrorBoundary label="Glossary">
+                <GlossaryReference />
               </ErrorBoundary>
             </div>
           </div>
