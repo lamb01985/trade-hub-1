@@ -799,7 +799,7 @@ export default function App() {
                       onConsumeSeed={() => setPendingSetupSeed(null)}
                     />
                 */}
-                <CorePlaybook />
+                <CorePlaybook onOpenChart={() => { setActiveTab('trade'); setTradeSubTab('chart') }} />
               </ErrorBoundary>
             </div>
           </div>

@@ -1,16 +1,19 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // CorePlaybook.jsx — Plan / Setups tab.
 //
-// Replaces the prior trigger engine UI with a focused 4-setup playbook for the
-// intraday setups Sarah is mastering: ORB, Break and Retest, Pullback, S/R
-// Reversal. Each card shows a short summary and exposes two actions:
-//   - Learn   → expands the card with full educational content
-//   - Use Setup → opens a pre-trade check modal with the per-setup checklist
+// Educational reference for the 4 intraday setups Sarah is mastering: ORB,
+// Break and Retest, Pullback, S/R Reversal. Each card has a short summary
+// in the collapsed view and a Learn toggle that reveals Conditions, Entry
+// rules, Stop loss, Target, Kills, and a small EXAMPLE section with stylized
+// mini-charts showing the setup playing out.
 //
-// No backtest, no scanner, no scoring. This component is pure reference and
-// pre-trade discipline. The underlying trigger engine code (Setups.jsx,
-// SetupCard, SetupBuilder, SetupTemplatesLibrary, AdjustSetupsModal,
-// setupEngine, setupStorage) is preserved in the repo for later re-activation.
+// There is no pre-trade checklist or modal here, and no gating between the
+// cards and the Journal. The Setup dropdown in the Log Trade form is just a
+// dropdown. The "Open in Chart" button is a plain navigation shortcut — it
+// does not pre-fill anything.
+//
+// The trigger engine (Setups.jsx and its supporting files) is still archived
+// in the tree; see App.jsx for re-enable instructions.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState } from 'react'
@@ -19,6 +22,198 @@ import { LIME, RED, YELLOW, MONO, BORDER, PANEL } from '../constants.js'
 const FG = '#e8e8e8'
 const MUTED = '#666'
 const DIM = '#888'
+const BULL = '#22c55e'
+const BEAR = '#ef4444'
+const LEVEL = '#666'
+
+// ── Mini-chart primitives. Tiny SVG candles + level lines for the EXAMPLE
+// section. Coordinates assume a 200x80 viewBox with y growing downward
+// (higher number = lower price), matching SVG conventions.
+function Candle({ x, top, bottom, wickTop, wickBottom, color, width = 6 }) {
+  return (
+    <>
+      <line x1={x + width / 2} y1={wickTop ?? top} x2={x + width / 2} y2={wickBottom ?? bottom} stroke={color} strokeWidth="1" />
+      <rect x={x} y={top} width={width} height={Math.max(1, bottom - top)} fill={color} />
+    </>
+  )
+}
+
+function Level({ y, label, dashed = true }) {
+  return (
+    <>
+      <line x1="0" y1={y} x2="200" y2={y} stroke={LEVEL} strokeWidth="0.6" strokeDasharray={dashed ? '3 3' : 'none'} />
+      {label && <text x="2" y={y - 2} fontSize="6" fill={LEVEL} fontFamily="ui-monospace, monospace">{label}</text>}
+    </>
+  )
+}
+
+function Note({ x, y, text, color }) {
+  return <text x={x} y={y} fontSize="6" fill={color || LEVEL} fontFamily="ui-monospace, monospace" fontWeight="700">{text}</text>
+}
+
+function Mini({ caption, children }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <svg viewBox="0 0 200 80" style={{ width: '100%', height: 80, background: '#0a0a0a', borderRadius: 3, border: `1px solid ${BORDER}` }}>
+        {children}
+      </svg>
+      <div style={{ fontSize: 9, color: '#666', textAlign: 'center', fontFamily: MONO, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+        {caption}
+      </div>
+    </div>
+  )
+}
+
+// ── Per-setup illustrations. Two each, kept intentionally schematic so they
+// read as "shape of the setup" rather than literal trades.
+
+function OrbBullish() {
+  return (
+    <>
+      <Level y={32} label="ORH" />
+      <Level y={58} label="ORL" />
+      <Candle x={18} top={40} bottom={50} color={LEVEL} />
+      <Candle x={30} top={42} bottom={52} color={LEVEL} />
+      <Candle x={42} top={38} bottom={48} color={LEVEL} />
+      <Candle x={54} top={44} bottom={54} color={LEVEL} />
+      <Candle x={66} top={40} bottom={50} color={LEVEL} />
+      <Candle x={86} top={20} bottom={36} color={BULL} />
+      <Candle x={102} top={14} bottom={26} color={BULL} />
+      <Candle x={118} top={10} bottom={20} color={BULL} />
+      <Note x={88} y={14} text="BREAK" color={BULL} />
+    </>
+  )
+}
+
+function OrbBearish() {
+  return (
+    <>
+      <Level y={28} label="ORH" />
+      <Level y={50} label="ORL" />
+      <Candle x={18} top={34} bottom={44} color={LEVEL} />
+      <Candle x={30} top={32} bottom={42} color={LEVEL} />
+      <Candle x={42} top={36} bottom={46} color={LEVEL} />
+      <Candle x={54} top={32} bottom={44} color={LEVEL} />
+      <Candle x={66} top={36} bottom={46} color={LEVEL} />
+      <Candle x={86} top={52} bottom={68} color={BEAR} />
+      <Candle x={102} top={60} bottom={72} color={BEAR} />
+      <Candle x={118} top={64} bottom={75} color={BEAR} />
+      <Note x={88} y={72} text="BREAK" color={BEAR} />
+    </>
+  )
+}
+
+function BrBullish() {
+  return (
+    <>
+      <Level y={40} label="LEVEL" />
+      <Candle x={10} top={48} bottom={58} color={BEAR} />
+      <Candle x={22} top={46} bottom={56} color={BEAR} />
+      <Candle x={34} top={48} bottom={58} color={LEVEL} />
+      <Candle x={46} top={28} bottom={44} color={BULL} />
+      <Candle x={58} top={32} bottom={42} color={LEVEL} />
+      <Candle x={70} top={36} bottom={44} color={LEVEL} />
+      <Candle x={82} top={36} bottom={44} color={LEVEL} wickBottom={50} />
+      <Note x={70} y={56} text="RETEST" color={LEVEL} />
+      <Candle x={96} top={24} bottom={36} color={BULL} />
+      <Candle x={110} top={18} bottom={28} color={BULL} />
+      <Candle x={124} top={14} bottom={22} color={BULL} />
+    </>
+  )
+}
+
+function BrBearish() {
+  return (
+    <>
+      <Level y={40} label="LEVEL" />
+      <Candle x={10} top={22} bottom={32} color={BULL} />
+      <Candle x={22} top={24} bottom={34} color={BULL} />
+      <Candle x={34} top={22} bottom={32} color={LEVEL} />
+      <Candle x={46} top={36} bottom={52} color={BEAR} />
+      <Candle x={58} top={38} bottom={48} color={LEVEL} />
+      <Candle x={70} top={36} bottom={44} color={LEVEL} />
+      <Candle x={82} top={36} bottom={44} color={LEVEL} wickTop={30} />
+      <Note x={70} y={28} text="RETEST" color={LEVEL} />
+      <Candle x={96} top={44} bottom={56} color={BEAR} />
+      <Candle x={110} top={52} bottom={62} color={BEAR} />
+      <Candle x={124} top={58} bottom={68} color={BEAR} />
+    </>
+  )
+}
+
+function PullbackBullish() {
+  return (
+    <>
+      <path d="M 10 60 Q 50 50, 90 38 Q 130 30, 190 18" fill="none" stroke={LEVEL} strokeWidth="0.8" strokeDasharray="2 2" />
+      <Candle x={14} top={56} bottom={66} color={BULL} />
+      <Candle x={26} top={48} bottom={58} color={BULL} />
+      <Candle x={38} top={40} bottom={50} color={BULL} />
+      <Candle x={50} top={36} bottom={44} color={LEVEL} />
+      <Candle x={62} top={38} bottom={46} color={LEVEL} wickBottom={52} />
+      <Candle x={74} top={40} bottom={48} color={LEVEL} wickBottom={54} />
+      <Note x={50} y={68} text="PULLBACK" color={LEVEL} />
+      <Candle x={86} top={32} bottom={42} color={BULL} />
+      <Candle x={98} top={26} bottom={36} color={BULL} />
+      <Candle x={110} top={22} bottom={30} color={BULL} />
+      <Candle x={122} top={16} bottom={26} color={BULL} />
+      <Note x={86} y={28} text="RESUME" color={BULL} />
+    </>
+  )
+}
+
+function PullbackBearish() {
+  return (
+    <>
+      <path d="M 10 18 Q 50 28, 90 42 Q 130 50, 190 62" fill="none" stroke={LEVEL} strokeWidth="0.8" strokeDasharray="2 2" />
+      <Candle x={14} top={16} bottom={26} color={BEAR} />
+      <Candle x={26} top={22} bottom={32} color={BEAR} />
+      <Candle x={38} top={30} bottom={40} color={BEAR} />
+      <Candle x={50} top={36} bottom={44} color={LEVEL} />
+      <Candle x={62} top={32} bottom={42} color={LEVEL} wickTop={26} />
+      <Candle x={74} top={32} bottom={42} color={LEVEL} wickTop={26} />
+      <Note x={50} y={20} text="PULLBACK" color={LEVEL} />
+      <Candle x={86} top={38} bottom={48} color={BEAR} />
+      <Candle x={98} top={44} bottom={54} color={BEAR} />
+      <Candle x={110} top={50} bottom={60} color={BEAR} />
+      <Candle x={122} top={54} bottom={64} color={BEAR} />
+      <Note x={86} y={64} text="RESUME" color={BEAR} />
+    </>
+  )
+}
+
+function ReversalAtResistance() {
+  return (
+    <>
+      <Level y={22} label="MAJOR R" />
+      <Candle x={14} top={56} bottom={66} color={BULL} />
+      <Candle x={28} top={48} bottom={58} color={BULL} />
+      <Candle x={42} top={40} bottom={50} color={BULL} />
+      <Candle x={56} top={32} bottom={42} color={BULL} />
+      <Candle x={72} top={26} bottom={36} color={BULL} wickTop={16} />
+      <Note x={62} y={14} text="REJECTION" color={BEAR} />
+      <Candle x={88} top={32} bottom={46} color={BEAR} />
+      <Candle x={102} top={40} bottom={54} color={BEAR} />
+      <Candle x={116} top={48} bottom={62} color={BEAR} />
+    </>
+  )
+}
+
+function ReversalAtSupport() {
+  return (
+    <>
+      <Level y={62} label="MAJOR S" />
+      <Candle x={14} top={18} bottom={28} color={BEAR} />
+      <Candle x={28} top={26} bottom={36} color={BEAR} />
+      <Candle x={42} top={34} bottom={44} color={BEAR} />
+      <Candle x={56} top={42} bottom={52} color={BEAR} />
+      <Candle x={72} top={48} bottom={58} color={BEAR} wickBottom={68} />
+      <Note x={62} y={76} text="REJECTION" color={BULL} />
+      <Candle x={88} top={38} bottom={52} color={BULL} />
+      <Candle x={102} top={30} bottom={44} color={BULL} />
+      <Candle x={116} top={22} bottom={36} color={BULL} />
+    </>
+  )
+}
 
 const SETUPS = [
   {
@@ -37,14 +232,9 @@ const SETUPS = [
     stopLoss: 'Opposite end of opening range (wider) or breakout candle low/high (tighter).',
     target: 'T1 = 1x range height from breakout point. T2 = 1.5-2x range height.',
     kills: 'False breakouts (poke and reverse), late entries (>30 min after breakout), insufficient volume, fighting overnight bias.',
-    checklist: [
-      'Opening range fully formed (15 minutes complete)',
-      'Breakout candle closed beyond the range',
-      'Volume on breakout exceeds 10-candle average',
-      'Higher timeframe direction supports this trade',
-      'My stop is at opposite end of range, or tighter at breakout candle',
-      'My target is at least 1x range height',
-      'This trade is within my daily trade limit',
+    examples: [
+      { caption: 'Bullish breakout above ORH', svg: <OrbBullish /> },
+      { caption: 'Bearish breakdown below ORL', svg: <OrbBearish /> },
     ],
   },
   {
@@ -63,14 +253,9 @@ const SETUPS = [
     stopLoss: 'Other side of the retest extreme (beyond the retest wick).',
     target: 'Measured move (consolidation height projected from level), or next major key level.',
     kills: 'Entering on the initial break instead of waiting for retest, retest fails and breaks back through, no volume on the original break.',
-    checklist: [
-      'Key level was identified BEFORE the break',
-      'Clean break confirmed (candle close beyond level + volume)',
-      'Price has pulled back to the level',
-      'Retest showed rejection (wick, doji, or rejection at level)',
-      'Retest did NOT break back through the level',
-      'Higher timeframe supports this direction',
-      'My stop is on opposite side of retest extreme',
+    examples: [
+      { caption: 'Bullish break, retest, continuation', svg: <BrBullish /> },
+      { caption: 'Bearish break, retest, continuation', svg: <BrBearish /> },
     ],
   },
   {
@@ -88,14 +273,9 @@ const SETUPS = [
     stopLoss: 'Below pullback low (longs) or above pullback high (shorts).',
     target: 'Previous swing high (longs) or low (shorts), then trail using moving average.',
     kills: 'Mistaking a reversal for a pullback, entering before exhaustion signals, tight stops getting noise-stopped out, trading pullbacks in choppy markets.',
-    checklist: [
-      'Trend is clearly established on my timeframe',
-      'Price pulled back to a key moving average or swing level',
-      'Pullback showed exhaustion signs (small candles, dojis, wicks)',
-      'Resumption candle has volume',
-      'Higher timeframes confirm trend direction',
-      'I am joining a trend, NOT calling a reversal',
-      'My stop is below pullback low (long) or above pullback high (short)',
+    examples: [
+      { caption: 'Uptrend pullback to EMA, then resume', svg: <PullbackBullish /> },
+      { caption: 'Downtrend pullback to EMA, then resume', svg: <PullbackBearish /> },
     ],
   },
   {
@@ -114,19 +294,51 @@ const SETUPS = [
     stopLoss: 'Just beyond the rejection extreme (above wick for shorts, below wick for longs). Keep this TIGHT.',
     target: 'Next major support/resistance level, midpoint of prior range.',
     kills: 'Fading strong trends, weak rejection signals, wide stops, fading minor levels, no higher timeframe context.',
-    checklist: [
-      'This is a MAJOR level (PDH, PDL, R1, S1, major swing)',
-      'Rejection candle is clear (long wick, engulfing, or doji)',
-      'Volume confirms the rejection',
-      'Higher timeframes do NOT show strong momentum against this trade',
-      'My stop is tight (just beyond rejection extreme)',
-      'I am fading a counter-trend move, not the dominant trend',
-      'I accept this is the highest-risk setup type',
+    examples: [
+      { caption: 'Rejection at major resistance', svg: <ReversalAtResistance /> },
+      { caption: 'Rejection at major support', svg: <ReversalAtSupport /> },
     ],
   },
 ]
 
-function SetupPlaybookCard({ setup, onUseSetup }) {
+function Section({ label, body, accent }) {
+  return (
+    <div>
+      <div style={{ fontSize: 9, color: accent || MUTED, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 11, color: '#aaa', lineHeight: 1.6 }}>{body}</div>
+    </div>
+  )
+}
+
+function ListSection({ label, items }) {
+  return (
+    <div>
+      <div style={{ fontSize: 9, color: MUTED, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
+      <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {items.map((it, i) => (
+          <li key={i} style={{ fontSize: 11, color: '#aaa', lineHeight: 1.6 }}>{it}</li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function ExampleStrip({ examples }) {
+  return (
+    <div>
+      <div style={{ fontSize: 9, color: MUTED, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 6 }}>Examples</div>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: `repeat(${examples.length}, 1fr)`,
+        gap: 8,
+      }}>
+        {examples.map((ex, i) => <Mini key={i} caption={ex.caption}>{ex.svg}</Mini>)}
+      </div>
+    </div>
+  )
+}
+
+function SetupPlaybookCard({ setup, onOpenChart }) {
   const [expanded, setExpanded] = useState(false)
   return (
     <div style={{
@@ -153,6 +365,7 @@ function SetupPlaybookCard({ setup, onUseSetup }) {
           <Section label="Stop loss" body={setup.stopLoss} />
           <Section label="Target" body={setup.target} accent={LIME} />
           <Section label="Kills" body={setup.kills} accent={RED} />
+          <ExampleStrip examples={setup.examples} />
         </div>
       )}
 
@@ -166,142 +379,28 @@ function SetupPlaybookCard({ setup, onUseSetup }) {
           padding: '9px 14px', borderRadius: 4,
           cursor: 'pointer', textTransform: 'uppercase',
         }}>{expanded ? 'Collapse' : 'Learn'}</button>
-        <button onClick={() => onUseSetup(setup)} style={{
-          flex: 1,
-          background: LIME,
-          color: '#000',
-          border: 'none',
-          fontFamily: MONO, fontSize: 10, fontWeight: 900, letterSpacing: '0.12em',
-          padding: '9px 14px', borderRadius: 4,
-          cursor: 'pointer', textTransform: 'uppercase',
-        }}>Use Setup →</button>
+        {onOpenChart && (
+          <button onClick={onOpenChart} style={{
+            flex: 1,
+            background: 'transparent',
+            border: `1px solid ${BORDER}`,
+            color: '#aaa',
+            fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: '0.12em',
+            padding: '9px 14px', borderRadius: 4,
+            cursor: 'pointer', textTransform: 'uppercase',
+          }}>Open in Chart →</button>
+        )}
       </div>
     </div>
   )
 }
 
-function Section({ label, body, accent }) {
-  return (
-    <div>
-      <div style={{ fontSize: 9, color: accent || MUTED, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 11, color: '#aaa', lineHeight: 1.6 }}>{body}</div>
-    </div>
-  )
-}
-
-function ListSection({ label, items }) {
-  return (
-    <div>
-      <div style={{ fontSize: 9, color: MUTED, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
-      <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {items.map((it, i) => (
-          <li key={i} style={{ fontSize: 11, color: '#aaa', lineHeight: 1.6 }}>{it}</li>
-        ))}
-      </ul>
-    </div>
-  )
-}
-
-function PreTradeCheckModal({ setup, onClose }) {
-  const [checked, setChecked] = useState({})
-  const total = setup.checklist.length
-  const done = Object.values(checked).filter(Boolean).length
-  const allChecked = done === total
-  function toggle(i) { setChecked(prev => ({ ...prev, [i]: !prev[i] })) }
-  return (
-    <div onClick={onClose} style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.82)',
-      zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
-      overflow: 'auto',
-    }}>
-      <div onClick={e => e.stopPropagation()} style={{
-        background: PANEL, width: '100%', maxWidth: 560, maxHeight: '94vh', overflow: 'auto',
-        borderRadius: '12px 12px 0 0', padding: '20px 22px 26px',
-        border: `1px solid ${BORDER}`, borderBottom: 'none',
-        fontFamily: MONO,
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-          <div style={{ fontSize: 14, fontWeight: 900, color: LIME, letterSpacing: '0.1em' }}>PRE-TRADE CHECK</div>
-          <button onClick={onClose} style={{
-            background: 'transparent', border: 'none', color: '#666',
-            fontFamily: MONO, fontSize: 12, cursor: 'pointer', letterSpacing: '0.1em',
-          }}>CLOSE ✕</button>
-        </div>
-        <div style={{ fontSize: 12, color: FG, fontWeight: 700, letterSpacing: '0.04em', marginBottom: 18 }}>
-          {setup.title} <span style={{ color: DIM, fontWeight: 400, marginLeft: 6 }}>{setup.fullTitle}</span>
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 18 }}>
-          {setup.checklist.map((item, i) => {
-            const on = !!checked[i]
-            return (
-              <button key={i} onClick={() => toggle(i)} style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                background: on ? `${LIME}11` : 'transparent',
-                border: `1px solid ${on ? `${LIME}55` : BORDER}`,
-                borderRadius: 4, padding: '10px 14px',
-                cursor: 'pointer', textAlign: 'left',
-                fontFamily: MONO,
-              }}>
-                <span style={{
-                  width: 16, height: 16, borderRadius: 3,
-                  border: `1px solid ${on ? LIME : BORDER}`,
-                  background: on ? LIME : 'transparent',
-                  color: '#000', fontWeight: 900, fontSize: 11,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  flexShrink: 0,
-                }}>{on ? '✓' : ''}</span>
-                <span style={{ fontSize: 11, color: on ? FG : '#aaa', lineHeight: 1.5 }}>{item}</span>
-              </button>
-            )
-          })}
-        </div>
-
-        <div style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          padding: '10px 14px',
-          background: allChecked ? `${LIME}11` : '#0a0a0a',
-          border: `1px solid ${allChecked ? `${LIME}55` : BORDER}`,
-          borderRadius: 4, marginBottom: 18,
-        }}>
-          <span style={{ fontSize: 10, fontFamily: MONO, color: allChecked ? LIME : '#888', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-            {done} / {total} checks complete
-          </span>
-          {!allChecked && (
-            <span style={{ fontSize: 10, fontFamily: MONO, color: YELLOW, letterSpacing: '0.06em' }}>
-              {total - done} item{total - done === 1 ? '' : 's'} left
-            </span>
-          )}
-        </div>
-
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={onClose} style={{
-            flex: 1, background: 'transparent', border: `1px solid ${BORDER}`, color: '#888',
-            fontFamily: MONO, fontSize: 11, fontWeight: 700, letterSpacing: '0.14em',
-            padding: '12px', borderRadius: 4, cursor: 'pointer',
-          }}>CANCEL</button>
-          <button onClick={onClose} disabled={!allChecked} style={{
-            flex: 2,
-            background: allChecked ? LIME : '#1a1a1a',
-            color: allChecked ? '#000' : '#444',
-            border: 'none',
-            fontFamily: MONO, fontSize: 11, fontWeight: 900, letterSpacing: '0.14em',
-            padding: '12px', borderRadius: 4,
-            cursor: allChecked ? 'pointer' : 'not-allowed',
-          }}>{allChecked ? 'All checks confirmed →' : 'Complete the checklist'}</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-export default function CorePlaybook() {
-  const [active, setActive] = useState(null)
+export default function CorePlaybook({ onOpenChart }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18, fontFamily: MONO }}>
       <div>
         <div style={{ fontSize: 9, color: MUTED, letterSpacing: '0.16em', textTransform: 'uppercase', marginBottom: 6 }}>
-          The 4 setups I'm mastering. Use the pre-trade check before every entry.
+          The 4 setups I'm mastering. Reference material, no gating.
         </div>
         <div style={{ fontSize: 22, fontWeight: 900, color: FG, letterSpacing: '0.04em' }}>CORE PLAYBOOK</div>
       </div>
@@ -313,11 +412,9 @@ export default function CorePlaybook() {
         alignItems: 'start',
       }}>
         {SETUPS.map(setup => (
-          <SetupPlaybookCard key={setup.id} setup={setup} onUseSetup={setActive} />
+          <SetupPlaybookCard key={setup.id} setup={setup} onOpenChart={onOpenChart} />
         ))}
       </div>
-
-      {active && <PreTradeCheckModal setup={active} onClose={() => setActive(null)} />}
     </div>
   )
 }
