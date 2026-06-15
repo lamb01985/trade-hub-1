@@ -24,6 +24,8 @@ const TYPE_COLORS = {
   'lvn': '#334',
   'premarket-high': LIME,
   'premarket-low': RED,
+  'round': '#556055',
+  'target': '#FFD166',
 }
 
 function LevelRow({ level, currentPrice }) {
@@ -206,7 +208,7 @@ export default function Levels({ liveData, orbHigh, orbLow, settings, onSettings
     volProfile: liveData?.volProfile,
   }), [price, pivots, autoFibs, vwapData, prevDay, weeklyData, orbHigh, orbLow, sdZones, customLevels, liveData?.volProfile])
 
-  const { levels, nearestAbove, nearestBelow, setupQuality } = levelMap
+  const { levels, nearestAbove, nearestBelow, setupQuality, blueSkyUp, blueSkyDown } = levelMap
 
   // Filter levels for display
   const filteredLevels = filter === 'all' ? levels : levels.filter(l => {
@@ -395,6 +397,13 @@ export default function Levels({ liveData, orbHigh, orbLow, settings, onSettings
 
       {/* The level map */}
       <Card style={{ padding: 0, overflow: 'hidden' }}>
+        {/* Blue-sky flag: nothing structural overhead */}
+        {price && blueSkyUp && above.length === 0 && (
+          <div style={{ padding: '12px 20px', background: '#0a1410', borderBottom: '1px solid #1e2a18', fontFamily: MONO, fontSize: 11, color: LIME, fontWeight: 700, letterSpacing: '0.04em' }}>
+            ▲ BLUE SKY — no resistance overhead. Price has cleared every structural level. Breaking into open space; use whole-dollar levels and the measured-move target as guides, and watch for momentum exhaustion.
+          </div>
+        )}
+
         {/* Levels ABOVE price */}
         {above.length > 0 && above.map((level, i) => (
           <LevelRow key={`${level.label}-${level.price}`} level={level} currentPrice={price} />
@@ -407,6 +416,13 @@ export default function Levels({ liveData, orbHigh, orbLow, settings, onSettings
         {below.length > 0 && below.map((level, i) => (
           <LevelRow key={`${level.label}-${level.price}`} level={level} currentPrice={price} />
         ))}
+
+        {/* Blue-sky flag: nothing structural below */}
+        {price && blueSkyDown && below.length === 0 && (
+          <div style={{ padding: '12px 20px', background: '#140a0a', borderTop: '1px solid #2a1818', fontFamily: MONO, fontSize: 11, color: '#ff5555', fontWeight: 700, letterSpacing: '0.04em' }}>
+            ▼ NO SUPPORT BELOW — price has broken under every structural level. Free-fall risk; use whole-dollar levels and the measured-move target as guides.
+          </div>
+        )}
 
         {filteredLevels.length === 0 && (
           <div style={{ padding: '40px 20px', textAlign: 'center', color: '#2a2a2a', fontFamily: MONO, fontSize: 11 }}>

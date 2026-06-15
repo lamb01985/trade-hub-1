@@ -28,6 +28,8 @@ export function calcVWAP(bars) {
     band1dn: vwap - stdev,
     band2up: vwap + 2 * stdev,
     band2dn: vwap - 2 * stdev,
+    band3up: vwap + 3 * stdev,
+    band3dn: vwap - 3 * stdev,
     stdev,
   }
 }
@@ -255,11 +257,13 @@ export function buildLevelMap(currentPrice, {
 
   // VWAP and bands
   if (vwapData) {
+    add(vwapData.band3up, 'VWAP +3σ', 'vwap-band', 'Extreme — breakout extension')
     add(vwapData.band2up, 'VWAP +2σ', 'vwap-band', 'Overbought zone')
     add(vwapData.band1up, 'VWAP +1σ', 'vwap-band', 'Extended')
     add(vwapData.vwap, 'VWAP', 'vwap', 'Volume weighted avg price')
     add(vwapData.band1dn, 'VWAP -1σ', 'vwap-band', 'Extended')
     add(vwapData.band2dn, 'VWAP -2σ', 'vwap-band', 'Oversold zone')
+    add(vwapData.band3dn, 'VWAP -3σ', 'vwap-band', 'Extreme — breakdown extension')
   }
 
   // Opening range
@@ -291,6 +295,37 @@ export function buildLevelMap(currentPrice, {
     add(lvl.price, lvl.label, 'custom')
   }
 
+  // Whole-dollar magnet levels. When price breaks out of the structural stack
+  // (e.g. above the weekly high into blue sky), these guarantee there are
+  // always reference points just above and below price. Generated within a
+  // band around current price so the list never runs dry on a trending move.
+  if (currentPrice != null && currentPrice > 0) {
+    // Scale the step to the instrument: $1 for sub-$100 names, $1 still works
+    // for QQQ/SPY-range; keep it whole-dollar which is what these respect.
+    const step = 1
+    const span = Math.max(5, Math.ceil(currentPrice * 0.01)) // ~1% each way, min $5
+    const base = Math.floor(currentPrice)
+    for (let p = base - span; p <= base + span + step; p += step) {
+      if (p <= 0) continue
+      // Skip if a structural level already sits within 10 cents — avoid clutter.
+      if (levels.some(l => Math.abs(l.price - p) < 0.10)) continue
+      add(p, `$${p}`, 'round', 'Whole-dollar level — intraday magnet')
+    }
+  }
+
+  // Measured-move target: when price has broken above the weekly high (blue
+  // sky), project an upside target = broken high + the day's opening range.
+  // Gives a breakout something to aim at instead of empty space.
+  const orRange = (orbHigh && orbLow && orbHigh > orbLow) ? (orbHigh - orbLow) : null
+  if (currentPrice != null && weeklyData?.high && orRange) {
+    if (currentPrice > weeklyData.high) {
+      add(weeklyData.high + orRange, 'Measured Move ↑', 'target', `Breakout target = weekly high + OR range ($${orRange.toFixed(2)})`)
+    }
+    if (weeklyData.low && currentPrice < weeklyData.low) {
+      add(weeklyData.low - orRange, 'Measured Move ↓', 'target', `Breakdown target = weekly low − OR range ($${orRange.toFixed(2)})`)
+    }
+  }
+
   // Volume Profile (POC, VAH, VAL, HVN, LVN)
   if (volProfile) {
     if (volProfile.poc != null) add(volProfile.poc, 'POC', 'poc', 'Point of Control — highest volume node, strongest S/R')
@@ -310,12 +345,21 @@ export function buildLevelMap(currentPrice, {
     lvl.confluenceWith = nearby.map(l => l.label)
   }
 
-  if (!currentPrice) return { levels, nearestAbove: null, nearestBelow: null, inZone: false, setupQuality: null }
+  if (!currentPrice) return { levels, nearestAbove: null, nearestBelow: null, inZone: false, setupQuality: null, blueSkyUp: false, blueSkyDown: false }
 
   const above = levels.filter(l => l.price > currentPrice)
   const below = levels.filter(l => l.price <= currentPrice)
   const nearestAbove = above[above.length - 1] || null
   const nearestBelow = below[0] || null
+
+  // Blue-sky flags: price has run past the entire structural stack on one side.
+  // With round-dollar + measured-move levels added above, true blue sky is now
+  // rare, but we still surface it so the trader knows breaking into space IS
+  // the read rather than seeing a level list that's all on one side.
+  const structuralAbove = above.filter(l => l.type !== 'round')
+  const structuralBelow = below.filter(l => l.type !== 'round')
+  const blueSkyUp = structuralAbove.length === 0
+  const blueSkyDown = structuralBelow.length === 0
 
   // "In zone" = within $0.20 of any level
   const inZone = levels.some(l => Math.abs(l.price - currentPrice) < 0.20)
@@ -333,5 +377,5 @@ export function buildLevelMap(currentPrice, {
     else setupQuality = 'BETWEEN LEVELS'
   }
 
-  return { levels, nearestAbove, nearestBelow, inZone, setupQuality }
+  return { levels, nearestAbove, nearestBelow, inZone, setupQuality, blueSkyUp, blueSkyDown }
 }
