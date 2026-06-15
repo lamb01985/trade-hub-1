@@ -29,10 +29,19 @@ export function useLiveData(ticker = 'QQQ', levelMap = null, settings = {}) {
   const [isHistoricalFallback, setIsHistoricalFallback] = useState(false)
   const [avgDayVol, setAvgDayVol] = useState(null)
   const [preMarket, setPreMarket] = useState(null)
+  // The ticker the currently-loaded REST context actually belongs to. Updated
+  // only when loadContext finishes, so it lags the `ticker` prop during a
+  // refetch. Consumers compare this to their expected ticker before trusting
+  // prevDay / pivots, preventing one ticker's levels showing under another.
+  const [dataTicker, setDataTicker] = useState(null)
 
   const streamRef = useRef(null)
   const vwapBarsRef = useRef([]) // Accumulate bars for VWAP
   const priceRef = useRef(null)
+  // Always-current ticker, readable from inside async closures that captured an
+  // older value. Used to detect when a fetch resolved after a ticker switch.
+  const tickerRef = useRef(ticker)
+  tickerRef.current = ticker
 
   // ── WebSocket connection ────────────────────────────────────────────────────
   useEffect(() => {
@@ -78,16 +87,26 @@ export function useLiveData(ticker = 'QQQ', levelMap = null, settings = {}) {
   // ── REST: load market context (VWAP, prev day, weekly, pivots, S/D zones) ──
   const loadContext = useCallback(async () => {
     if (!ticker) return
+    // Snapshot the ticker this run is for. If the prop changes while the
+    // awaits below are in flight, a later run will own the state and this one
+    // must not write — otherwise it stamps one ticker's levels with another's.
+    const runTicker = ticker
+    // Invalidate the stamp up front so nothing downstream trusts the about-to-
+    // be-replaced context as belonging to the new ticker during the gap.
+    setDataTicker(null)
     setLoadingContext(true)
     setContextError(null)
 
     try {
       const [intradayBars, pd, wd, histBars] = await Promise.all([
-        getIntradayBars(ticker, 1, 'minute').catch(() => []),
-        getPrevDay(ticker).catch(() => null),
-        getWeeklyData(ticker).catch(() => null),
-        getHistoricalBars(ticker, 25).catch(() => []),
+        getIntradayBars(runTicker, 1, 'minute').catch(() => []),
+        getPrevDay(runTicker).catch(() => null),
+        getWeeklyData(runTicker).catch(() => null),
+        getHistoricalBars(runTicker, 25).catch(() => []),
       ])
+
+      // The ticker changed mid-fetch — discard this run's results entirely.
+      if (runTicker !== tickerRef.current) return
 
       vwapBarsRef.current = intradayBars
       const vwap = calcVWAP(intradayBars)
@@ -98,7 +117,8 @@ export function useLiveData(ticker = 'QQQ', levelMap = null, settings = {}) {
         setIntradayBars(intradayBars)
         setIsHistoricalFallback(false)
       } else {
-        const fallback = await getIntradayBarsForDate(ticker, priorTradingDayStr()).catch(() => [])
+        const fallback = await getIntradayBarsForDate(runTicker, priorTradingDayStr()).catch(() => [])
+        if (runTicker !== tickerRef.current) return
         setIntradayBars(fallback)
         setIsHistoricalFallback(fallback.length > 0)
       }
@@ -108,6 +128,8 @@ export function useLiveData(ticker = 'QQQ', levelMap = null, settings = {}) {
       if (pd) {
         const p = calcPivots(pd.high, pd.low, pd.close)
         setPivots(p)
+      } else {
+        setPivots(null)
       }
 
       const zones = detectSDZones(histBars)
@@ -133,10 +155,13 @@ export function useLiveData(ticker = 'QQQ', levelMap = null, settings = {}) {
       setAvgDayVol(avgDV > 0 ? avgDV : null)
       const minsElapsed = Math.max(1, getETMins() - 570) // 9:30 ET = 570 mins from midnight
       setRvol(avgDV > 0 ? sessionVol / (avgDV * minsElapsed / 390) : null)
+
+      // Stamp the loaded context with its ticker — last thing, only on success.
+      setDataTicker(runTicker)
     } catch (e) {
-      setContextError(e.message)
+      if (runTicker === tickerRef.current) setContextError(e.message)
     } finally {
-      setLoadingContext(false)
+      if (runTicker === tickerRef.current) setLoadingContext(false)
     }
   }, [ticker])
 
@@ -184,5 +209,6 @@ export function useLiveData(ticker = 'QQQ', levelMap = null, settings = {}) {
     isHistoricalFallback,
     avgDayVol,
     preMarket,
+    dataTicker,
   }
 }

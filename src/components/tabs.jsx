@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Card, SLabel, Heading, Tile, Fld, Sel, Btn, Pill, CheckRow, Tip } from './ui.jsx'
 import { LIME, RED, YELLOW, BLUE, PURPLE, ORANGE, MONO, SANS, BORDER, DARK, PANEL, SETUP_TYPES, todayStr, localDateStr, tomorrowStr, uid, f2, fmtD, fmtU, rrColor, ivContext, calcOptionRR, bsCalc, getETMins, SESSION_LABELS, SESSION_COLORS, SESSION_TIPS } from '../constants.js'
-import { getPrevDay, getHistoricalBars, getTopMovers } from '../lib/massive.js'
+import { getPrevDay, getHistoricalBars, getTopMovers, prevDayPlausible } from '../lib/massive.js'
 import { occSymbol, SCHWAB_TRADE_URL, SCHWAB_BLUE } from '../lib/schwabClient.js'
 import { useLocalStorage } from '../hooks/useStore.js'
 
@@ -1589,6 +1589,7 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
   const [rc, setRc] = useState({})
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState('')
+  const [loadError, setLoadError] = useState('')
   const [dataLoaded, setDataLoaded] = useState(false)
   const [missingFields, setMissingFields] = useState({})
   const [justSaved, setJustSaved] = useState(false)
@@ -1633,11 +1634,43 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
     onSavedPrepsChange(next)
   }
 
-  const hasLiveData = !!(liveData?.prevDay?.high || liveData?.pivots?.pp)
+  const tickerMatchesData = (liveData?.dataTicker || '').toUpperCase() === (prep.ticker || '').toUpperCase()
+  const hasLiveData = tickerMatchesData && !!(liveData?.prevDay?.high || liveData?.pivots?.pp)
   const hasClaudeKey = !!anthropicKey
 
   function loadMarketData() {
-    const { prevDay, pivots, price } = liveData || {}
+    const { prevDay, pivots, price, dataTicker } = liveData || {}
+    setLoadError('')
+
+    const want = (prep.ticker || '').toUpperCase()
+    const have = (dataTicker || '').toUpperCase()
+
+    // Primary guard: the loaded context must belong to the ticker in the box.
+    // During a ticker switch the feed refetches asynchronously, so liveData can
+    // briefly still hold the previous ticker's levels (e.g. QQQ's $744/$735
+    // under a TSLA label). Refuse to load until the data catches up.
+    if (!have || have !== want) {
+      setLoadError(
+        `Market data is still loading for ${want || 'this ticker'}` +
+        (have ? ` (showing ${have})` : '') +
+        `. Wait a moment and hit Load Market Data again — levels NOT loaded.`
+      )
+      setDataLoaded(false)
+      return
+    }
+
+    // Secondary backstop: even for the right ticker, reject a prev-day range
+    // wildly off the live price (bad/stale/halted-day bar).
+    if (prevDay && price != null && !prevDayPlausible(prevDay, price)) {
+      setLoadError(
+        `Live data looks wrong for ${want}: ` +
+        `prev-day range $${f2(prevDay.low)}–$${f2(prevDay.high)} vs live $${f2(price)}. ` +
+        `Levels NOT loaded. Refresh data or enter levels manually before trading.`
+      )
+      setDataLoaded(false)
+      return
+    }
+
     const next = {
       orbHigh: prevDay?.high != null ? f2(prevDay.high) : '',
       orbLow: prevDay?.low != null ? f2(prevDay.low) : '',
@@ -1851,6 +1884,10 @@ STRUCTURED (parsing block, do not modify the format): output exactly one JSON ob
 
       {aiError && (
         <div style={{ background: '#1a0505', border: '1px solid #3a0808', borderRadius: 4, padding: '10px 16px', fontSize: 11, fontFamily: MONO, color: RED }}>{aiError}</div>
+      )}
+
+      {loadError && (
+        <div style={{ background: '#1a0505', border: `1px solid ${RED}`, borderRadius: 4, padding: '10px 16px', fontSize: 11, fontFamily: MONO, color: RED, fontWeight: 700 }}>⚠ {loadError}</div>
       )}
 
       {!hasClaudeKey && (

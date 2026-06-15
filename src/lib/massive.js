@@ -321,7 +321,32 @@ export async function getPrevDay(ticker) {
   const d = await get(`/v2/aggs/ticker/${ticker}/prev`, { adjusted: 'true' })
   const bar = d.results?.[0]
   if (!bar) return null
-  return { open: bar.o, high: bar.h, low: bar.l, close: bar.c, volume: bar.v }
+  const out = { open: bar.o, high: bar.h, low: bar.l, close: bar.c, volume: bar.v }
+  // Internal-consistency guard. A valid daily bar must satisfy
+  // low <= open/close <= high and have positive, finite numbers. A bar that
+  // fails this is a bad feed response (stale, halted-day, or wrong adjustment)
+  // and must NOT be turned into trading levels. Return null so callers treat
+  // it as "no live data" rather than silently loading garbage.
+  const nums = [out.open, out.high, out.low, out.close]
+  const allFinitePos = nums.every(n => typeof n === 'number' && isFinite(n) && n > 0)
+  const ordered = allFinitePos && out.low <= out.open && out.open <= out.high
+    && out.low <= out.close && out.close <= out.high && out.low <= out.high
+  if (!ordered) {
+    recordFailure({ url: `prevDay:${ticker}`, status: 'bad_bar' })
+    return null
+  }
+  return out
+}
+
+// Cross-check prev-day levels against a known-good reference price (live last
+// trade). Returns true if the prev-day bar is plausibly the same instrument at
+// the current price scale. A gap this large almost always means an adjustment
+// or stale-bar problem, not a real overnight move.
+export function prevDayPlausible(prevDay, refPrice, maxGapPct = 0.40) {
+  if (!prevDay || refPrice == null || !isFinite(refPrice) || refPrice <= 0) return true
+  const mid = (prevDay.high + prevDay.low) / 2
+  if (!isFinite(mid) || mid <= 0) return false
+  return Math.abs(mid - refPrice) / refPrice <= maxGapPct
 }
 
 export async function getWeeklyData(ticker) {
