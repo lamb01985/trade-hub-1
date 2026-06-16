@@ -1,10 +1,33 @@
 // ── ORB Tab ───────────────────────────────────────────────────────────────────
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { Card, SLabel, Heading, Tile, Fld, Sel, Btn, Pill, CheckRow, Tip } from './ui.jsx'
 import { LIME, RED, YELLOW, BLUE, PURPLE, ORANGE, MONO, SANS, BORDER, DARK, PANEL, SETUP_TYPES, todayStr, localDateStr, tomorrowStr, uid, f2, fmtD, fmtU, rrColor, ivContext, calcOptionRR, bsCalc, getETMins, SESSION_LABELS, SESSION_COLORS, SESSION_TIPS } from '../constants.js'
 import { getPrevDay, getHistoricalBars, getTopMovers, prevDayPlausible } from '../lib/massive.js'
 import { occSymbol, SCHWAB_TRADE_URL, SCHWAB_BLUE } from '../lib/schwabClient.js'
+import { aggregateBars } from '../lib/structure.js'
+import { evaluateOrbSignals, detectStaleLevels } from '../lib/orbSignalEngine.js'
 import { useLocalStorage } from '../hooks/useStore.js'
+
+// Opening-range window, expressed as the end-of-OR offset in minutes after
+// the regular-session open (9:30 ET). Spec default: first 15 minutes (so OR
+// closes at 9:45 ET, ET minute 585). Bars after this minute feed the signal
+// engine; anything inside the window is the OR itself.
+const DEFAULT_OR_WINDOW_MINUTES = 15
+const RTH_OPEN_MINUTES_ET = 570 // 9:30 ET expressed in minutes since ET midnight
+
+// Returns the bar's wall-clock minute of day in ET, used to gate bars to the
+// post-OR portion of the session. We deliberately compute against ET rather
+// than UTC so DST flips don't shift the window.
+function etMinuteOfDay(timestampMs) {
+  const t = new Date(timestampMs).toLocaleString('en-US', {
+    timeZone: 'America/New_York',
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+  const [h, m] = t.split(',').pop().trim().split(':').map(Number)
+  return h * 60 + m
+}
 
 const CL_ITEMS = [
   { id: 'c1', text: 'Opening range has fully formed for my chosen OR period', required: true },
@@ -110,6 +133,36 @@ export function ORBTab({ settings, onSendToCalc, prepFill, liveData, savedPreps 
     const lowBad = !isNaN(ol) && Math.abs(ol - livePriceForSanity) / livePriceForSanity > SANITY_THRESHOLD
     return (highBad || lowBad) ? { highBad, lowBad } : null
   })()
+  // ── ORB Signal Engine ───────────────────────────────────────────────────
+  // Derive completed post-OR 5m bars from the live 1m intraday feed and run
+  // the pure engine. Anything inside the OR window is the OR itself; anything
+  // not yet closed (current 5m bucket whose end is in the future) is dropped.
+  // The engine is gated on full bar closes by design, so partial bars never
+  // surface as a CONFIRMED signal.
+  const orWindowMinutes = DEFAULT_OR_WINDOW_MINUTES
+  const orbSignal = useMemo(() => {
+    if (isNaN(oh) || isNaN(ol) || !(oh > ol)) return null
+    const oneMin = liveData?.intradayBars || []
+    if (!oneMin.length) return null
+    const fiveMin = aggregateBars(oneMin, 5)
+    const orEndEtMin = RTH_OPEN_MINUTES_ET + orWindowMinutes
+    const now = Date.now()
+    const completedPostOr = fiveMin.filter(b => {
+      if (etMinuteOfDay(b.t) < orEndEtMin) return false
+      // Drop the in-flight 5m bucket (its window has not closed yet).
+      if (b.t + 5 * 60000 > now) return false
+      return true
+    })
+    return evaluateOrbSignals(completedPostOr, { orHigh: oh, orLow: ol })
+  }, [oh, ol, orWindowMinutes, liveData?.intradayBars])
+
+  // Stale-levels warning: live price more than one orRange beyond both
+  // boundaries means the loaded OR is almost certainly from a prior session.
+  const orbStale = useMemo(() => {
+    if (livePriceForSanity == null || isNaN(oh) || isNaN(ol)) return false
+    return detectStaleLevels(livePriceForSanity, oh, ol)
+  }, [livePriceForSanity, oh, ol])
+
   const isLong = dir === 'long'
   const entry = range ? (isLong ? (es === 'retest' ? oh : oh + range * 0.03) : (es === 'retest' ? ol : ol - range * 0.03)) : null
   const stop = range ? (isLong ? ol : oh) : null
@@ -223,6 +276,82 @@ export function ORBTab({ settings, onSendToCalc, prepFill, liveData, savedPreps 
           </div>
         )
       })()}
+
+      {/* ── ORB Signal card. Always renders once OR levels are valid. ─────── */}
+      {orbSignal && !sanityFail && (() => {
+        const cur = orbSignal.current
+        const state = cur?.state || 'WATCHING'
+        const tone = state === 'CONFIRMED'
+          ? (cur?.direction === 'LONG' ? 'long' : cur?.direction === 'SHORT' ? 'short' : 'neutral')
+          : state === 'PENDING' ? 'pending' : 'watching'
+        const color = tone === 'long' ? LIME : tone === 'short' ? RED : tone === 'pending' ? YELLOW : '#888'
+        const bg = tone === 'long' ? '#071208' : tone === 'short' ? '#150505' : tone === 'pending' ? '#100d04' : '#0a0a0a'
+        const border = tone === 'long' ? `${LIME}55` : tone === 'short' ? `${RED}55` : tone === 'pending' ? `${YELLOW}55` : BORDER
+        const directionGlyph = cur?.direction === 'LONG' ? '▲' : cur?.direction === 'SHORT' ? '▼' : '•'
+        return (
+          <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 5, padding: '14px 18px' }}>
+            {orbStale && (
+              <div style={{ marginBottom: 12, padding: '8px 12px', background: '#150505', border: `1px solid ${RED}55`, borderRadius: 4, fontSize: 10, fontFamily: MONO, color: RED, letterSpacing: '0.06em' }}>
+                STALE LEVELS: live price ${f2(livePriceForSanity)} sits more than one OR range from both boundaries. The loaded OR may be from a prior session. Use Refetch from chart above.
+              </div>
+            )}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{
+                  fontSize: 10, fontFamily: MONO, fontWeight: 800, letterSpacing: '0.14em',
+                  color: state === 'CONFIRMED' ? '#000' : color,
+                  background: state === 'CONFIRMED' ? color : 'transparent',
+                  border: `1px solid ${color}`,
+                  padding: '3px 8px', borderRadius: 3,
+                }}>{state}</span>
+                {cur?.signal && (
+                  <span style={{ fontSize: 12, fontFamily: MONO, fontWeight: 700, color: '#e8e8e8', letterSpacing: '0.04em' }}>
+                    {cur.signal.replace(/_/g, ' ')}
+                  </span>
+                )}
+                {state === 'PENDING' && (
+                  <span style={{ fontSize: 11, fontFamily: MONO, color, letterSpacing: '0.08em' }}>{cur.boundary} broken</span>
+                )}
+              </div>
+              {cur?.direction && (
+                <span style={{ fontSize: 12, fontFamily: MONO, fontWeight: 800, color, letterSpacing: '0.12em' }}>
+                  {directionGlyph} {cur.direction}
+                </span>
+              )}
+            </div>
+            {state === 'CONFIRMED' && (
+              <>
+                <div style={{ fontSize: 11, fontFamily: MONO, color: '#aaa', lineHeight: 1.6, marginBottom: 8 }}>{cur.explanation}</div>
+                <div style={{ display: 'flex', gap: 14, fontSize: 10, fontFamily: MONO, color: '#888', flexWrap: 'wrap' }}>
+                  <span><span style={{ color: '#555' }}>Boundary:</span> <strong style={{ color: '#bbb' }}>{cur.boundary}</strong></span>
+                  {cur.event?.boundaryPrice != null && (
+                    <span><span style={{ color: '#555' }}>Level:</span> <strong style={{ color: '#bbb' }}>${f2(cur.event.boundaryPrice)}</strong></span>
+                  )}
+                  {cur.price != null && (
+                    <span><span style={{ color: '#555' }}>Trigger close:</span> <strong style={{ color }}>${f2(cur.price)}</strong></span>
+                  )}
+                </div>
+              </>
+            )}
+            {state === 'PENDING' && (
+              <>
+                <div style={{ fontSize: 11, fontFamily: MONO, color: '#aaa', lineHeight: 1.6, marginBottom: 8 }}>{cur.waitingFor}</div>
+                <div style={{ display: 'flex', gap: 14, fontSize: 10, fontFamily: MONO, color: '#888', flexWrap: 'wrap' }}>
+                  <span><span style={{ color: '#555' }}>Boundary:</span> <strong style={{ color: '#bbb' }}>{cur.boundary} ${f2(cur.boundaryPrice)}</strong></span>
+                  <span><span style={{ color: '#555' }}>Break close:</span> <strong style={{ color: YELLOW }}>${f2(cur.triggerPrice)}</strong></span>
+                  <span><span style={{ color: '#555' }}>Window remaining:</span> <strong style={{ color: YELLOW }}>{cur.windowRemaining} {cur.windowRemaining === 1 ? 'bar' : 'bars'} (5m)</strong></span>
+                </div>
+              </>
+            )}
+            {state === 'WATCHING' && (
+              <div style={{ fontSize: 11, fontFamily: MONO, color: '#888', lineHeight: 1.6 }}>
+                No qualifying bar close yet. Engine waits for a full 5m bar to close beyond OR High or OR Low, or for an inside-range wick-and-reclaim of either boundary.
+              </div>
+            )}
+          </div>
+        )
+      })()}
+
       <Sel label="Entry Style" value={es} onChange={setEs} options={[{ value: 'retest', label: 'Retest Entry — wait for pullback to OR level (recommended)' }, { value: 'break', label: 'Breakout Entry — enter on first close above/below' }]} />
       {range && (
         <div style={{ pointerEvents: sanityFail ? 'none' : 'auto', opacity: sanityFail ? 0.3 : 1, filter: sanityFail ? 'grayscale(1)' : 'none', transition: 'opacity 0.2s' }}>
