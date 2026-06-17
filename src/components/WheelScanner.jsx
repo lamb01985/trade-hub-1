@@ -155,7 +155,6 @@ export default function WheelScanner({
   onWatchlistChange = null,
   liveDataMulti = {},
   apiKey = '',
-  anthropicKey = '',
 }) {
   const [positions, setPositions] = useLocalStorage('tradeHub.wheel.positions.v1', [])
   const [capital, setCapital] = useLocalStorage('tradeHub.wheel.capital.v1', 25000)
@@ -227,11 +226,11 @@ export default function WheelScanner({
   }, [liveDataMulti])
 
   // ── Bulk Claude call for thesis layer ─────────────────────────────────────
-  // Matches the existing direct-to-anthropic pattern (see Journal.jsx,
-  // ShortThesis.jsx, tabs.jsx PrepTab generateBrief). Returns a map
+  // Server-side proxy via /api/ai/wheel-ai. ANTHROPIC_API_KEY and model live
+  // in Vercel env, the browser never holds them. Returns a map
   // { [TICKER]: { putThesis, callThesis, confidence } } or {} on failure.
   const fetchThesisBatch = useCallback(async (analyses) => {
-    if (!anthropicKey || !analyses?.length) return {}
+    if (!analyses?.length) return {}
     const summary = analyses
       .filter(a => !a.error)
       .map(a => ({
@@ -269,28 +268,19 @@ Tickers and data:
 ${JSON.stringify(summary, null, 2)}`
 
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetch('/api/ai/wheel-ai', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': anthropicKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 1500,
-          messages: [{ role: 'user', content: prompt }],
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, maxTokens: 1500 }),
       })
-      const data = await res.json()
-      const text = data?.content?.[0]?.text || ''
-      const parsed = parseJsonBlock(text)
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.content) return {}
+      const parsed = parseJsonBlock(data.content)
       return parsed && typeof parsed === 'object' ? parsed : {}
     } catch {
       return {}
     }
-  }, [anthropicKey, positions])
+  }, [positions])
 
   // ── Main scan flow ────────────────────────────────────────────────────────
   const runScan = async () => {

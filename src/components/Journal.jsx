@@ -229,7 +229,7 @@ function TradeRow({ trade, onUpdate, onEdit, onDelete }) {
 
 // ── Main Journal component ───────────────────────────────────────────────────
 
-export default function Journal({ trades, onUpdate, onDelete, onEdit, onOpenQuickLog, anthropicKey, prep, schwab, onAddTrades }) {
+export default function Journal({ trades, onUpdate, onDelete, onEdit, onOpenQuickLog, prep, schwab, onAddTrades }) {
   const [_, setTick] = useState(0)
   useEffect(() => { const id = setInterval(() => setTick(t => t + 1), 30000); return () => clearInterval(id) }, [])
 
@@ -357,7 +357,7 @@ export default function Journal({ trades, onUpdate, onDelete, onEdit, onOpenQuic
   const todayNote = eodNotes[today]
 
   async function generateCoaching() {
-    if (!anthropicKey || coachLoading) return
+    if (coachLoading) return
     setCoachLoading(true); setCoachError('')
     const tradeList = todayTrades.map((t, i) =>
       `${i + 1}. ${t.ticker} ${(t.optType || '').toUpperCase()} $${t.strike || '?'} ${t.contracts || 1}c — Entry $${f2(t.entry)}, Stop $${f2(t.stop)}, Target $${f2(t.target)} — ${t.status.toUpperCase()} — P&L: ${t.pnl != null ? fmtD(t.pnl) : 'open'} — ${t.setupType || ''} — Notes: ${t.notes || '—'}`
@@ -376,18 +376,25 @@ Evaluate:
 Be direct and specific. No generic advice. Max 150 words total. End with "GRADE: X".`
 
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetch('/api/ai/eod-coach', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-        body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 400, messages: [{ role: 'user', content: prompt }] })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, maxTokens: 400 }),
       })
-      const data = await res.json()
-      if (data.content?.[0]?.text) {
-        const note = data.content[0].text
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data.content) {
+        const note = data.content
         const grade = note.match(/GRADE:\s*([ABCD])/i)?.[1]?.toUpperCase() || null
         setEodNotes(prev => ({ ...prev, [today]: { note, grade, ts: Date.now(), pnl: summary.totalPnl, trades: summary.count } }))
       } else {
-        setCoachError(data.error?.message || 'Coaching failed — check Claude API key in Command')
+        // Surface server status + Anthropic error type + message verbatim, same
+        // format the Prep brief uses. Failure is now debuggable from the banner.
+        const parts = []
+        const status = data.status || res.status
+        if (status) parts.push(`Anthropic ${status}`)
+        if (data.type) parts.push(`(${data.type})`)
+        parts.push(data.message || data.error || 'Coaching failed')
+        setCoachError(parts.join(' '))
       }
     } catch (e) { setCoachError('Network error: ' + e.message) }
     setCoachLoading(false)
@@ -527,7 +534,7 @@ Be direct and specific. No generic advice. Max 150 words total. End with "GRADE:
                     <div style={{ fontSize: 22, fontWeight: 900, fontFamily: MONO, color: gradeColor(todayNote.grade), border: `1px solid ${gradeColor(todayNote.grade)}55`, borderRadius: 4, padding: '2px 14px', lineHeight: 1.3 }}>{todayNote.grade}</div>
                   )}
                 </div>
-                <Btn small variant="ghost" onClick={generateCoaching} disabled={coachLoading || !anthropicKey}>{coachLoading ? 'Coaching...' : 'Regenerate'}</Btn>
+                <Btn small variant="ghost" onClick={generateCoaching} disabled={coachLoading}>{coachLoading ? 'Coaching...' : 'Regenerate'}</Btn>
               </div>
               <pre style={{ fontFamily: MONO, fontSize: 11, color: '#888', lineHeight: 1.75, whiteSpace: 'pre-wrap', margin: 0 }}>{todayNote.note}</pre>
             </>
@@ -536,10 +543,10 @@ Be direct and specific. No generic advice. Max 150 words total. End with "GRADE:
               <div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: '#aaa', fontFamily: MONO, marginBottom: 4 }}>EOD Coach</div>
                 <div style={{ fontSize: 11, color: '#555', fontFamily: MONO }}>
-                  {anthropicKey ? `${todayTrades.length} trade${todayTrades.length !== 1 ? 's' : ''} today. Get Claude's coaching and discipline grade.` : 'Add Claude API key in Command to enable EOD coaching.'}
+                  {todayTrades.length} trade{todayTrades.length !== 1 ? 's' : ''} today. Get Claude's coaching and discipline grade.
                 </div>
               </div>
-              {anthropicKey && <Btn small variant="lime" onClick={generateCoaching} disabled={coachLoading}>{coachLoading ? '✦ Coaching...' : '✦ EOD Coach'}</Btn>}
+              <Btn small variant="lime" onClick={generateCoaching} disabled={coachLoading}>{coachLoading ? '✦ Coaching...' : '✦ EOD Coach'}</Btn>
             </div>
           )}
           {coachError && <div style={{ fontSize: 10, color: RED, fontFamily: MONO, marginTop: 10 }}>{coachError}</div>}

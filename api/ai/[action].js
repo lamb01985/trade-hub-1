@@ -8,19 +8,23 @@
 //   ANTHROPIC_API_KEY   required, set as Sensitive in Vercel
 //   ANTHROPIC_MODEL     optional, defaults to claude-sonnet-4-6
 //
-// Routes (dynamic segment, future-proofed so Journal EOD coach,
-// ShortThesis, and WheelScanner can move into this same file as
-// additional actions later without adding a Vercel function):
+// Routes (dynamic segment, all four AI features in one Vercel function
+// so we stay under the Hobby 12-function limit):
 //
-//   POST /api/ai/brief
-//        body: { prompt: string, maxTokens?: number }
-//        returns: { content, model } on success
-//                 { error, status, type, message, model } on failure
+//   POST /api/ai/brief          PrepTab AI brief generator
+//   POST /api/ai/wheel-ai       WheelScanner setup-quality thesis
+//   POST /api/ai/eod-coach      Journal end-of-day coach
+//   POST /api/ai/short-thesis   ShortThesis put-thesis generator
+//
+// All four take the same body shape: { prompt: string, maxTokens?: number }
+// and return: { content, model } on success
+//             { error, status, type, message, model } on failure
 //
 // Errors are explicit on purpose: status code (Anthropic's, or 5xx for
 // missing config) plus the upstream error type and message. A future
 // failure surfaces in both the Vercel function logs and the client
-// banner instead of dropping silently.
+// banner instead of dropping silently. Logs are tagged with the action
+// name so per-call-site failures are greppable in Vercel logs.
 
 const ANTHROPIC_MESSAGES_URL = 'https://api.anthropic.com/v1/messages'
 const DEFAULT_MODEL = 'claude-sonnet-4-6'
@@ -54,7 +58,10 @@ async function callAnthropic({ prompt, maxTokens, model, apiKey }) {
   return { status: upstream.status, ok: upstream.ok, data: parsed }
 }
 
-async function handleBrief(req, res) {
+// One generic handler serves every Anthropic-backed action. The action
+// name is only used to tag console logs so failures are greppable by call
+// site (ai/brief vs ai/wheel-ai etc) in Vercel function logs.
+async function handleAnthropicCall(req, res, actionName) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'method_not_allowed' })
     return
@@ -67,7 +74,7 @@ async function handleBrief(req, res) {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) {
     // eslint-disable-next-line no-console
-    console.error('[ai/brief] ANTHROPIC_API_KEY is not set on the server')
+    console.error(`[ai/${actionName}] ANTHROPIC_API_KEY is not set on the server`)
     res.status(500).json({
       error: 'anthropic_key_missing',
       message: 'ANTHROPIC_API_KEY is not set on the server. Set it in Vercel project env vars and redeploy.',
@@ -86,7 +93,7 @@ async function handleBrief(req, res) {
         || (typeof data === 'string' ? data.slice(0, 500) : 'Unknown Anthropic error')
       const upstreamType = data?.error?.type || null
       // eslint-disable-next-line no-console
-      console.error('[ai/brief] Anthropic API error:', {
+      console.error(`[ai/${actionName}] Anthropic API error:`, {
         status, model, type: upstreamType, message: upstreamMessage,
       })
       res.status(status).json({
@@ -102,7 +109,7 @@ async function handleBrief(req, res) {
     res.status(200).json({ content, model })
   } catch (err) {
     // eslint-disable-next-line no-console
-    console.error('[ai/brief] handler exception:', err?.message, err?.stack)
+    console.error(`[ai/${actionName}] handler exception:`, err?.message, err?.stack)
     res.status(500).json({
       error: 'handler_error',
       message: err?.message || 'unknown failure',
@@ -111,7 +118,10 @@ async function handleBrief(req, res) {
 }
 
 const ROUTES = {
-  brief: handleBrief,
+  brief: (req, res) => handleAnthropicCall(req, res, 'brief'),
+  'wheel-ai': (req, res) => handleAnthropicCall(req, res, 'wheel-ai'),
+  'eod-coach': (req, res) => handleAnthropicCall(req, res, 'eod-coach'),
+  'short-thesis': (req, res) => handleAnthropicCall(req, res, 'short-thesis'),
 }
 
 export default async function handler(req, res) {

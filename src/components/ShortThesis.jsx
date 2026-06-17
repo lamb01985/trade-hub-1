@@ -65,7 +65,7 @@ function ScoreBar({ score, tier }) {
 
 // ── Expanded analysis ────────────────────────────────────────────────────────
 
-function ExpandedAnalysis({ result, apiKey, anthropicKey, theses, onSaveThesis }) {
+function ExpandedAnalysis({ result, apiKey, theses, onSaveThesis }) {
   const [news, setNews] = useState(null)
   const [thesisLoading, setThesisLoading] = useState(false)
   const [thesisError, setThesisError] = useState('')
@@ -86,7 +86,6 @@ function ExpandedAnalysis({ result, apiKey, anthropicKey, theses, onSaveThesis }
     : ''
 
   async function generateThesis() {
-    if (!anthropicKey) { setThesisError('Add Claude API key in Command tab.'); return }
     setThesisLoading(true); setThesisError('')
     const dataBlob = `Ticker: ${d.ticker} · Price: $${f2(d.price)}
 P/S: ${d.ps?.toFixed(1) || 'N/A'}×  P/E: ${d.pe?.toFixed(1) || 'N/A'}  Market Cap: ${fmtBig(d.mktCap)}
@@ -138,14 +137,14 @@ Data:
 ${dataBlob}`
 
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetch('/api/ai/short-thesis', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-        body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 800, messages: [{ role: 'user', content: prompt }] }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, maxTokens: 800 }),
       })
-      const data = await res.json()
-      if (data.content?.[0]?.text) {
-        const text = data.content[0].text
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data.content) {
+        const text = data.content
         // Try to extract trigger from "Wait for break and close below $XX"
         const triggerMatch = text.match(/(?:below|under)\s+\$?\s*([\d.]+)/i)
         const trigger = triggerMatch ? parseFloat(triggerMatch[1]) : null
@@ -153,7 +152,14 @@ ${dataBlob}`
         const stop = stopMatch ? parseFloat(stopMatch[1]) : null
         onSaveThesis(d.ticker, { text, trigger, stop, createdAt: new Date().toISOString(), score: result.score, price: d.price })
       } else {
-        setThesisError(data.error?.message || 'Thesis generation failed')
+        // Surface server status + Anthropic error type + message verbatim,
+        // same format the Prep brief and EOD coach use.
+        const parts = []
+        const status = data.status || res.status
+        if (status) parts.push(`Anthropic ${status}`)
+        if (data.type) parts.push(`(${data.type})`)
+        parts.push(data.message || data.error || 'Thesis generation failed')
+        setThesisError(parts.join(' '))
       }
     } catch (e) {
       setThesisError('Network error: ' + e.message)
@@ -318,13 +324,13 @@ ${dataBlob}`
           <>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: 9, fontFamily: MONO, color: RED, letterSpacing: '0.14em', textTransform: 'uppercase' }}>Active Put Thesis</span>
-              <Btn small variant="ghost" onClick={generateThesis} disabled={thesisLoading || !anthropicKey}>{thesisLoading ? 'Writing...' : 'Regenerate'}</Btn>
+              <Btn small variant="ghost" onClick={generateThesis} disabled={thesisLoading}>{thesisLoading ? 'Writing...' : 'Regenerate'}</Btn>
             </div>
             <pre style={{ fontFamily: MONO, fontSize: 11, color: '#cc8a8a', background: '#150505', border: `1px solid ${RED}33`, borderRadius: 5, padding: '14px 16px', lineHeight: 1.75, whiteSpace: 'pre-wrap', margin: 0 }}>{existing.text}</pre>
           </>
         ) : (
-          <button onClick={generateThesis} disabled={thesisLoading || !anthropicKey} style={{ background: thesisLoading || !anthropicKey ? '#1a1a1a' : RED, color: thesisLoading || !anthropicKey ? '#444' : '#fff', border: 'none', borderRadius: 4, padding: '12px', fontFamily: MONO, fontSize: 11, fontWeight: 900, letterSpacing: '0.14em', cursor: thesisLoading || !anthropicKey ? 'not-allowed' : 'pointer' }}>
-            {thesisLoading ? '✦ Writing thesis...' : anthropicKey ? '✦ Generate Put Thesis →' : 'Add Claude API key to generate thesis'}
+          <button onClick={generateThesis} disabled={thesisLoading} style={{ background: thesisLoading ? '#1a1a1a' : RED, color: thesisLoading ? '#444' : '#fff', border: 'none', borderRadius: 4, padding: '12px', fontFamily: MONO, fontSize: 11, fontWeight: 900, letterSpacing: '0.14em', cursor: thesisLoading ? 'not-allowed' : 'pointer' }}>
+            {thesisLoading ? '✦ Writing thesis...' : '✦ Generate Put Thesis →'}
           </button>
         )}
         {thesisError && <div style={{ fontSize: 10, fontFamily: MONO, color: RED }}>{thesisError}</div>}
@@ -377,7 +383,7 @@ function ActiveTheses({ theses, results, onRemove, onUpdate }) {
 
 // ── Main tab ─────────────────────────────────────────────────────────────────
 
-export default function ShortThesis({ apiKey, anthropicKey, theses, onThesesChange }) {
+export default function ShortThesis({ apiKey, theses, onThesesChange }) {
   const [universe, setUniverse] = useLocalStorage('th-short-universe', DEFAULT_UNIVERSE)
   const [explainerDismissed, setExplainerDismissed] = useLocalStorage('th-short-explainer', false)
   const [results, setResults] = useState([])
@@ -533,7 +539,7 @@ export default function ShortThesis({ apiKey, anthropicKey, theses, onThesesChan
                   <span style={{ color: '#444', fontSize: 14 }}>{isOpen ? '−' : '+'}</span>
                 </div>
                 {isOpen && (
-                  <ExpandedAnalysis result={r} apiKey={apiKey} anthropicKey={anthropicKey} theses={theses} onSaveThesis={saveThesis} />
+                  <ExpandedAnalysis result={r} apiKey={apiKey} theses={theses} onSaveThesis={saveThesis} />
                 )}
               </div>
             )

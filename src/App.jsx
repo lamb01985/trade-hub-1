@@ -708,7 +708,6 @@ export default function App() {
                   onWatchlistChange={setWheelWatchlist}
                   liveDataMulti={wheelDataMulti?.data || {}}
                   apiKey={apiKey}
-                  anthropicKey={anthropicKey}
                 />
               </ErrorBoundary>
             </div>
@@ -960,7 +959,6 @@ export default function App() {
                   onDelete={handleDeleteTrade}
                   onEdit={openQuickLog}
                   onOpenQuickLog={openQuickLog}
-                  anthropicKey={anthropicKey}
                   prep={prep}
                   schwab={schwab}
                   onAddTrades={list => setTrades(prev => [...prev, ...list])}
