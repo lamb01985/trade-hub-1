@@ -1941,25 +1941,22 @@ Only use the levels provided. No generic advice.
 STRUCTURED (parsing block, do not modify the format): output exactly one JSON object on its own line at the very end of your response, after all prose sections above. The JSON must contain a single field "volume_threshold", an integer share count for the break-candle volume that confirms the primary setup. Estimate from the ticker's typical 5-min volume if not stated. Example: {"volume_threshold": 50000}`
 
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      // The Anthropic call is now server-side. ANTHROPIC_API_KEY and the
+      // model string live in Vercel env so the browser never holds the
+      // key and the model can be bumped from the dashboard without a
+      // redeploy. The server returns a flat { content, model } on
+      // success or a structured { status, type, message, model } on
+      // failure; both shapes are surfaced verbatim in the banner.
+      const res = await fetch('/api/ai/brief', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': anthropicKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 900,
-          messages: [{ role: 'user', content: prompt }]
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, maxTokens: 900 }),
       })
-      const data = await res.json()
-      if (data.content?.[0]?.text) {
-        const raw = data.content[0].text
-        // Extract the trailing STRUCTURED JSON block, write threshold for the
-        // active ticker, and strip the block from the visible brief text.
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data.content) {
+        const raw = data.content
+        // Extract the trailing STRUCTURED JSON block, write threshold for
+        // the active ticker, and strip the block from the visible brief.
         let visible = raw
         try {
           const match = raw.match(/\{[^{}]*"volume_threshold"\s*:\s*([0-9]+)[^{}]*\}\s*$/m)
@@ -1969,8 +1966,6 @@ STRUCTURED (parsing block, do not modify the format): output exactly one JSON ob
               const tickerKey = (prep.ticker || 'QQQ').toUpperCase()
               onVolumeThresholdsChange(prev => ({ ...(prev || {}), [tickerKey]: threshold }))
             }
-            // Strip the structured block (and the preceding "---" separator
-            // and STRUCTURED preamble if present) from the saved text.
             visible = raw
               .replace(/\n*---\s*\n+STRUCTURED[^\n]*\n+\{[^{}]*"volume_threshold"[^{}]*\}\s*$/m, '')
               .replace(/\n*\{[^{}]*"volume_threshold"[^{}]*\}\s*$/m, '')
@@ -1979,7 +1974,17 @@ STRUCTURED (parsing block, do not modify the format): output exactly one JSON ob
         } catch {}
         upd('gamePlan', visible)
       } else {
-        setAiError(data.error?.message || 'Generation failed, check your Claude API key in Command tab')
+        // Surface the real upstream failure: HTTP status, Anthropic error
+        // type, and the message verbatim. A future "model not found" or
+        // "missing key" failure becomes immediately debuggable from the
+        // banner instead of showing a blank Generation failed line.
+        const parts = []
+        const status = data.status || res.status
+        if (status) parts.push(`Anthropic ${status}`)
+        if (data.type) parts.push(`(${data.type})`)
+        const message = data.message || data.error || 'Generation failed'
+        parts.push(message)
+        setAiError(parts.join(' '))
       }
     } catch (e) {
       setAiError('Network error: ' + e.message)
