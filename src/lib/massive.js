@@ -311,10 +311,137 @@ export function priorTradingDayStr(refDate = new Date()) {
   return d.toISOString().slice(0, 10)
 }
 
+// Market holidays for 2026 (full-day market closures). The walk-back below
+// skips these in addition to weekends so getPriorSession lands on the most
+// recent regular session even on holiday-adjacent days. Populate as new
+// closures are announced; format is 'YYYY-MM-DD' strings.
+// New Year's Day 2026 fell on a Thursday and was a market closure; the
+// remaining 2026 dates can be added here as needed.
+export const MARKET_HOLIDAYS_2026 = []
+
+// 4:15 PM Eastern. The 15-minute pad past the 4:00 PM close lets the
+// settlement print land before we consider "today" the most recent session,
+// so we don't pull a half-formed bar when the proxy responds in the first
+// few minutes after the bell.
+const SESSION_CLOSE_ET_HOUR = 16
+const SESSION_CLOSE_ET_MIN = 15
+
+// Pull the wall-clock parts (year, month, day, hour, minute, weekday) for a
+// given absolute instant, expressed in America/New_York. Uses
+// Intl.DateTimeFormat with timeZone: 'America/New_York' so DST and the
+// machine's locale never come into play; the boundary holds regardless of
+// where the server or browser is running.
+function etParts(at) {
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', weekday: 'short',
+    hour12: false,
+  })
+  const lookup = {}
+  for (const p of fmt.formatToParts(at)) lookup[p.type] = p.value
+  return {
+    year: parseInt(lookup.year, 10),
+    month: parseInt(lookup.month, 10),
+    day: parseInt(lookup.day, 10),
+    // Some ICU builds report midnight hour as '24'; normalize to 0.
+    hour: parseInt(lookup.hour, 10) % 24,
+    minute: parseInt(lookup.minute, 10),
+    weekday: lookup.weekday, // 'Mon' / 'Tue' / ... / 'Sun'
+  }
+}
+
+function ymdFromParts({ year, month, day }) {
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
+// Calendar subtraction by one day on a YMD string. Uses UTC date arithmetic
+// so DST transitions never shift the result (we are only doing calendar math,
+// never wall-clock math).
+function subtractDay(ymd) {
+  const [y, m, d] = ymd.split('-').map(Number)
+  const date = new Date(Date.UTC(y, m - 1, d))
+  date.setUTCDate(date.getUTCDate() - 1)
+  return date.toISOString().slice(0, 10)
+}
+
+function dayOfWeekUtc(ymd) {
+  const [y, m, d] = ymd.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay() // 0 = Sun, 6 = Sat
+}
+
+// Returns the YYYY-MM-DD for the most recently completed regular US equity
+// session, anchored to America/New_York. Logic:
+//   1. Compute the current ET wall clock for the given instant (default: now).
+//   2. If it is a weekday and the ET time is at or after 16:15, the session
+//      is today; otherwise the candidate is the prior calendar day.
+//   3. Walk back over Saturdays, Sundays, and MARKET_HOLIDAYS_2026 until a
+//      regular session date is reached.
+//
+// Pure helper. Same instant always produces the same output. Exported so
+// callers (and tests) can reason about session dates without leaking time
+// math into the call sites.
+export function mostRecentSessionDate(at = new Date()) {
+  const et = etParts(at)
+  const isWeekday = et.weekday !== 'Sat' && et.weekday !== 'Sun'
+  const afterClose = et.hour > SESSION_CLOSE_ET_HOUR
+    || (et.hour === SESSION_CLOSE_ET_HOUR && et.minute >= SESSION_CLOSE_ET_MIN)
+  let candidate = ymdFromParts(et)
+  if (!isWeekday || !afterClose) {
+    candidate = subtractDay(candidate)
+  }
+  while (true) {
+    const dow = dayOfWeekUtc(candidate)
+    const isWeekend = dow === 0 || dow === 6
+    const isHoliday = MARKET_HOLIDAYS_2026.includes(candidate)
+    if (!isWeekend && !isHoliday) return candidate
+    candidate = subtractDay(candidate)
+  }
+}
+
 export async function getPremarketBars(ticker) {
   // Last trade and premarket high/low via snapshot
   const d = await get(`/v2/snapshot/locale/us/markets/stocks/tickers/${ticker}`)
   return d.ticker ?? null
+}
+
+// Returns the most-recently-completed regular session bar for `ticker`,
+// anchored to America/New_York. After 16:15 ET this returns today's bar;
+// before that, the prior trading day's bar. Walks back over weekends and
+// MARKET_HOLIDAYS_2026 via mostRecentSessionDate.
+//
+// Shape: { date, open, high, low, close } where date is the YYYY-MM-DD
+// session string and o/h/l/c are mapped from the bar. Returns null when the
+// daily bar is missing or fails the same internal-consistency guard used by
+// getPrevDay (every field finite and positive, low <= open <= high,
+// low <= close <= high). On bad-bar failure we record the same apiHealth
+// signal as getPrevDay so callers fall through to "no live data" rather
+// than rendering garbage.
+//
+// getPrevDay is left in place for any caller that wants the broker's
+// /v2/aggs/{T}/prev shortcut (which always points to the prior session, not
+// today's just-completed one).
+export async function getPriorSession(ticker) {
+  const date = mostRecentSessionDate()
+  const bars = await getDayBars(ticker, date, date)
+  const bar = bars?.[0]
+  if (!bar) return null
+  const out = {
+    date,
+    open: bar.o,
+    high: bar.h,
+    low: bar.l,
+    close: bar.c,
+  }
+  const nums = [out.open, out.high, out.low, out.close]
+  const allFinitePos = nums.every(n => typeof n === 'number' && isFinite(n) && n > 0)
+  const ordered = allFinitePos && out.low <= out.open && out.open <= out.high
+    && out.low <= out.close && out.close <= out.high && out.low <= out.high
+  if (!ordered) {
+    recordFailure({ url: `priorSession:${ticker}`, status: 'bad_bar' })
+    return null
+  }
+  return out
 }
 
 export async function getPrevDay(ticker) {

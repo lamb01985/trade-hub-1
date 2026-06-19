@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { Card, SLabel, Heading, Tile, Fld, Sel, Btn, Pill, CheckRow, Tip } from './ui.jsx'
 import { LIME, RED, YELLOW, BLUE, PURPLE, ORANGE, MONO, SANS, BORDER, DARK, PANEL, SETUP_TYPES, todayStr, localDateStr, tomorrowStr, uid, f2, fmtD, fmtU, rrColor, ivContext, calcOptionRR, bsCalc, getETMins, SESSION_LABELS, SESSION_COLORS, SESSION_TIPS } from '../constants.js'
-import { getPrevDay, getHistoricalBars, getTopMovers, prevDayPlausible } from '../lib/massive.js'
+import { getPrevDay, getHistoricalBars, getTopMovers, prevDayPlausible, getPriorSession } from '../lib/massive.js'
 import { occSymbol, SCHWAB_TRADE_URL, SCHWAB_BLUE } from '../lib/schwabClient.js'
 import { aggregateBars } from '../lib/structure.js'
 import { evaluateOrbSignals, detectStaleLevels } from '../lib/orbSignalEngine.js'
@@ -1736,7 +1736,7 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
       onPrepChange({ ...prep, ticker: next })
       return
     }
-    onPrepChange({ ...prep, ticker: next, orbHigh: '', orbLow: '', keyLevel: '', plannedStrike: '', ivNote: '', gamePlan: '', avoidNotes: '', marketEvents: '' })
+    onPrepChange({ ...prep, ticker: next, orbHigh: '', orbLow: '', sessionOpen: '', sessionClose: '', keyLevel: '', plannedStrike: '', ivNote: '', gamePlan: '', avoidNotes: '', marketEvents: '' })
     setMissingFields({})
   }
 
@@ -1767,33 +1767,49 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
   const hasLiveData = tickerMatchesData && !!(liveData?.prevDay?.high || liveData?.pivots?.pp)
   const hasClaudeKey = !!anthropicKey
 
-  function loadMarketData() {
-    const { prevDay, pivots, price, dataTicker } = liveData || {}
+  async function loadMarketData() {
+    const { pivots, price, dataTicker } = liveData || {}
     setLoadError('')
 
     const want = (prep.ticker || '').toUpperCase()
     const have = (dataTicker || '').toUpperCase()
 
-    // Primary guard: the loaded context must belong to the ticker in the box.
-    // During a ticker switch the feed refetches asynchronously, so liveData can
-    // briefly still hold the previous ticker's levels (e.g. QQQ's $744/$735
-    // under a TSLA label). Refuse to load until the data catches up.
+    // Primary guard: the loaded context (pivots, live price, etc) must belong
+    // to the ticker in the box. During a ticker switch the feed refetches
+    // asynchronously, so liveData can briefly still hold the previous
+    // ticker's data. Refuse to load until the live context catches up.
     if (!have || have !== want) {
       setLoadError(
         `Market data is still loading for ${want || 'this ticker'}` +
         (have ? ` (showing ${have})` : '') +
-        `. Wait a moment and hit Load Market Data again — levels NOT loaded.`
+        `. Wait a moment and hit Load Market Data again, levels NOT loaded.`
       )
       setDataLoaded(false)
       return
     }
 
-    // Secondary backstop: even for the right ticker, reject a prev-day range
-    // wildly off the live price (bad/stale/halted-day bar).
-    if (prevDay && price != null && !prevDayPlausible(prevDay, price)) {
+    // Pull the most-recently-completed regular session from the server. After
+    // 16:15 ET this is today's bar (matching what just happened in the chart);
+    // before that it is the prior trading day. Anchored to America/New_York
+    // inside mostRecentSessionDate, so the boundary holds regardless of where
+    // the user is.
+    const session = await getPriorSession(want)
+    if (!session) {
+      setLoadError(
+        `Could not load the most recent session for ${want}. The daily bar may ` +
+        `be missing or inconsistent. Try again in a moment or enter levels manually.`
+      )
+      setDataLoaded(false)
+      return
+    }
+
+    // Secondary backstop: reject a session range wildly off the live price
+    // (bad/stale/halted-day bar). prevDayPlausible operates on the high/low
+    // shape so we pass through the session bar directly.
+    if (price != null && !prevDayPlausible({ high: session.high, low: session.low }, price)) {
       setLoadError(
         `Live data looks wrong for ${want}: ` +
-        `prev-day range $${f2(prevDay.low)}–$${f2(prevDay.high)} vs live $${f2(price)}. ` +
+        `session range $${f2(session.low)} to $${f2(session.high)} vs live $${f2(price)}. ` +
         `Levels NOT loaded. Refresh data or enter levels manually before trading.`
       )
       setDataLoaded(false)
@@ -1801,8 +1817,10 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
     }
 
     const next = {
-      orbHigh: prevDay?.high != null ? f2(prevDay.high) : '',
-      orbLow: prevDay?.low != null ? f2(prevDay.low) : '',
+      orbHigh: session.high != null ? f2(session.high) : '',
+      orbLow: session.low != null ? f2(session.low) : '',
+      sessionOpen: session.open != null ? f2(session.open) : '',
+      sessionClose: session.close != null ? f2(session.close) : '',
       keyLevel: pivots?.pp != null ? f2(pivots.pp) : '',
       plannedStrike: price != null ? String(Math.round(price)) : '',
     }
@@ -1810,6 +1828,8 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
     setMissingFields({
       orbHigh: !next.orbHigh,
       orbLow: !next.orbLow,
+      sessionOpen: !next.sessionOpen,
+      sessionClose: !next.sessionClose,
       keyLevel: !next.keyLevel,
       plannedStrike: !next.plannedStrike,
     })
@@ -2057,7 +2077,7 @@ STRUCTURED (parsing block, do not modify the format): output exactly one JSON ob
           </div>
           <Sel label="OR Period" value={prep.orPeriod || settings.orPeriod || '15'} onChange={v => upd('orPeriod', v)} options={[{ value: '5', label: '5 min (8:35 CT)' }, { value: '15', label: '15 min (8:45 CT)' }, { value: '30', label: '30 min (9:00 CT)' }]} />
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12, marginBottom: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 12, marginBottom: 14 }}>
           <div>
             <Fld label="Prior Day High" value={prep.orbHigh || ''} onChange={v => upd('orbHigh', v)} prefix="$" />
             {missingFields.orbHigh && <div style={{ fontSize: 8, fontFamily: MONO, color: YELLOW, letterSpacing: '0.08em', marginTop: 4 }}>no live value</div>}
@@ -2065,6 +2085,14 @@ STRUCTURED (parsing block, do not modify the format): output exactly one JSON ob
           <div>
             <Fld label="Prior Day Low" value={prep.orbLow || ''} onChange={v => upd('orbLow', v)} prefix="$" />
             {missingFields.orbLow && <div style={{ fontSize: 8, fontFamily: MONO, color: YELLOW, letterSpacing: '0.08em', marginTop: 4 }}>no live value</div>}
+          </div>
+          <div>
+            <Fld label="Session Open" value={prep.sessionOpen || ''} onChange={v => upd('sessionOpen', v)} prefix="$" />
+            {missingFields.sessionOpen && <div style={{ fontSize: 8, fontFamily: MONO, color: YELLOW, letterSpacing: '0.08em', marginTop: 4 }}>no live value</div>}
+          </div>
+          <div>
+            <Fld label="Session Close" value={prep.sessionClose || ''} onChange={v => upd('sessionClose', v)} prefix="$" />
+            {missingFields.sessionClose && <div style={{ fontSize: 8, fontFamily: MONO, color: YELLOW, letterSpacing: '0.08em', marginTop: 4 }}>no live value</div>}
           </div>
           <div>
             <Fld label="Key Level (PP)" value={prep.keyLevel || ''} onChange={v => upd('keyLevel', v)} prefix="$" />
