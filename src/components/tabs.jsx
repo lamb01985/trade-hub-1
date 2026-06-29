@@ -1719,6 +1719,7 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState('')
   const [loadError, setLoadError] = useState('')
+  const [priceWarning, setPriceWarning] = useState('')
   const [dataLoaded, setDataLoaded] = useState(false)
   const [missingFields, setMissingFields] = useState({})
   const [justSaved, setJustSaved] = useState(false)
@@ -1908,11 +1909,111 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
     if (!anthropicKey) return
     setAiLoading(true)
     setAiError('')
+    setPriceWarning('')
     const { prevDay, pivots, vwapData, price, rvol, atr, preMarket, volProfile } = liveData || {}
     const d = (v, fb = 'unknown') => v != null && !isNaN(v) ? f2(v) : fb
 
+    // ── Build refPrice + marketContext ────────────────────────────────────
+    // Priority chain per spec: live price -> sessionClose -> prevDay close ->
+    // sessionOpen -> pre-market last. Live price first per spec, but we also
+    // compute the drift against sessionClose / currentPrice so a stale tick
+    // (the typical case where the WS holds a pre-market print after close)
+    // raises a visible warning before we ship the prompt.
+    const finitePos = v => typeof v === 'number' && isFinite(v) && v > 0
+    const parseNum = s => {
+      const n = parseFloat(s)
+      return finitePos(n) ? n : null
+    }
+    const livePriceN = finitePos(price) ? price : null
+    const sessionCloseN = parseNum(prep.sessionClose)
+    const sessionOpenN = parseNum(prep.sessionOpen)
+    const prevDayCloseN = finitePos(prevDay?.close) ? prevDay.close : null
+    const orbHighN = parseNum(prep.orbHigh)
+    const orbLowN = parseNum(prep.orbLow)
+    const preMarketLastN = finitePos(preMarket?.last) ? preMarket.last : null
+
+    // ET-aware after-hours flag computed up front so the priority chain can
+    // branch on it. After regular close, the WS price can hold a stale
+    // pre-market tick (the 713.98 case we hit on QQQ), so sessionClose wins
+    // over livePrice in that window. During regular hours and pre-market,
+    // livePrice is the right anchor and stays at the top of the chain.
+    const etFmt = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      hour: '2-digit', minute: '2-digit', weekday: 'short', hour12: false,
+    })
+    const etParts = {}
+    for (const p of etFmt.formatToParts(new Date())) etParts[p.type] = p.value
+    const etHour = parseInt(etParts.hour, 10) % 24
+    const etMinute = parseInt(etParts.minute, 10)
+    const etWeekday = etParts.weekday
+    const isWeekendEt = etWeekday === 'Sat' || etWeekday === 'Sun'
+    const etMinutesOfDay = etHour * 60 + etMinute
+    const isAfterHours = isWeekendEt || etMinutesOfDay >= 16 * 60
+    const isBeforeOpen = !isWeekendEt && etMinutesOfDay < 9 * 60 + 30
+
+    let refPrice = null
+    let refPriceSource = 'none'
+    if (isAfterHours && sessionCloseN != null) {
+      // Post-close: regular session close is the canonical anchor. The live
+      // tick (if any) can be a stale pre-market print or an unstable AH quote.
+      refPrice = sessionCloseN; refPriceSource = 'sessionClose'
+    } else if (livePriceN != null) {
+      refPrice = livePriceN; refPriceSource = 'livePrice'
+    } else if (sessionCloseN != null) {
+      refPrice = sessionCloseN; refPriceSource = 'sessionClose'
+    } else if (prevDayCloseN != null) {
+      refPrice = prevDayCloseN; refPriceSource = 'prevDayClose'
+    } else if (sessionOpenN != null) {
+      refPrice = sessionOpenN; refPriceSource = 'sessionOpen'
+    } else if (preMarketLastN != null) {
+      refPrice = preMarketLastN; refPriceSource = 'preMarketLast'
+    }
+
+    const marketContext = {
+      currentPrice: livePriceN,
+      refPrice,
+      refPriceSource,
+      sessionOpen: sessionOpenN,
+      sessionClose: sessionCloseN,
+      priorDayHigh: orbHighN ?? (finitePos(prevDay?.high) ? prevDay.high : null),
+      priorDayLow: orbLowN ?? (finitePos(prevDay?.low) ? prevDay.low : null),
+      prevDayClose: prevDayCloseN,
+      isAfterHours,
+      isBeforeRegularOpen: isBeforeOpen,
+      timestamp: new Date().toISOString(),
+    }
+
+    // eslint-disable-next-line no-console
+    console.log('[Generate AI Brief] selected refPrice:', refPrice, 'source:', refPriceSource)
+    // eslint-disable-next-line no-console
+    console.log('[Generate AI Brief] marketContext:', marketContext)
+
+    // 2% drift warning: if refPrice diverges from currentPrice OR sessionClose
+    // by more than 2%, surface that to the user before firing the AI call.
+    // Helps catch the stuck-WS-pre-market-tick case where the live price is
+    // unreliable even though it sits at the top of the priority chain.
+    if (refPrice != null) {
+      const anchors = [
+        { name: 'sessionClose', value: sessionCloseN },
+        { name: 'currentPrice', value: livePriceN },
+      ].filter(a => a.value != null && a.value !== refPrice)
+      for (const anchor of anchors) {
+        const drift = Math.abs(refPrice - anchor.value) / anchor.value
+        if (drift > 0.02) {
+          const msg =
+            `Ref Price $${f2(refPrice)} (${refPriceSource}) differs by ` +
+            `${(drift * 100).toFixed(1)}% from ${anchor.name} $${f2(anchor.value)}. ` +
+            `If the live price feed is stuck on a pre-market tick, re-run Load Market Data and regenerate.`
+          // eslint-disable-next-line no-console
+          console.warn('[Generate AI Brief] drift warning:', msg)
+          setPriceWarning(msg)
+          break
+        }
+      }
+    }
+
     const isStock = (prep.instrument || 'options') === 'stock'
-    const rvolStr = rvol != null ? `${rvol.toFixed(2)}x avg (${rvol >= 1.2 ? 'elevated — moves are real' : rvol >= 0.8 ? 'normal' : 'low — low conviction'})` : 'not available'
+    const rvolStr = rvol != null ? `${rvol.toFixed(2)}x avg (${rvol >= 1.2 ? 'elevated, moves are real' : rvol >= 0.8 ? 'normal' : 'low, low conviction'})` : 'not available'
     const atrStr = atr != null ? `$${d(atr)} (daily ATR)` : 'not available'
     const pmStr = preMarket?.active
       ? `Price $${d(preMarket.last)}, gap ${preMarket.gap >= 0 ? 'up' : 'down'} $${d(Math.abs(preMarket.gap))} vs PDC. PMH $${d(preMarket.high)}, PML $${d(preMarket.low)}. Trend: ${preMarket.trend}.`
@@ -1923,11 +2024,37 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
     const alignStr = mtfAlignment?.score > 0
       ? `1H ${mtfAlignment.mtf?.['1h']?.state || '—'}, 15M ${mtfAlignment.mtf?.['15m']?.state || '—'}, 5M ${mtfAlignment.mtf?.['5m']?.state || '—'}, 1M ${mtfAlignment.mtf?.['1m']?.state || '—'}. Score: ${mtfAlignment.score}/100. ${mtfAlignment.label}.`
       : 'not yet calculated'
-    const prompt = isStock
-      ? `You are a professional day trader assistant. Generate a pre-market game plan for ${prep.ticker || 'SPY'} stock/ETF.
 
-Market context:
-- Ticker: ${prep.ticker || 'SPY'} | Current price: $${d(price)}
+    // Canonical reference block the AI must anchor on. Format optimized for the
+    // model to grok at a glance: refPrice front and center, the alternatives
+    // listed so the model can sanity-check, and an explicit instruction not to
+    // fall back to pre-market after regular close.
+    const refBlock = [
+      `Ref Price (anchor all level math on this): $${d(refPrice)} (source: ${refPriceSource})`,
+      `Current live price: ${livePriceN != null ? '$' + d(livePriceN) : 'unavailable'}`,
+      `Session open (today's regular session open): ${sessionOpenN != null ? '$' + d(sessionOpenN) : 'unavailable'}`,
+      `Session close (today's regular session close): ${sessionCloseN != null ? '$' + d(sessionCloseN) : 'unavailable'}`,
+      `Prior day high: ${marketContext.priorDayHigh != null ? '$' + d(marketContext.priorDayHigh) : 'unavailable'}`,
+      `Prior day low: ${marketContext.priorDayLow != null ? '$' + d(marketContext.priorDayLow) : 'unavailable'}`,
+      `Is after regular hours: ${isAfterHours}`,
+      `Is before regular open: ${isBeforeOpen}`,
+      `Generated at: ${marketContext.timestamp}`,
+    ].join('\n')
+
+    const refRule =
+      `HARD RULE: Do not use the pre-market or session open as Ref Price after the regular session has closed. ` +
+      `If sessionClose or currentPrice is available, use that instead. Anchor every Key Level, Entry, Stop, ` +
+      `and Target on Ref Price above, not on a pre-market or session-open value.`
+    const prompt = isStock
+      ? `You are a professional day trader assistant. Generate a game plan for ${prep.ticker || 'SPY'} stock/ETF.
+
+MARKET CONTEXT (anchor on this):
+${refBlock}
+
+${refRule}
+
+Other context:
+- Ticker: ${prep.ticker || 'SPY'}
 - OR Period: ${prep.orPeriod || 15} min
 - Prev Day High: $${d(prevDay?.high, prep.orbHigh)} | Low: $${d(prevDay?.low, prep.orbLow)} | Close: $${d(prevDay?.close)}
 - Pivot Point: $${d(pivots?.pp)} | R1: $${d(pivots?.r1)} | R2: $${d(pivots?.r2)} | R3: $${d(pivots?.r3)}
@@ -1967,10 +2094,15 @@ Only use the levels provided. No generic advice.
 
 ---
 STRUCTURED (parsing block, do not modify the format): output exactly one JSON object on its own line at the very end of your response, after all prose sections above. The JSON must contain a single field "volume_threshold", an integer share count for the break-candle volume that confirms the primary setup. Estimate from the ticker's typical 5-min volume if not stated. Example: {"volume_threshold": 50000}`
-      : `You are a professional options day trader assistant. Generate a pre-market game plan for 0DTE ${prep.ticker || 'QQQ'} options.
+      : `You are a professional options day trader assistant. Generate a game plan for 0DTE ${prep.ticker || 'QQQ'} options.
 
-Market context:
-- Ticker: ${prep.ticker || 'QQQ'} | Current price: $${d(price)}
+MARKET CONTEXT (anchor on this):
+${refBlock}
+
+${refRule}
+
+Other context:
+- Ticker: ${prep.ticker || 'QQQ'}
 - OR Period: ${prep.orPeriod || 15} min
 - Prev Day High: $${d(prevDay?.high, prep.orbHigh)} | Low: $${d(prevDay?.low, prep.orbLow)} | Close: $${d(prevDay?.close)}
 - Pivot Point: $${d(pivots?.pp)} | R1: $${d(pivots?.r1)} | R2: $${d(pivots?.r2)} | R3: $${d(pivots?.r3)}
@@ -2089,6 +2221,10 @@ STRUCTURED (parsing block, do not modify the format): output exactly one JSON ob
           </div>
         </div>
       </div>
+
+      {priceWarning && (
+        <div style={{ background: '#1a1605', border: `1px solid ${YELLOW}`, borderRadius: 4, padding: '10px 16px', fontSize: 11, fontFamily: MONO, color: YELLOW, fontWeight: 700 }}>⚠ {priceWarning}</div>
+      )}
 
       {aiError && (
         <div style={{ background: '#1a0505', border: '1px solid #3a0808', borderRadius: 4, padding: '10px 16px', fontSize: 11, fontFamily: MONO, color: RED }}>{aiError}</div>
