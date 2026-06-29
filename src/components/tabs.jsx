@@ -1768,62 +1768,106 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
   const hasClaudeKey = !!anthropicKey
 
   async function loadMarketData() {
+    // eslint-disable-next-line no-console
+    console.log('[Load Market Data] clicked')
     const { pivots, price, dataTicker } = liveData || {}
     setLoadError('')
 
     const want = (prep.ticker || '').toUpperCase()
     const have = (dataTicker || '').toUpperCase()
+    // eslint-disable-next-line no-console
+    console.log('[Load Market Data] ticker:', want, '| liveData dataTicker:', have || '(none)')
 
-    // Primary guard: the loaded context (pivots, live price, etc) must belong
-    // to the ticker in the box. During a ticker switch the feed refetches
-    // asynchronously, so liveData can briefly still hold the previous
-    // ticker's data. Refuse to load until the live context catches up.
-    if (!have || have !== want) {
+    if (!want) {
+      const msg = 'No ticker entered. Type a ticker into Primary Ticker, then hit Load Market Data.'
+      // eslint-disable-next-line no-console
+      console.warn('[Load Market Data] aborting:', msg)
+      setLoadError(msg)
+      setDataLoaded(false)
+      return
+    }
+
+    // Note: pivots and live price come from the useLiveData hook which is
+    // gated by its own ticker prop. If that hook hasn't finished loading
+    // context for `want` yet, dataTicker will not equal want and we cannot
+    // trust pivots / price for this ticker. We DON'T block the whole load on
+    // that, we just skip the pivots-derived fields and tell the user. The
+    // session fields (high/low/open/close) come from a separate, request-
+    // scoped getPriorSession call below that is always for `want`.
+    const liveContextReady = !!have && have === want
+    if (!liveContextReady) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        '[Load Market Data] live context not yet bound to want=' + want
+        + ' (have=' + (have || '(none)') + '). Will populate session fields only,'
+        + ' key level and strike depend on pivots/price and stay empty for now.',
+      )
+    }
+
+    // Pull the most-recently-completed regular session from the server. After
+    // 16:15 ET this is today's bar; before that it is the prior trading day.
+    // Anchored to America/New_York inside mostRecentSessionDate, so the
+    // boundary holds regardless of where the user is.
+    let session = null
+    try {
+      // eslint-disable-next-line no-console
+      console.log('[Load Market Data] calling getPriorSession(' + want + ') -> /api/polygon/proxy')
+      session = await getPriorSession(want)
+      // eslint-disable-next-line no-console
+      console.log('[Load Market Data] session response:', session)
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[Load Market Data] getPriorSession threw:', err)
       setLoadError(
-        `Market data is still loading for ${want || 'this ticker'}` +
-        (have ? ` (showing ${have})` : '') +
-        `. Wait a moment and hit Load Market Data again, levels NOT loaded.`
+        `Could not reach the market data API for ${want}: ${err?.message || 'unknown error'}. ` +
+        `If POLYGON_API_KEY is missing in Vercel env, set it and redeploy. ` +
+        `Fields are editable: enter levels manually to continue.`,
       )
       setDataLoaded(false)
       return
     }
 
-    // Pull the most-recently-completed regular session from the server. After
-    // 16:15 ET this is today's bar (matching what just happened in the chart);
-    // before that it is the prior trading day. Anchored to America/New_York
-    // inside mostRecentSessionDate, so the boundary holds regardless of where
-    // the user is.
-    const session = await getPriorSession(want)
     if (!session) {
+      // eslint-disable-next-line no-console
+      console.warn('[Load Market Data] getPriorSession returned null (missing bar or failed consistency guard)')
       setLoadError(
-        `Could not load the most recent session for ${want}. The daily bar may ` +
-        `be missing or inconsistent. Try again in a moment or enter levels manually.`
+        `Could not load the most recent session for ${want}. ` +
+        `The daily bar is missing or inconsistent (low must bound open and close). ` +
+        `Fields are editable: enter levels manually to continue.`,
       )
       setDataLoaded(false)
       return
     }
 
     // Secondary backstop: reject a session range wildly off the live price
-    // (bad/stale/halted-day bar). prevDayPlausible operates on the high/low
-    // shape so we pass through the session bar directly.
-    if (price != null && !prevDayPlausible({ high: session.high, low: session.low }, price)) {
-      setLoadError(
+    // (bad/stale/halted-day bar). Only check if live price is for the right
+    // ticker; otherwise skip the plausibility check.
+    if (liveContextReady && price != null
+      && !prevDayPlausible({ high: session.high, low: session.low }, price)) {
+      const msg =
         `Live data looks wrong for ${want}: ` +
         `session range $${f2(session.low)} to $${f2(session.high)} vs live $${f2(price)}. ` +
         `Levels NOT loaded. Refresh data or enter levels manually before trading.`
-      )
+      // eslint-disable-next-line no-console
+      console.warn('[Load Market Data] plausibility check failed:', msg)
+      setLoadError(msg)
       setDataLoaded(false)
       return
     }
 
+    // Build the state update. Session fields always populate from the
+    // server-returned bar for `want`. Pivots/strike only populate when the
+    // useLiveData hook has bound the live context to this ticker.
     const next = {
       orbHigh: session.high != null ? f2(session.high) : '',
       orbLow: session.low != null ? f2(session.low) : '',
       sessionOpen: session.open != null ? f2(session.open) : '',
       sessionClose: session.close != null ? f2(session.close) : '',
-      keyLevel: pivots?.pp != null ? f2(pivots.pp) : '',
-      plannedStrike: price != null ? String(Math.round(price)) : '',
+      keyLevel: liveContextReady && pivots?.pp != null ? f2(pivots.pp) : '',
+      plannedStrike: liveContextReady && price != null ? String(Math.round(price)) : '',
     }
+    // eslint-disable-next-line no-console
+    console.log('[Load Market Data] state update payload:', next)
     onPrepChange({ ...prep, ...next })
     setMissingFields({
       orbHigh: !next.orbHigh,
@@ -1833,7 +1877,17 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
       keyLevel: !next.keyLevel,
       plannedStrike: !next.plannedStrike,
     })
+    if (!liveContextReady) {
+      // Soft warning, not a hard failure: the session fields ARE loaded.
+      setLoadError(
+        `Session levels loaded. Key Level and Strike Plan are still loading ` +
+        `for ${want} (the live data feed is catching up). Hit Load Market Data ` +
+        `again in a moment to fill those two.`,
+      )
+    }
     setDataLoaded(true)
+    // eslint-disable-next-line no-console
+    console.log('[Load Market Data] state updated, success path complete')
     setTimeout(() => setDataLoaded(false), 4000)
   }
 
