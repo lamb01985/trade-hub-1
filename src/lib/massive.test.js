@@ -36,22 +36,24 @@ describe('mostRecentSessionDate', () => {
     expect(mostRecentSessionDate(at)).toBe('2026-06-15')
   })
 
-  it('Saturday returns the prior Friday', () => {
-    // Saturday 2026-06-20 11:00 ET = 15:00 UTC.
+  it('Saturday walks past Juneteenth Friday to Thursday', () => {
+    // Saturday 2026-06-20 11:00 ET = 15:00 UTC. Friday 2026-06-19 is
+    // Juneteenth (closure), so the walk-back skips it.
     const at = new Date('2026-06-20T15:00:00Z')
-    expect(mostRecentSessionDate(at)).toBe('2026-06-19') // Friday
+    expect(mostRecentSessionDate(at)).toBe('2026-06-18') // Thursday
   })
 
-  it('Sunday returns the prior Friday', () => {
-    // Sunday 2026-06-21 13:00 ET = 17:00 UTC.
+  it('Sunday walks past Juneteenth Friday to Thursday', () => {
+    // Sunday 2026-06-21 13:00 ET = 17:00 UTC. Same reasoning as above.
     const at = new Date('2026-06-21T17:00:00Z')
-    expect(mostRecentSessionDate(at)).toBe('2026-06-19') // Friday
+    expect(mostRecentSessionDate(at)).toBe('2026-06-18') // Thursday
   })
 
-  it('Monday morning before close returns the prior Friday', () => {
-    // Monday 2026-06-22 09:30 ET = 13:30 UTC.
+  it('Monday morning before close walks past Juneteenth Friday to Thursday', () => {
+    // Monday 2026-06-22 09:30 ET = 13:30 UTC. Before close, walk back one
+    // to Sunday, then weekend + Juneteenth Friday, landing on Thursday.
     const at = new Date('2026-06-22T13:30:00Z')
-    expect(mostRecentSessionDate(at)).toBe('2026-06-19')
+    expect(mostRecentSessionDate(at)).toBe('2026-06-18')
   })
 
   it('Tuesday early morning before close returns the prior Monday', () => {
@@ -67,23 +69,35 @@ describe('mostRecentSessionDate', () => {
     expect(mostRecentSessionDate(at)).toBe('2026-06-30')
   })
 
-  it('crosses year boundary correctly', () => {
+  it('crosses year boundary correctly, skipping New Year\'s Day', () => {
     // Friday 2026-01-02 09:00 ET = 14:00 UTC. Before close, walk back to
-    // Thursday 2026-01-01. New Year's Day is a market closure but is not
-    // yet in MARKET_HOLIDAYS_2026, so this test asserts the no-holiday path.
-    // When the holiday list is populated, the expected value would shift to
+    // Thursday 2026-01-01 (New Year's Day closure), skip, land on Wednesday
     // 2025-12-31.
     const at = new Date('2026-01-02T14:00:00Z')
-    expect(mostRecentSessionDate(at)).toBe('2026-01-01')
+    expect(mostRecentSessionDate(at)).toBe('2025-12-31')
   })
 
-  it('MARKET_HOLIDAYS_2026 is exported as an empty array by default', () => {
+  it('MARKET_HOLIDAYS_2026 is exported as a populated array of key dates', () => {
     expect(Array.isArray(MARKET_HOLIDAYS_2026)).toBe(true)
-    expect(MARKET_HOLIDAYS_2026.length).toBe(0)
+    expect(MARKET_HOLIDAYS_2026.length).toBeGreaterThan(0)
+    expect(MARKET_HOLIDAYS_2026).toContain('2026-07-03') // Independence Day (observed)
+    expect(MARKET_HOLIDAYS_2026).toContain('2026-06-19') // Juneteenth
+    expect(MARKET_HOLIDAYS_2026).toContain('2026-11-26') // Thanksgiving
   })
 
   it('default parameter uses the current instant and returns a YYYY-MM-DD string', () => {
     const result = mostRecentSessionDate()
     expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  })
+
+  it('regression: Monday 2026-07-06 09:46 ET returns 2026-07-02 (skips Independence Day observed)', () => {
+    // Monday 2026-07-06 09:46 ET = 13:46 UTC. Before close: walk back to
+    // Sunday 07-05 (weekend), Saturday 07-04 (weekend), Friday 07-03
+    // (Independence Day observed closure), landing on Thursday 07-02.
+    // Real bug: the empty MARKET_HOLIDAYS_2026 list let the walk-back stop
+    // on Friday 07-03, and Polygon returned no bar for that date, so
+    // getPriorSession returned null and Evening Prep broke silently.
+    const at = new Date('2026-07-06T13:46:00Z')
+    expect(mostRecentSessionDate(at)).toBe('2026-07-02')
   })
 })

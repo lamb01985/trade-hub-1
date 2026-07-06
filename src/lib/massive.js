@@ -12,6 +12,7 @@
 // apiHealth so the header indicator reflects current API quality.
 
 import { recordSuccess, recordFailure, recordRateLimit, recordUnavailable } from './apiHealth.js'
+import { MARKET_HOLIDAYS_2026 as HOLIDAY_MAP_2026 } from '../constants.js'
 
 // Polygon REST calls are proxied through /api/polygon/proxy so the
 // POLYGON_API_KEY never reaches the browser. The proxy takes the original
@@ -311,13 +312,12 @@ export function priorTradingDayStr(refDate = new Date()) {
   return d.toISOString().slice(0, 10)
 }
 
-// Market holidays for 2026 (full-day market closures). The walk-back below
-// skips these in addition to weekends so getPriorSession lands on the most
-// recent regular session even on holiday-adjacent days. Populate as new
-// closures are announced; format is 'YYYY-MM-DD' strings.
-// New Year's Day 2026 fell on a Thursday and was a market closure; the
-// remaining 2026 dates can be added here as needed.
-export const MARKET_HOLIDAYS_2026 = []
+// Market holidays for 2026 (full-day market closures). Sourced from
+// src/constants.js as a { 'YYYY-MM-DD': 'Holiday Name' } map (the canonical
+// list, populated per nyse.com); we re-export just the keys here as an array
+// so the walk-back below can do a simple `.includes` check. Aliasing the
+// import (HOLIDAY_MAP_2026) avoids a name collision with this export.
+export const MARKET_HOLIDAYS_2026 = Object.keys(HOLIDAY_MAP_2026)
 
 // 4:15 PM Eastern. The 15-minute pad past the 4:00 PM close lets the
 // settlement print land before we consider "today" the most recent session,
@@ -405,43 +405,72 @@ export async function getPremarketBars(ticker) {
   return d.ticker ?? null
 }
 
-// Returns the most-recently-completed regular session bar for `ticker`,
-// anchored to America/New_York. After 16:15 ET this returns today's bar;
-// before that, the prior trading day's bar. Walks back over weekends and
-// MARKET_HOLIDAYS_2026 via mostRecentSessionDate.
-//
-// Shape: { date, open, high, low, close } where date is the YYYY-MM-DD
-// session string and o/h/l/c are mapped from the bar. Returns null when the
-// daily bar is missing or fails the same internal-consistency guard used by
-// getPrevDay (every field finite and positive, low <= open <= high,
-// low <= close <= high). On bad-bar failure we record the same apiHealth
-// signal as getPrevDay so callers fall through to "no live data" rather
-// than rendering garbage.
-//
-// getPrevDay is left in place for any caller that wants the broker's
-// /v2/aggs/{T}/prev shortcut (which always points to the prior session, not
-// today's just-completed one).
-export async function getPriorSession(ticker) {
-  const date = mostRecentSessionDate()
-  const bars = await getDayBars(ticker, date, date)
-  const bar = bars?.[0]
-  if (!bar) return null
-  const out = {
-    date,
-    open: bar.o,
-    high: bar.h,
-    low: bar.l,
-    close: bar.c,
-  }
-  const nums = [out.open, out.high, out.low, out.close]
+// Internal-consistency guard shared by getPriorSession and getPrevDay. A
+// valid daily bar must have finite positive OHLC and satisfy the ordering
+// low <= open <= high and low <= close <= high. A bar that fails this is a
+// bad feed response (stale, halted-day, or wrong adjustment) and must not
+// be turned into trading levels.
+function isBarConsistent(o, h, l, c) {
+  const nums = [o, h, l, c]
   const allFinitePos = nums.every(n => typeof n === 'number' && isFinite(n) && n > 0)
-  const ordered = allFinitePos && out.low <= out.open && out.open <= out.high
-    && out.low <= out.close && out.close <= out.high && out.low <= out.high
-  if (!ordered) {
-    recordFailure({ url: `priorSession:${ticker}`, status: 'bad_bar' })
+  return allFinitePos && l <= o && o <= h && l <= c && c <= h && l <= h
+}
+
+// Convert a Polygon bar's `t` timestamp (ms since epoch) to a YYYY-MM-DD
+// string anchored to America/New_York. en-CA locale outputs ISO-8601 dates,
+// so no reordering is needed.
+function tToNyDate(t) {
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  })
+  return fmt.format(new Date(t))
+}
+
+// Subtract N calendar days from a YMD string via UTC date math. Never uses
+// wall-clock arithmetic; DST transitions cannot shift the result.
+function subtractDays(ymd, n) {
+  const [y, m, d] = ymd.split('-').map(Number)
+  const date = new Date(Date.UTC(y, m - 1, d))
+  date.setUTCDate(date.getUTCDate() - n)
+  return date.toISOString().slice(0, 10)
+}
+
+// Returns the most-recently-completed regular session bar for `ticker`.
+// Instead of pinning a single expected session date and failing when the
+// exchange was closed for a holiday the local list doesn't know about, this
+// pulls a 10-day trailing window and walks newest to oldest, returning the
+// first bar that passes isBarConsistent. The window's upper bound is
+// mostRecentSessionDate() so a half-formed intraday bar for today cannot be
+// selected before 16:15 ET.
+//
+// Shape: { date, open, high, low, close } with date derived from the bar's
+// `t` timestamp in America/New_York. Returns null when the window is empty
+// (recorded as 'no_bars_in_window') or when every bar in the window fails
+// the guard (each bad bar recorded as 'bad_bar' before walking further).
+export async function getPriorSession(ticker) {
+  const endDate = mostRecentSessionDate()
+  const startDate = subtractDays(endDate, 9)
+  const bars = await getDayBars(ticker, startDate, endDate)
+  if (!bars || bars.length === 0) {
+    recordFailure({ url: `priorSession:${ticker}`, status: 'no_bars_in_window' })
     return null
   }
-  return out
+  // getDayBars requests sort=asc, so walk from the end for newest-first.
+  for (let i = bars.length - 1; i >= 0; i--) {
+    const bar = bars[i]
+    if (isBarConsistent(bar.o, bar.h, bar.l, bar.c)) {
+      return {
+        date: tToNyDate(bar.t),
+        open: bar.o,
+        high: bar.h,
+        low: bar.l,
+        close: bar.c,
+      }
+    }
+    recordFailure({ url: `priorSession:${ticker}`, status: 'bad_bar' })
+  }
+  return null
 }
 
 export async function getPrevDay(ticker) {
@@ -449,16 +478,7 @@ export async function getPrevDay(ticker) {
   const bar = d.results?.[0]
   if (!bar) return null
   const out = { open: bar.o, high: bar.h, low: bar.l, close: bar.c, volume: bar.v }
-  // Internal-consistency guard. A valid daily bar must satisfy
-  // low <= open/close <= high and have positive, finite numbers. A bar that
-  // fails this is a bad feed response (stale, halted-day, or wrong adjustment)
-  // and must NOT be turned into trading levels. Return null so callers treat
-  // it as "no live data" rather than silently loading garbage.
-  const nums = [out.open, out.high, out.low, out.close]
-  const allFinitePos = nums.every(n => typeof n === 'number' && isFinite(n) && n > 0)
-  const ordered = allFinitePos && out.low <= out.open && out.open <= out.high
-    && out.low <= out.close && out.close <= out.high && out.low <= out.high
-  if (!ordered) {
+  if (!isBarConsistent(out.open, out.high, out.low, out.close)) {
     recordFailure({ url: `prevDay:${ticker}`, status: 'bad_bar' })
     return null
   }
