@@ -1721,6 +1721,7 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
   const [loadError, setLoadError] = useState('')
   const [priceWarning, setPriceWarning] = useState('')
   const [dataLoaded, setDataLoaded] = useState(false)
+  const [loadingData, setLoadingData] = useState(false)
   const [missingFields, setMissingFields] = useState({})
   const [justSaved, setJustSaved] = useState(false)
 
@@ -1769,6 +1770,16 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
   const hasClaudeKey = !!anthropicKey
 
   async function loadMarketData() {
+    if (loadingData) return
+    setLoadingData(true)
+    try {
+      await runLoadMarketData()
+    } finally {
+      setLoadingData(false)
+    }
+  }
+
+  async function runLoadMarketData() {
     // eslint-disable-next-line no-console
     console.log('[Load Market Data] clicked')
     const { pivots, price, dataTicker } = liveData || {}
@@ -2203,9 +2214,9 @@ STRUCTURED (parsing block, do not modify the format): output exactly one JSON ob
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10 }}>
         <div><SLabel>Nightly Options Game Plan</SLabel><Heading>Tomorrow's Prep</Heading></div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          {hasLiveData && (
-            <Btn small variant="ghost" onClick={loadMarketData}>
-              {dataLoaded ? '✓ Loaded' : '↓ Load Market Data'}
+          {!!prep.ticker && (
+            <Btn small variant="ghost" onClick={loadMarketData} disabled={loadingData}>
+              {loadingData ? 'Loading…' : dataLoaded ? '✓ Loaded' : '↓ Load Market Data'}
             </Btn>
           )}
           {canSave && (

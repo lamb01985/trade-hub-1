@@ -63,12 +63,19 @@ export function listUnavailableEndpoints() {
 }
 
 // ── Throttle ───────────────────────────────────────────────────────────────
-// Polygon's free tier allows 5 req/s and most paid plans go to 100+ req/s.
-// 100ms (10 req/s) is conservative and works across plans without surprising
-// the user with paywalled errors. Tunable here in one place.
+// Every background call in the app shares one FIFO gate. Paid Massive stock
+// plans have no per-second cap, so the gate only exists to smooth bursts into
+// the Vercel proxy. At the old 100ms spacing a 5-minute context refresh across
+// all watchlists (100+ calls) queued user clicks for 10+ seconds.
+//
+// Calls made with { priority: true } (user-initiated, like Load Market Data)
+// skip the gate entirely so they never wait behind background refreshes.
+// CLIENT_TIMEOUT_MS bounds each attempt so a hung proxy fails fast instead of
+// leaving the button spinning.
 
-const REQUEST_INTERVAL_MS = 100
+const REQUEST_INTERVAL_MS = 25
 const MAX_RETRIES = 3
+const CLIENT_TIMEOUT_MS = 15_000
 
 let lastRequestTime = 0
 let inFlightDelay = Promise.resolve()
@@ -86,7 +93,21 @@ async function waitForNextSlot() {
   await inFlightDelay
 }
 
-async function throttledFetch(url, options = {}) {
+async function fetchWithTimeout(url, options) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS)
+  try {
+    return await fetch(url, { ...options, signal: controller.signal })
+  } catch (err) {
+    if (err?.name === 'AbortError') throw new Error(`request timed out after ${CLIENT_TIMEOUT_MS / 1000}s`)
+    throw err
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+async function throttledFetch(url, rawOptions = {}) {
+  const { priority = false, ...options } = rawOptions
   // Short-circuit: this endpoint pattern has already 403'd on this session,
   // so don't waste a request slot. We synthesize a Response-shape object the
   // callers can branch on, identical to what fetch would have produced.
@@ -103,9 +124,9 @@ async function throttledFetch(url, options = {}) {
   }
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    await waitForNextSlot()
+    if (!priority) await waitForNextSlot()
     try {
-      const r = await fetch(url, options)
+      const r = await fetchWithTimeout(url, options)
       if (r.status === 403) {
         // Permanent for the session — don't retry, don't poll. Remember the
         // pattern so future callers for the same endpoint short-circuit too.
@@ -250,8 +271,12 @@ export async function getLastTrade(ticker) {
   return d.results?.p ?? null
 }
 
-export async function getDayBars(ticker, from, to) {
-  const d = await getCachedJson(`/v2/aggs/ticker/${ticker}/range/1/day/${from}/${to}`, { adjusted: 'true', sort: 'asc', limit: '50' }, 'historicalBars')
+export async function getDayBars(ticker, from, to, { priority = false, fresh = false } = {}) {
+  const path = `/v2/aggs/ticker/${ticker}/range/1/day/${from}/${to}`
+  const params = { adjusted: 'true', sort: 'asc', limit: '50' }
+  const d = fresh
+    ? await get(path, params, { priority })
+    : await getCachedJson(path, params, 'historicalBars')
   return d.results || []
 }
 
@@ -451,7 +476,10 @@ function subtractDays(ymd, n) {
 export async function getPriorSession(ticker) {
   const endDate = mostRecentSessionDate()
   const startDate = subtractDays(endDate, 9)
-  const bars = await getDayBars(ticker, startDate, endDate)
+  // Fresh + priority: this backs the Load Market Data button. Skipping the
+  // cache prevents a window fetched before the newest daily bar posted from
+  // being served for 24h; priority skips the background request queue.
+  const bars = await getDayBars(ticker, startDate, endDate, { priority: true, fresh: true })
   if (!bars || bars.length === 0) {
     recordFailure({ url: `priorSession:${ticker}`, status: 'no_bars_in_window' })
     return null
@@ -527,6 +555,9 @@ export async function getTopMovers({ signal } = {}) {
 
 // ── WebSocket ────────────────────────────────────────────────────────────────
 
+const RECONNECT_BASE_MS = 3_000
+const RECONNECT_MAX_MS = 60_000
+
 export class MassiveStream {
   constructor({ onTrade, onQuote, onConnected, onDisconnected, onError } = {}) {
     this.apiKey = null
@@ -565,6 +596,7 @@ export class MassiveStream {
       for (const msg of msgs) {
         if (msg.ev === 'status') {
           if (msg.status === 'auth_success') {
+            this.reconnectDelayMs = RECONNECT_BASE_MS
             this.handlers.onConnected?.()
             // Resubscribe to any existing subscriptions
             if (this.subscriptions.size > 0) {
@@ -572,6 +604,11 @@ export class MassiveStream {
             }
           } else if (msg.status === 'auth_failed') {
             this.handlers.onError?.('API key invalid or plan does not include WebSocket access')
+          } else if (msg.status === 'max_connections') {
+            // Massive allows one stocks socket per key. Another tab or device
+            // holds it; back off hard instead of fighting for the slot.
+            this.reconnectDelayMs = RECONNECT_MAX_MS
+            this.handlers.onError?.('Live feed is open in another tab or device (Massive allows one connection). Using backup polling.')
           }
         } else if (msg.ev === 'T') {
           this.handlers.onTrade?.({ ticker: msg.sym, price: msg.p, size: msg.s, timestamp: msg.t })
@@ -584,8 +621,9 @@ export class MassiveStream {
     this.ws.onclose = () => {
       this.handlers.onDisconnected?.()
       if (!this.intentionalClose) {
-        // Auto-reconnect after 3s
-        this.reconnectTimer = setTimeout(() => this.connect(), 3000)
+        const delay = this.reconnectDelayMs || RECONNECT_BASE_MS
+        this.reconnectDelayMs = Math.min(delay * 2, RECONNECT_MAX_MS)
+        this.reconnectTimer = setTimeout(() => this.connect(), delay)
       }
     }
 
@@ -619,5 +657,92 @@ export class MassiveStream {
     clearTimeout(this.reconnectTimer)
     this.ws?.close()
     this.ws = null
+  }
+}
+
+// ── Shared stream ────────────────────────────────────────────────────────────
+// Massive allows ONE concurrent stocks WebSocket per key. Each live-data hook
+// used to open its own, so four sockets evicted each other in a reconnect
+// loop, and every drop pushed all hooks into 10s REST polling that clogged the
+// request queue. All hooks now share one socket through MassiveStreamClient,
+// which keeps the old MassiveStream interface (connect / subscribe /
+// unsubscribe / disconnect) and ref-counts ticker subscriptions.
+
+const hub = {
+  socket: null,
+  connected: false,
+  clients: new Set(),
+  refCounts: new Map(),
+}
+
+function hubSocket() {
+  if (hub.socket) return hub.socket
+  hub.socket = new MassiveStream({
+    onConnected: () => {
+      hub.connected = true
+      for (const c of hub.clients) c.handlers.onConnected?.()
+    },
+    onDisconnected: () => {
+      hub.connected = false
+      for (const c of hub.clients) c.handlers.onDisconnected?.()
+    },
+    onError: (msg) => {
+      for (const c of hub.clients) c.handlers.onError?.(msg)
+    },
+    onTrade: (evt) => {
+      for (const c of hub.clients) if (c.tickers.has(evt.ticker)) c.handlers.onTrade?.(evt)
+    },
+    onQuote: (evt) => {
+      for (const c of hub.clients) if (c.tickers.has(evt.ticker)) c.handlers.onQuote?.(evt)
+    },
+  })
+  hub.socket.connect()
+  return hub.socket
+}
+
+export class MassiveStreamClient {
+  constructor(handlers = {}) {
+    this.handlers = handlers
+    this.tickers = new Set()
+    this.active = false
+  }
+
+  connect() {
+    if (this.active) return
+    this.active = true
+    hub.clients.add(this)
+    hubSocket()
+    if (hub.connected) queueMicrotask(() => { if (this.active) this.handlers.onConnected?.() })
+  }
+
+  subscribe(ticker) {
+    if (!ticker || this.tickers.has(ticker)) return
+    this.tickers.add(ticker)
+    const n = (hub.refCounts.get(ticker) || 0) + 1
+    hub.refCounts.set(ticker, n)
+    if (n === 1) hubSocket().subscribe(ticker)
+  }
+
+  unsubscribe(ticker) {
+    if (!this.tickers.has(ticker)) return
+    this.tickers.delete(ticker)
+    const n = (hub.refCounts.get(ticker) || 1) - 1
+    if (n <= 0) {
+      hub.refCounts.delete(ticker)
+      hub.socket?.unsubscribe(ticker)
+    } else {
+      hub.refCounts.set(ticker, n)
+    }
+  }
+
+  disconnect() {
+    for (const t of Array.from(this.tickers)) this.unsubscribe(t)
+    this.active = false
+    hub.clients.delete(this)
+    if (hub.clients.size === 0 && hub.socket) {
+      hub.socket.disconnect()
+      hub.socket = null
+      hub.connected = false
+    }
   }
 }

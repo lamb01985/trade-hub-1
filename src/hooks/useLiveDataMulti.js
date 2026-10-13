@@ -19,7 +19,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
-  MassiveStream,
+  MassiveStreamClient,
   getLastTrade,
   getPrevDay,
   getIntradayBars,
@@ -90,7 +90,7 @@ export function useLiveDataMulti(tickers = []) {
   useEffect(() => {
     if (streamRef.current) return // existing connection survives ticker changes
 
-    const stream = new MassiveStream({
+    const stream = new MassiveStreamClient({
       onConnected: () => {
         setConnected(true)
         setWsError(null)

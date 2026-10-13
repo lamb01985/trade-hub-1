@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { MassiveStream, getLastTrade, getPrevDay, getIntradayBars, getIntradayBarsForDate, priorTradingDayStr, getWeeklyData, getHistoricalBars } from '../lib/massive.js'
+import { MassiveStreamClient, getLastTrade, getPrevDay, getIntradayBars, getIntradayBarsForDate, priorTradingDayStr, getWeeklyData, getHistoricalBars } from '../lib/massive.js'
 import { calcVWAP, calcPivots, detectSDZones, calcIntradayVolumeProfile, calcATR, tickSizeFor } from '../lib/levels.js'
 import { computePreMarketStats } from '../lib/premarket.js'
 import { checkLevelAlerts } from '../lib/alerts.js'
@@ -47,7 +47,7 @@ export function useLiveData(ticker = 'QQQ', levelMap = null, settings = {}) {
   useEffect(() => {
     if (!ticker) return
 
-    const stream = new MassiveStream({
+    const stream = new MassiveStreamClient({
       onConnected: () => {
         setConnected(true)
         setWsError(null)
@@ -91,9 +91,11 @@ export function useLiveData(ticker = 'QQQ', levelMap = null, settings = {}) {
     // awaits below are in flight, a later run will own the state and this one
     // must not write — otherwise it stamps one ticker's levels with another's.
     const runTicker = ticker
-    // Invalidate the stamp up front so nothing downstream trusts the about-to-
-    // be-replaced context as belonging to the new ticker during the gap.
-    setDataTicker(null)
+    // Invalidate the stamp up front on a ticker switch so nothing downstream
+    // trusts the old context as the new ticker's. A same-ticker refresh keeps
+    // the stamp: the existing context is still valid, and clearing it hid the
+    // Load Market Data button for the length of every 5-minute refresh.
+    setDataTicker(prev => (prev === runTicker ? prev : null))
     setLoadingContext(true)
     setContextError(null)
 
