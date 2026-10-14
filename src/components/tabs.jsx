@@ -1,7 +1,7 @@
 // ── ORB Tab ───────────────────────────────────────────────────────────────────
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { Card, SLabel, Heading, Tile, Fld, Sel, Btn, Pill, CheckRow, Tip } from './ui.jsx'
-import { LIME, RED, YELLOW, BLUE, PURPLE, ORANGE, MONO, SANS, BORDER, DARK, PANEL, SETUP_TYPES, todayStr, localDateStr, tomorrowStr, uid, f2, fmtD, fmtU, rrColor, ivContext, calcOptionRR, bsCalc, getETMins, SESSION_LABELS, SESSION_COLORS, SESSION_TIPS } from '../constants.js'
+import { LIME, RED, YELLOW, BLUE, PURPLE, ORANGE, MONO, SANS, BORDER, DARK, PANEL, SETUP_TYPES, todayStr, localDateStr, tomorrowStr, uid, f2, fmtD, fmtU, rrColor, ivContext, calcOptionRR, bsCalc, getETMins, SESSION_LABELS, SESSION_COLORS, SESSION_TIPS, nextSessionDayName } from '../constants.js'
 import { getPrevDay, getHistoricalBars, getTopMovers, prevDayPlausible, getPriorSession } from '../lib/massive.js'
 import { occSymbol, SCHWAB_TRADE_URL, SCHWAB_BLUE } from '../lib/schwabClient.js'
 import { aggregateBars } from '../lib/structure.js'
@@ -2545,7 +2545,7 @@ STRUCTURED (parsing block, do not modify the format): output exactly one JSON ob
                 </div>
                 {allDone && (
                   <div style={{ marginTop: 12, padding: '10px 14px', background: '#071208', border: `1px solid ${LIME}55`, borderRadius: 4, textAlign: 'center' }}>
-                    <span style={{ fontSize: 12, fontFamily: MONO, fontWeight: 900, color: LIME, letterSpacing: '0.12em' }}>READY FOR MONDAY</span>
+                    <span style={{ fontSize: 12, fontFamily: MONO, fontWeight: 900, color: LIME, letterSpacing: '0.12em' }}>READY FOR {nextSessionDayName().toUpperCase()}</span>
                   </div>
                 )}
               </div>

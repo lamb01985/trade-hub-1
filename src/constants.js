@@ -127,6 +127,36 @@ export function getSession() {
   return 'open'
 }
 
+// Returns the weekday name of the next (or current) trading session in ET.
+// Before 4:00 PM ET on a trading day, returns today's name. Otherwise walks
+// forward until it finds a weekday not in MARKET_HOLIDAYS_2026.
+export function nextSessionDayName(now = new Date()) {
+  const etYmd = d => {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(d)
+    return `${parts.find(p => p.type === 'year').value}-${parts.find(p => p.type === 'month').value}-${parts.find(p => p.type === 'day').value}`
+  }
+  const ymdDow = ymd => ({ Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }[
+    new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', weekday: 'short' }).format(new Date(`${ymd}T12:00:00Z`))
+  ])
+  const isSession = ymd => { const dow = ymdDow(ymd); return dow >= 1 && dow <= 5 && !MARKET_HOLIDAYS_2026[ymd] }
+  const weekdayName = ymd =>
+    new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', weekday: 'long' }).format(new Date(`${ymd}T12:00:00Z`))
+  const nextYmd = ymd => {
+    const [y, m, d] = ymd.split('-').map(Number)
+    return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10)
+  }
+  const todayYmd = etYmd(now)
+  if (isSession(todayYmd) && getETMins() < 960) return weekdayName(todayYmd)
+  let candidate = nextYmd(todayYmd)
+  for (let i = 0; i < 10; i++) {
+    if (isSession(candidate)) return weekdayName(candidate)
+    candidate = nextYmd(candidate)
+  }
+  return 'Monday'
+}
+
 export const todayStr = () => new Date().toISOString().slice(0, 10)
 export const tomorrowStr = () => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10) }
 // Local-timezone YYYY-MM-DD for fields the user thinks of in their own day
