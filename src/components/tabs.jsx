@@ -14,6 +14,16 @@ import { useLocalStorage } from '../hooks/useStore.js'
 // closes at 9:45 ET, ET minute 585). Bars after this minute feed the signal
 // engine; anything inside the window is the OR itself.
 const DEFAULT_OR_WINDOW_MINUTES = 15
+
+// AI brief tuning. 900 tokens truncated the brief mid PRIMARY SETUP table.
+const BRIEF_MAX_TOKENS = 2500
+// A $ figure in the brief further than this from every provided level gets
+// flagged as a number the model invented.
+const BRIEF_LEVEL_TOLERANCE = 0.25
+// Figures below this are treated as dollar distances (risk, gain), not prices.
+const BRIEF_MIN_PRICE_TO_CHECK = 50
+// Cap on level map rows sent to the model, nearest to Ref Price first.
+const BRIEF_MAX_MAP_LEVELS = 30
 const RTH_OPEN_MINUTES_ET = 570 // 9:30 ET expressed in minutes since ET midnight
 
 // Returns the bar's wall-clock minute of day in ET, used to gate bars to the
@@ -2034,12 +2044,84 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
     const pmStr = preMarket?.active
       ? `Price $${d(preMarket.last)}, gap ${preMarket.gap >= 0 ? 'up' : 'down'} $${d(Math.abs(preMarket.gap))} vs PDC. PMH $${d(preMarket.high)}, PML $${d(preMarket.low)}. Trend: ${preMarket.trend}.`
       : 'no pre-market data yet'
-    const vpStr = volProfile?.poc != null
-      ? `POC $${d(volProfile.poc)}, VAH $${d(volProfile.vah)}, VAL $${d(volProfile.val)}`
-      : 'not computed yet'
     const alignStr = mtfAlignment?.score > 0
       ? `1H ${mtfAlignment.mtf?.['1h']?.state || '—'}, 15M ${mtfAlignment.mtf?.['15m']?.state || '—'}, 5M ${mtfAlignment.mtf?.['5m']?.state || '—'}, 1M ${mtfAlignment.mtf?.['1m']?.state || '—'}. Score: ${mtfAlignment.score}/100. ${mtfAlignment.label}.`
       : 'not yet calculated'
+
+    // ── Precompute every price level in code ─────────────────────────────
+    // The model was inventing levels (wrong range midpoint, ATR extensions
+    // anchored to the wrong side) and skipped the pivot when the live feed
+    // had not filled it. All math happens here; the model only narrates.
+    // Pivots use the same session H/L/C shown on screen so the brief and the
+    // Prep fields always agree, falling back to the live pivots.
+    const pivH = marketContext.priorDayHigh
+    const pivL = marketContext.priorDayLow
+    const pivC = sessionCloseN ?? prevDayCloseN
+    const localPiv = calcPivots(pivH, pivL, pivC)
+    const piv = localPiv
+      ? { pp: localPiv.PP, r1: localPiv.R1, r2: localPiv.R2, r3: localPiv.R3, s1: localPiv.S1, s2: localPiv.S2, s3: localPiv.S3 }
+      : (pivots || {})
+    const atrN = finitePos(atr) ? atr : null
+    const derived = []
+    const addLvl = (label, v) => { if (finitePos(v)) derived.push({ label, price: v }) }
+    addLvl('Prior day high (PDH)', pivH)
+    addLvl('Prior day low (PDL)', pivL)
+    if (pivH != null && pivL != null) addLvl('Prior day range midpoint', (pivH + pivL) / 2)
+    addLvl('Session open', sessionOpenN)
+    addLvl('Session close', sessionCloseN)
+    addLvl('Pivot point (PP)', piv.pp)
+    addLvl('R1', piv.r1); addLvl('R2', piv.r2); addLvl('R3', piv.r3)
+    addLvl('S1', piv.s1); addLvl('S2', piv.s2); addLvl('S3', piv.s3)
+    addLvl('VWAP', vwapData?.vwap)
+    addLvl('VWAP +1 stdev', vwapData?.band1up)
+    addLvl('VWAP -1 stdev', vwapData?.band1dn)
+    if (volProfile?.poc != null) {
+      addLvl('Volume POC', volProfile.poc); addLvl('Value area high', volProfile.vah); addLvl('Value area low', volProfile.val)
+    }
+    if (preMarket?.active) { addLvl('Pre-market high', preMarket.high); addLvl('Pre-market low', preMarket.low) }
+    if (atrN != null && pivH != null && pivL != null) {
+      addLvl('PDH + 0.5 ATR', pivH + atrN / 2)
+      addLvl('PDH + 1 ATR', pivH + atrN)
+      addLvl('PDL - 0.5 ATR', pivL - atrN / 2)
+      addLvl('PDL - 1 ATR', pivL - atrN)
+    }
+    derived.sort((a, b) => b.price - a.price)
+
+    const mapLevels = (levelMap?.levels || [])
+      .filter(l => finitePos(l.price))
+      .sort((a, b) => Math.abs(a.price - (refPrice ?? a.price)) - Math.abs(b.price - (refPrice ?? b.price)))
+      .slice(0, BRIEF_MAX_MAP_LEVELS)
+      .sort((a, b) => b.price - a.price)
+
+    const derivedBlock = derived.length
+      ? derived.map(l => `• $${d(l.price)}: ${l.label}`).join('\n')
+      : 'none available'
+    const mapBlock = mapLevels.length
+      ? mapLevels.map(l => `• $${d(l.price)}: ${l.label}${l.sublabel ? ` (${l.sublabel})` : ''}`).join('\n')
+      : 'not loaded'
+
+    const allowedPrices = [
+      ...derived.map(l => l.price),
+      ...mapLevels.map(l => l.price),
+      refPrice, livePriceN, parseNum(prep.plannedStrike),
+    ].filter(finitePos)
+
+    const numberRule =
+      `NUMBER RULE: Every price you write must be copied exactly from PRECOMPUTED LEVELS or LEVEL MAP below. ` +
+      `Do not calculate midpoints, pivots, ATR extensions, or any new price level yourself. Entries are stated as ` +
+      `"next candle open after a close above/below $X" using a listed level. Stops and targets must be listed levels. ` +
+      `Dollar risk, dollar gain, and R:R between listed levels are fine. If a level you want is not listed, say it is not available.`
+
+    const dteN = parseInt(prep.plannedDTE, 10)
+    const dteLabel = isNaN(dteN) ? '1DTE' : dteN === 0 ? '0DTE' : `${dteN}DTE`
+
+    const levelsSection = `PRECOMPUTED LEVELS (calculated in code, highest first):
+${derivedBlock}
+
+LEVEL MAP (app's active levels nearest Ref Price, highest first):
+${mapBlock}
+
+${numberRule}`
 
     // Canonical reference block the AI must anchor on. Format optimized for the
     // model to grok at a glance: refPrice front and center, the alternatives
@@ -2072,16 +2154,13 @@ ${refRule}
 Other context:
 - Ticker: ${prep.ticker || 'SPY'}
 - OR Period: ${prep.orPeriod || 15} min
-- Prev Day High: $${d(prevDay?.high, prep.orbHigh)} | Low: $${d(prevDay?.low, prep.orbLow)} | Close: $${d(prevDay?.close)}
-- Pivot Point: $${d(pivots?.pp)} | R1: $${d(pivots?.r1)} | R2: $${d(pivots?.r2)} | R3: $${d(pivots?.r3)}
-- S1: $${d(pivots?.s1)} | S2: $${d(pivots?.s2)} | S3: $${d(pivots?.s3)}
-- VWAP: $${d(vwapData?.vwap)} | VWAP +1σ: $${d(vwapData?.band1up)} | -1σ: $${d(vwapData?.band1dn)}
 - RVOL: ${rvolStr}
 - ATR: ${atrStr}
-- Volume Profile: ${vpStr}
 - Pre-Market: ${pmStr}
 - MTF Alignment: ${alignStr}
 - Market events: ${prep.marketEvents || 'none noted'}
+
+${levelsSection}
 
 Write a tight, specific game plan with these exact sections:
 
@@ -2089,13 +2168,13 @@ THESIS
 [1-2 sentences: what the market structure supports today and why]
 
 KEY LEVELS
-[List 4-6 levels from the data with $ price and what a touch/break means. Format: • $XXX.XX — [explanation]]
+[List 4-6 levels from the data with $ price and what a touch/break means. Format: • $XXX.XX: [explanation]]
 
 ENTRY CONDITIONS
-[Exactly what must happen on the 5-min chart before entering. Candle behavior, volume, level confirmation. Be specific — "wait for a candle CLOSE above $X" not vague.]
+[Exactly what must happen on the 5-min chart before entering. Candle behavior, volume, level confirmation. Be specific: "wait for a 5-min candle CLOSE above $X", not vague. Reference the opening range (first ${prep.orPeriod || 15} min) where relevant.]
 
 PRIMARY SETUP
-[The highest-probability trade today. Specify exact entry trigger, stop (share price), target (share price), and R:R. Use the ATR to size the stop.]
+[The highest-probability trade today. Specify exact entry trigger, stop (share price), target (share price), and R:R. Pick the stop from the listed levels and use ATR only to sanity check its distance.]
 
 SECONDARY SETUP
 [Backup plan if primary fails. One alternative scenario — what reversal or different direction could play out. One concise setup.]
@@ -2106,11 +2185,11 @@ PROBABILITY ASSESSMENT
 STAND ASIDE IF
 [3 specific conditions that kill today's setup. Be concrete.]
 
-Only use the levels provided. No generic advice.
+Only use the levels provided. No generic advice. Do not use em dashes; use colons or commas.
 
 ---
 STRUCTURED (parsing block, do not modify the format): output exactly one JSON object on its own line at the very end of your response, after all prose sections above. The JSON must contain a single field "volume_threshold", an integer share count for the break-candle volume that confirms the primary setup. Estimate from the ticker's typical 5-min volume if not stated. Example: {"volume_threshold": 50000}`
-      : `You are a professional options day trader assistant. Generate a game plan for 0DTE ${prep.ticker || 'QQQ'} options.
+      : `You are a professional options day trader assistant. Generate a game plan for ${dteLabel} ${prep.ticker || 'QQQ'} options.
 
 MARKET CONTEXT (anchor on this):
 ${refBlock}
@@ -2120,18 +2199,15 @@ ${refRule}
 Other context:
 - Ticker: ${prep.ticker || 'QQQ'}
 - OR Period: ${prep.orPeriod || 15} min
-- Prev Day High: $${d(prevDay?.high, prep.orbHigh)} | Low: $${d(prevDay?.low, prep.orbLow)} | Close: $${d(prevDay?.close)}
-- Pivot Point: $${d(pivots?.pp)} | R1: $${d(pivots?.r1)} | R2: $${d(pivots?.r2)} | R3: $${d(pivots?.r3)}
-- S1: $${d(pivots?.s1)} | S2: $${d(pivots?.s2)} | S3: $${d(pivots?.s3)}
-- VWAP: $${d(vwapData?.vwap)} | VWAP +1σ: $${d(vwapData?.band1up)} | -1σ: $${d(vwapData?.band1dn)}
 - RVOL: ${rvolStr}
 - ATR: ${atrStr}
-- Volume Profile: ${vpStr}
 - Pre-Market: ${pmStr}
 - MTF Alignment: ${alignStr}
 - Planned strike: $${prep.plannedStrike || 'not set'} | DTE: ${prep.plannedDTE || 1}
 - IV note: ${prep.ivNote || 'not recorded'}
 - Market events: ${prep.marketEvents || 'none noted'}
+
+${levelsSection}
 
 Write a tight, specific game plan with these exact sections:
 
@@ -2139,17 +2215,17 @@ THESIS
 [1-2 sentences: what the market structure supports today and why]
 
 KEY LEVELS
-[List 4-6 levels from the data with $ price and what a touch/break means. Format: • $XXX.XX — [explanation]]
+[List 4-6 levels from the data with $ price and what a touch/break means. Format: • $XXX.XX: [explanation]]
 
 ENTRY CONDITIONS
-[Exactly what must happen on the 5-min chart before entering. Candle behavior, volume, level confirmation. Be specific — "wait for a candle CLOSE above $X" not vague.]
+[Exactly what must happen on the 5-min chart before entering. Candle behavior, volume, level confirmation. Be specific: "wait for a 5-min candle CLOSE above $X", not vague. Reference the opening range (first ${prep.orPeriod || 15} min) where relevant.]
 
 PRIMARY SETUP
 Strike: $${prep.plannedStrike || '[ATM]'} | DTE: ${prep.plannedDTE || 1}
-[The highest-probability 0DTE setup. Specify entry premium range, stop, target, and R:R. Include underlying trigger level.]
+[The highest-probability ${dteLabel} setup. Specify entry premium range, stop, target, and R:R. Include underlying trigger level.]
 
 SECONDARY SETUP
-[Backup if primary fails — alternative direction or structure play if the primary level doesn't hold. One concise setup.]
+[Backup if primary fails: alternative direction or structure play if the primary level doesn't hold. One concise setup.]
 
 PROBABILITY ASSESSMENT
 [1-2 honest sentences: is this a high or low probability day? What makes it tradeable or why you'd stand aside? Factor in RVOL, IV, and ATR context.]
@@ -2157,7 +2233,7 @@ PROBABILITY ASSESSMENT
 STAND ASIDE IF
 [3 specific conditions that kill today's setup. Be concrete.]
 
-Only use the levels provided. No generic advice.
+Only use the levels provided. No generic advice. Do not use em dashes; use colons or commas.
 
 ---
 STRUCTURED (parsing block, do not modify the format): output exactly one JSON object on its own line at the very end of your response, after all prose sections above. The JSON must contain a single field "volume_threshold", an integer share count for the break-candle volume that confirms the primary setup. Estimate from the ticker's typical 5-min volume if not stated. Example: {"volume_threshold": 50000}`
@@ -2172,7 +2248,7 @@ STRUCTURED (parsing block, do not modify the format): output exactly one JSON ob
       const res = await fetch('/api/ai/brief', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, maxTokens: 900 }),
+        body: JSON.stringify({ prompt, maxTokens: BRIEF_MAX_TOKENS }),
       })
       const data = await res.json().catch(() => ({}))
       if (res.ok && data.content) {
@@ -2194,6 +2270,20 @@ STRUCTURED (parsing block, do not modify the format): output exactly one JSON ob
               .trimEnd()
           }
         } catch {}
+        // Flag any price the model wrote that is not one of the levels we gave it.
+        const strays = [...new Set(
+          [...visible.matchAll(/\$\s?([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]+)?|[0-9]+(?:\.[0-9]+)?)/g)]
+            .map(m => parseFloat(m[1].replace(/,/g, '')))
+            .filter(v => v >= BRIEF_MIN_PRICE_TO_CHECK)
+            .filter(v => !allowedPrices.some(a => Math.abs(a - v) <= BRIEF_LEVEL_TOLERANCE))
+            .map(v => '$' + f2(v)),
+        )]
+        if (strays.length) {
+          const msg = `AI brief used prices not in your level set: ${strays.join(', ')}. Verify before trading.`
+          // eslint-disable-next-line no-console
+          console.warn('[Generate AI Brief] stray prices:', strays)
+          setPriceWarning(prev => (prev ? prev + ' | ' : '') + msg)
+        }
         upd('gamePlan', visible)
       } else {
         // Surface the real upstream failure: HTTP status, Anthropic error
