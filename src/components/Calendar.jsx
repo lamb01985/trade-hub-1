@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect } from 'react'
 import { Card, SLabel, Heading, Pill, Btn } from './ui.jsx'
 import { useLocalStorage } from '../hooks/useStore.js'
 import { LIME, RED, YELLOW, BLUE, ORANGE, PURPLE, MONO, BORDER, PANEL } from '../constants.js'
-import { getAllEvents, eventsOn, ymd, parseYmd, startOfWeek, colorForEvent, fetchNasdaqEarnings, MAJOR_TICKERS } from '../lib/calendar.js'
+import { getAllEvents, eventsOn, ymd, parseYmd, startOfWeek, colorForEvent, fetchNasdaqEarnings, MAJOR_TICKERS, MIN_EARNINGS_MARKET_CAP } from '../lib/calendar.js'
 import { getRotationSnapshot, flowLabel, tierColor, trendArrow, SECTORS, writeSectorCache, readSectorCache } from '../lib/sectors.js'
 
 const VIEWS = [
@@ -529,13 +529,13 @@ export default function CalendarTab({ putTheses = {}, apiKey }) {
 
       {nasdaqStatus === 'error' && (
         <div style={{ fontSize: 10, fontFamily: MONO, color: YELLOW, background: '#1a1208', border: `1px solid ${YELLOW}44`, borderRadius: 4, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-          <span>Earnings feed unavailable: {nasdaqError || 'proxy error'}. Other calendar events still shown. Tracking: {MAJOR_TICKERS.join(', ')}.</span>
+          <span>Earnings feed unavailable: {nasdaqError || 'proxy error'}. Other calendar events still shown. Tracking: {MAJOR_TICKERS.join(', ')}, plus any company over ${MIN_EARNINGS_MARKET_CAP / 1e9}B.</span>
           <Btn small variant="ghost" onClick={() => { setNasdaqStatus('idle'); setTimeout(() => window.location.reload(), 0) }}>Retry</Btn>
         </div>
       )}
       {nasdaqStatus === 'empty' && (
         <div style={{ fontSize: 10, fontFamily: MONO, color: '#666', background: '#0c0c0c', border: `1px solid ${BORDER}`, borderRadius: 4, padding: '8px 12px' }}>
-          No tracked-ticker earnings in the next 14 days. Tracking: {MAJOR_TICKERS.join(', ')}.
+          No tracked earnings in the next 14 days. Tracking: {MAJOR_TICKERS.join(', ')}, plus any company over ${MIN_EARNINGS_MARKET_CAP / 1e9}B.
         </div>
       )}
 

@@ -9,6 +9,18 @@ export const MAJOR_TICKERS = [
   'CRWD', 'ELF', 'NET', 'IONQ',
 ]
 
+// Earnings from any company at or above this market cap also show, so
+// index movers (ASML, the big banks) are not silently dropped.
+export const MIN_EARNINGS_MARKET_CAP = 50e9
+// At or above this market cap, earnings are tagged high impact.
+export const HIGH_IMPACT_MARKET_CAP = 200e9
+
+// Nasdaq sends marketCap as a string like "$1,234,567,890" (or "N/A").
+function parseMarketCap(v) {
+  const n = parseFloat(String(v ?? '').replace(/[$,\s]/g, ''))
+  return isFinite(n) ? n : 0
+}
+
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
 export function ymd(d) {
@@ -179,12 +191,14 @@ export async function fetchNasdaqEarnings(dateStr) {
     }
     const rows = data?.data?.rows || []
     const mapped = rows
-      .filter(r => MAJOR_TICKERS.includes((r.symbol || '').toUpperCase()))
+      .map(r => ({ ...r, _cap: parseMarketCap(r.marketCap) }))
+      .filter(r => MAJOR_TICKERS.includes((r.symbol || '').toUpperCase()) || r._cap >= MIN_EARNINGS_MARKET_CAP)
+      .sort((a, b) => b._cap - a._cap)
       .map(r => ({
         date: dateStr,
         time: r.time === 'time-pre-market' ? '07:00' : r.time === 'time-after-hours' ? '15:30' : '12:00',
         type: 'earnings',
-        impact: 'medium',
+        impact: r._cap >= HIGH_IMPACT_MARKET_CAP ? 'high' : 'medium',
         name: `${r.symbol} Earnings`,
         ticker: r.symbol,
         bmo: r.time === 'time-pre-market' ? 'BMO' : r.time === 'time-after-hours' ? 'AMC' : '—',
