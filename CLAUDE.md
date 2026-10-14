@@ -14,7 +14,7 @@ Internal use only, single operator, not customer facing.
 - localStorage for client persistence
 - Deployed on Vercel, auto deploys on push to main
 - GitHub repo: github.com/lamb01985/trade-hub-1
-- Local path: ~/Downloads/trade-hub 4
+- Local path: ~/Downloads/trade-hub-work
 
 ## Key paths
 
