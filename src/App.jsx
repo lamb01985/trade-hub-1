@@ -375,7 +375,11 @@ export default function App() {
     sdZones: liveData.sdZones,
     customLevels: enrichedCustomLevels,
     volProfile: liveData.volProfile,
-  }), [liveData, manualFibs, levelMapInput, enrichedCustomLevels])
+    atr: liveData.atr,
+    // _priceTick re-runs this every 5s so the session flips at the bell even
+    // when no new price tick arrives (thin after-hours tape).
+    session: getSession(),
+  }), [liveData, manualFibs, levelMapInput, enrichedCustomLevels, _priceTick])
 
   // Multi-timeframe alignment — computed once, fanned out to header / Levels / Chart / Checklist / AI brief
   const mtfAlignment = useMemo(() => {

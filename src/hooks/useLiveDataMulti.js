@@ -21,7 +21,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   MassiveStreamClient,
   getLastTrade,
-  getPrevDay,
+  getPriorSession,
   getIntradayBars,
   getIntradayBarsForDate,
   priorTradingDayStr,
@@ -171,7 +171,7 @@ export function useLiveDataMulti(tickers = []) {
         try {
           const [intradayBars, pd, wd, histBars] = await Promise.all([
             getIntradayBars(ticker, 1, 'minute').catch(() => []),
-            getPrevDay(ticker).catch(() => null),
+            getPriorSession(ticker, { priority: false }).catch(() => null),
             getWeeklyData(ticker).catch(() => null),
             getHistoricalBars(ticker, 25).catch(() => []),
           ])

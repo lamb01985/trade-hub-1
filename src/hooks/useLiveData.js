@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { MassiveStreamClient, getLastTrade, getPrevDay, getIntradayBars, getIntradayBarsForDate, priorTradingDayStr, getWeeklyData, getHistoricalBars } from '../lib/massive.js'
+import { MassiveStreamClient, getLastTrade, getPriorSession, getIntradayBars, getIntradayBarsForDate, priorTradingDayStr, getWeeklyData, getHistoricalBars } from '../lib/massive.js'
 import { calcVWAP, calcPivots, detectSDZones, calcIntradayVolumeProfile, calcATR, tickSizeFor } from '../lib/levels.js'
 import { computePreMarketStats } from '../lib/premarket.js'
 import { checkLevelAlerts } from '../lib/alerts.js'
@@ -100,9 +100,13 @@ export function useLiveData(ticker = 'QQQ', levelMap = null, settings = {}) {
     setContextError(null)
 
     try {
+      // pd comes from the same completed-session bar Load Market Data uses:
+      // the prior day during the session, today's bar after 16:15 ET. The old
+      // "previous day" endpoint could lag a day in the evening, so pivots and
+      // the Structure cards described a different day than PDH/PDL.
       const [intradayBars, pd, wd, histBars] = await Promise.all([
         getIntradayBars(runTicker, 1, 'minute').catch(() => []),
-        getPrevDay(runTicker).catch(() => null),
+        getPriorSession(runTicker, { priority: false }).catch(() => null),
         getWeeklyData(runTicker).catch(() => null),
         getHistoricalBars(runTicker, 25).catch(() => []),
       ])

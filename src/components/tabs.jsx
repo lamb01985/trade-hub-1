@@ -5,6 +5,7 @@ import { LIME, RED, YELLOW, BLUE, PURPLE, ORANGE, MONO, SANS, BORDER, DARK, PANE
 import { getPrevDay, getHistoricalBars, getTopMovers, prevDayPlausible, getPriorSession } from '../lib/massive.js'
 import { occSymbol, SCHWAB_TRADE_URL, SCHWAB_BLUE } from '../lib/schwabClient.js'
 import { aggregateBars } from '../lib/structure.js'
+import { calcPivots } from '../lib/levels.js'
 import { evaluateOrbSignals, detectStaleLevels } from '../lib/orbSignalEngine.js'
 import { useLocalStorage } from '../hooks/useStore.js'
 
@@ -1782,7 +1783,7 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
   async function runLoadMarketData() {
     // eslint-disable-next-line no-console
     console.log('[Load Market Data] clicked')
-    const { pivots, price, dataTicker } = liveData || {}
+    const { price, dataTicker } = liveData || {}
     setLoadError('')
 
     const want = (prep.ticker || '').toUpperCase()
@@ -1867,6 +1868,8 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
       return
     }
 
+    const sessionPivots = calcPivots(session.high, session.low, session.close)
+
     // Build the state update. Session fields always populate from the
     // server-returned bar for `want`. Pivots/strike only populate when the
     // useLiveData hook has bound the live context to this ticker.
@@ -1875,7 +1878,9 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
       orbLow: session.low != null ? f2(session.low) : '',
       sessionOpen: session.open != null ? f2(session.open) : '',
       sessionClose: session.close != null ? f2(session.close) : '',
-      keyLevel: liveContextReady && pivots?.pp != null ? f2(pivots.pp) : '',
+      // Pivot from the same bar as the session fields, so PDH/PDL and PP can
+      // never come from different days.
+      keyLevel: sessionPivots?.pp != null ? f2(sessionPivots.pp) : '',
       plannedStrike: liveContextReady && price != null ? String(Math.round(price)) : '',
     }
     // eslint-disable-next-line no-console
@@ -1892,9 +1897,9 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
     if (!liveContextReady) {
       // Soft warning, not a hard failure: the session fields ARE loaded.
       setLoadError(
-        `Session levels loaded. Key Level and Strike Plan are still loading ` +
-        `for ${want} (the live data feed is catching up). Hit Load Market Data ` +
-        `again in a moment to fill those two.`,
+        `Session levels loaded. Strike Plan is still loading for ${want} ` +
+        `(the live price feed is catching up). Hit Load Market Data again in ` +
+        `a moment to fill it.`,
       )
     }
     setDataLoaded(true)
@@ -2356,7 +2361,7 @@ STRUCTURED (parsing block, do not modify the format): output exactly one JSON ob
           const pp = liveData?.pivots?.pp
 
           const qColor = sq === 'ON LEVEL' ? LIME : sq === 'APPROACHING' ? YELLOW : sq === 'TIGHT RANGE' ? PURPLE : '#888'
-          const qDesc = sq === 'ON LEVEL' ? 'price is touching a key level — await candle close' : sq === 'APPROACHING' ? 'price is closing in on a level — get ready' : sq === 'TIGHT RANGE' ? 'compressed between two close levels — breakout setup' : sq === 'BETWEEN LEVELS' ? 'no immediate level — wait for price to reach one' : 'live data not loaded'
+          const qDesc = sq === 'ON LEVEL' ? 'price is touching a key level: await candle close' : sq === 'APPROACHING' ? 'price is closing in on a level: get ready' : sq === 'TIGHT RANGE' ? 'compressed between two close levels: breakout setup' : sq === 'BETWEEN LEVELS' ? 'no immediate level: wait for price to reach one' : sq === 'MARKET CLOSED' ? 'prep mode: live signals resume at the open, plan against the structure below' : 'live data not loaded'
 
           const plan = (prep.gamePlan || '').trim()
           const briefDetected = !!anthropicKey && (plan.includes('THESIS') || plan.includes('PRIMARY SETUP') || plan.includes('KEY LEVELS'))
@@ -2392,8 +2397,8 @@ STRUCTURED (parsing block, do not modify the format): output exactly one JSON ob
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
                 <div style={{ background: '#080808', border: '1px solid #161616', borderRadius: 4, padding: '10px 12px' }}>
                   <div style={{ fontSize: 9, color: '#444', fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>vs VWAP</div>
-                  <div style={{ fontSize: 13, fontFamily: MONO, fontWeight: 700, color: vwapDelta == null ? '#444' : vwapDelta >= 0 ? LIME : RED }}>
-                    {vwapDelta == null ? '—' : vwapDelta >= 0 ? `Above +$${f2(vwapDelta)}` : `Below -$${f2(Math.abs(vwapDelta))}`}
+                  <div style={{ fontSize: 13, fontFamily: MONO, fontWeight: 700, color: sq === 'MARKET CLOSED' || vwapDelta == null ? '#444' : vwapDelta >= 0 ? LIME : RED }}>
+                    {sq === 'MARKET CLOSED' ? 'Session closed' : vwapDelta == null ? '—' : vwapDelta >= 0 ? `Above +$${f2(vwapDelta)}` : `Below -$${f2(Math.abs(vwapDelta))}`}
                   </div>
                 </div>
                 <div style={{ background: '#080808', border: '1px solid #161616', borderRadius: 4, padding: '10px 12px' }}>

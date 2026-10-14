@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { Card, SLabel, Heading, Fld, Btn, Pill, Tip } from './ui.jsx'
 import { buildLevelMap, calcFibs } from '../lib/levels.js'
 import { requestNotificationPermission, Sounds } from '../lib/alerts.js'
-import { LIME, RED, YELLOW, BLUE, PURPLE, ORANGE, MONO, BORDER, LEVEL_COLORS, f2 } from '../constants.js'
+import { LIME, RED, YELLOW, BLUE, PURPLE, ORANGE, MONO, BORDER, LEVEL_COLORS, f2, getSession } from '../constants.js'
 
 const TYPE_COLORS = {
   'pivot': '#888',
@@ -195,6 +195,7 @@ export default function Levels({ liveData, orbHigh, orbLow, settings, onSettings
     return null
   }, [orbHigh, orbLow, prevDay])
 
+  const session = getSession()
   const levelMap = useMemo(() => buildLevelMap(price, {
     pivots,
     fibs: autoFibs?.fibs ?? null,
@@ -206,7 +207,9 @@ export default function Levels({ liveData, orbHigh, orbLow, settings, onSettings
     sdZones,
     customLevels,
     volProfile: liveData?.volProfile,
-  }), [price, pivots, autoFibs, vwapData, prevDay, weeklyData, orbHigh, orbLow, sdZones, customLevels, liveData?.volProfile])
+    atr: liveData?.atr,
+    session,
+  }), [price, pivots, autoFibs, vwapData, prevDay, weeklyData, orbHigh, orbLow, sdZones, customLevels, liveData?.volProfile, liveData?.atr, session])
 
   const { levels, nearestAbove, nearestBelow, setupQuality, blueSkyUp, blueSkyDown } = levelMap
 

@@ -1,6 +1,22 @@
 // Trading Intelligence Engine
 // Calculates all key levels used by institutional traders
 
+// ── Setup quality thresholds ────────────────────────────────────────────────
+// Distances are fractions of the daily ATR, so "on level" means the same thing
+// on QQQ at $740 as on a $50 name. Rough QQQ equivalents at a ~$9 ATR are in
+// parentheses. Whole-dollar 'round' levels are ignored here: they sit every $1
+// and would keep high-priced tickers permanently ON LEVEL.
+export const SQ_ON_LEVEL_ATR = 0.03      // (~$0.27)
+export const SQ_APPROACHING_ATR = 0.08   // (~$0.72)
+export const SQ_TIGHT_RANGE_ATR = 0.25   // nearest above + below gap (~$2.25)
+// Used only when ATR is not loaded yet: assume a typical 1.2% daily range.
+export const SQ_FALLBACK_ATR_PCT = 0.012
+// Live setup signals only during the regular session. Pre-market, after
+// hours, weekends and holidays show MARKET CLOSED instead of reacting to thin
+// extended-hours ticks.
+export const SQ_LIVE_SESSIONS = ['open', 'chop', 'power-hour']
+export const SQ_MARKET_CLOSED = 'MARKET CLOSED'
+
 // ── VWAP ─────────────────────────────────────────────────────────────────────
 
 export function calcVWAP(bars) {
@@ -39,15 +55,38 @@ export function calcVWAP(bars) {
 export function calcPivots(pdh, pdl, pdc) {
   if (!pdh || !pdl || !pdc) return null
   const PP = (pdh + pdl + pdc) / 3
+  const R1 = 2 * PP - pdl
+  const R2 = PP + (pdh - pdl)
+  const R3 = pdh + 2 * (PP - pdl)
+  const S1 = 2 * PP - pdh
+  const S2 = PP - (pdh - pdl)
+  const S3 = pdl - 2 * (pdh - PP)
+  // Lowercase aliases: Prep, the AI brief and the Wheel scanner read
+  // pivots.pp / r1 / s1, while the level map reads PP / R1 / S1. Without
+  // both, the lowercase readers silently got undefined for every pivot.
   return {
-    PP,
-    R1: 2 * PP - pdl,
-    R2: PP + (pdh - pdl),
-    R3: pdh + 2 * (PP - pdl),
-    S1: 2 * PP - pdh,
-    S2: PP - (pdh - pdl),
-    S3: pdl - 2 * (pdh - PP),
+    PP, R1, R2, R3, S1, S2, S3,
+    pp: PP, r1: R1, r2: R2, r3: R3, s1: S1, s2: S2, s3: S3,
   }
+}
+
+// ── Setup quality ───────────────────────────────────────────────────────────
+// above: levels above price sorted high to low; below: levels at or below
+// price sorted high to low (the shape buildLevelMap produces). session null
+// means the caller did not say, which is treated as live for back-compat.
+export function scoreSetupQuality(currentPrice, above, below, { atr = null, session = null } = {}) {
+  if (session && !SQ_LIVE_SESSIONS.includes(session)) return SQ_MARKET_CLOSED
+  const nearestAbove = above[above.length - 1]
+  const nearestBelow = below[0]
+  if (!currentPrice || !nearestAbove || !nearestBelow) return null
+  const unit = atr && atr > 0 ? atr : currentPrice * SQ_FALLBACK_ATR_PCT
+  const gapAbove = nearestAbove.price - currentPrice
+  const gapBelow = currentPrice - nearestBelow.price
+  const minGap = Math.min(gapAbove, gapBelow)
+  if (minGap < SQ_ON_LEVEL_ATR * unit) return 'ON LEVEL'
+  if (minGap < SQ_APPROACHING_ATR * unit) return 'APPROACHING'
+  if (gapAbove + gapBelow < SQ_TIGHT_RANGE_ATR * unit) return 'TIGHT RANGE'
+  return 'BETWEEN LEVELS'
 }
 
 // ── Fibonacci ─────────────────────────────────────────────────────────────────
@@ -222,6 +261,8 @@ export function buildLevelMap(currentPrice, {
   sdZones = [],
   customLevels = [],
   volProfile = null,
+  atr = null,
+  session = null,
 }) {
   const levels = []
 
@@ -364,18 +405,7 @@ export function buildLevelMap(currentPrice, {
   // "In zone" = within $0.20 of any level
   const inZone = levels.some(l => Math.abs(l.price - currentPrice) < 0.20)
 
-  // Setup quality score
-  let setupQuality = null
-  if (nearestAbove && nearestBelow) {
-    const gapAbove = nearestAbove.price - currentPrice
-    const gapBelow = currentPrice - nearestBelow.price
-    const minGap = Math.min(gapAbove, gapBelow)
-
-    if (minGap < 0.15) setupQuality = 'ON LEVEL'
-    else if (minGap < 0.40) setupQuality = 'APPROACHING'
-    else if (gapAbove + gapBelow < 1.50) setupQuality = 'TIGHT RANGE'
-    else setupQuality = 'BETWEEN LEVELS'
-  }
+  const setupQuality = scoreSetupQuality(currentPrice, structuralAbove, structuralBelow, { atr, session })
 
   return { levels, nearestAbove, nearestBelow, inZone, setupQuality, blueSkyUp, blueSkyDown }
 }

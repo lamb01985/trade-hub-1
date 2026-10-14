@@ -473,13 +473,13 @@ function subtractDays(ymd, n) {
 // `t` timestamp in America/New_York. Returns null when the window is empty
 // (recorded as 'no_bars_in_window') or when every bar in the window fails
 // the guard (each bad bar recorded as 'bad_bar' before walking further).
-export async function getPriorSession(ticker) {
+export async function getPriorSession(ticker, { priority = true } = {}) {
   const endDate = mostRecentSessionDate()
   const startDate = subtractDays(endDate, 9)
   // Fresh + priority: this backs the Load Market Data button. Skipping the
   // cache prevents a window fetched before the newest daily bar posted from
   // being served for 24h; priority skips the background request queue.
-  const bars = await getDayBars(ticker, startDate, endDate, { priority: true, fresh: true })
+  const bars = await getDayBars(ticker, startDate, endDate, { priority, fresh: true })
   if (!bars || bars.length === 0) {
     recordFailure({ url: `priorSession:${ticker}`, status: 'no_bars_in_window' })
     return null
@@ -494,6 +494,7 @@ export async function getPriorSession(ticker) {
         high: bar.h,
         low: bar.l,
         close: bar.c,
+        volume: bar.v,
       }
     }
     recordFailure({ url: `priorSession:${ticker}`, status: 'bad_bar' })

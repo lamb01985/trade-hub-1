@@ -183,6 +183,7 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
           : sq === 'APPROACHING' ? 'Price is closing in on a level — prepare your entry, do not chase.'
           : sq === 'TIGHT RANGE' ? 'Price compressed between two close levels — breakout setup forming.'
           : sq === 'BETWEEN LEVELS' ? 'No level nearby — stand aside until price reaches one.'
+          : sq === 'MARKET CLOSED' ? 'Regular session is closed. Live signals resume at 8:30 CT; use this time to prep.'
           : 'Waiting for level map to load.'
 
         const orPeriod = settings.orPeriod || '15'
