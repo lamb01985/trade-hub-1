@@ -298,8 +298,8 @@ async function getCachedJson(path, params, endpoint) {
 
 // ── Market data ───────────────────────────────────────────────────────────────
 
-export async function getLastTrade(ticker) {
-  const d = await get(`/v2/last/trade/${ticker}`)
+export async function getLastTrade(ticker, { priority = false } = {}) {
+  const d = await get(`/v2/last/trade/${ticker}`, {}, { priority })
   return d.results?.p ?? null
 }
 
