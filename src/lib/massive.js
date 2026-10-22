@@ -11,6 +11,7 @@
 // Every outcome (success / failure / rate-limit retry) is recorded into
 // apiHealth so the header indicator reflects current API quality.
 
+import { marketDate, normalizeOption } from './optionSnapshot.js'
 import { recordSuccess, recordFailure, recordRateLimit, recordUnavailable } from './apiHealth.js'
 import { MARKET_HOLIDAYS_2026 as HOLIDAY_MAP_2026 } from '../constants.js'
 
@@ -297,6 +298,22 @@ async function getCachedJson(path, params, endpoint) {
 }
 
 // ── Market data ───────────────────────────────────────────────────────────────
+
+// One bounded snapshot page. Callers must display truncation rather than claim
+// a complete chain. Expiry/strike filters let the user narrow large chains.
+export async function getOptionChain(ticker, { expiry, type, strike, limit = 250 } = {}) {
+  const symbol = String(ticker || '').trim().toUpperCase()
+  if (!/^[A-Z][A-Z0-9.-]{0,9}$/.test(symbol)) throw new Error('Enter a valid stock or ETF ticker.')
+  const data = await get(`/v3/snapshot/options/${symbol}`, {
+    ...(expiry ? { expiration_date: expiry } : { 'expiration_date.gte': marketDate() }),
+    contract_type: type === 'call' || type === 'put' ? type : undefined,
+    strike_price: strike === '' || strike == null ? undefined : strike,
+    sort: 'expiration_date', order: 'asc', limit: Math.min(250, Math.max(1, limit)),
+  }, { priority: true })
+  if (data.status === 'ERROR' || data.status === 'NOT_AUTHORIZED') throw new Error(data.message || data.error || 'Options access was denied by Massive.')
+  if (data.results != null && !Array.isArray(data.results)) throw new Error('Massive returned an invalid options snapshot.')
+  return { contracts: (data.results || []).map(raw => normalizeOption(raw, symbol)), hasMore: !!data.next_url, fetchedAt: new Date().toISOString() }
+}
 
 export async function getLastTrade(ticker, { priority = false } = {}) {
   const d = await get(`/v2/last/trade/${ticker}`, {}, { priority })

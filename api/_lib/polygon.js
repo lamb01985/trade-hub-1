@@ -22,22 +22,27 @@ function family(path) {
     return 'aggs'
   }
   if (new RegExp(`^/v2/snapshot/locale/us/markets/stocks/(?:tickers/${TICKER}|gainers|losers)$`).test(path)) return 'snapshot'
+  if (/^\/v3\/snapshot\/options\/[A-Z][A-Z0-9.-]{0,9}$/.test(path)) return 'options'
   if (path === '/v2/reference/news') return 'news'
   if (path === '/v3/reference/short-interest') return 'short'
   if (path === '/vX/reference/financials') return 'financials'
   invalid()
 }
-const keys = { none: [], aggs: ['adjusted', 'sort', 'limit'], snapshot: ['include_otc'], news: ['ticker', 'limit', 'order', 'sort'], short: ['ticker.eq', 'limit', 'order'], financials: ['ticker', 'timeframe', 'limit', 'order'] }
+const keys = { options: ['expiration_date','expiration_date.gte','contract_type','strike_price','sort','order','limit'], none: [], aggs: ['adjusted', 'sort', 'limit'], snapshot: ['include_otc'], news: ['ticker', 'limit', 'order', 'sort'], short: ['ticker.eq', 'limit', 'order'], financials: ['ticker', 'timeframe', 'limit', 'order'] }
 export function validateProviderRequest(path, params = {}) {
   const kind = family(path)
   if (!params || typeof params !== 'object' || Array.isArray(params)) invalid()
   for (const [key, value] of Object.entries(params)) {
     if (!keys[kind].includes(key) || typeof value !== 'string' || !value.length || value.length > 256) invalid()
+    if (kind === 'options' && key === 'limit' && Number(value) > 250) invalid()
+    if (['expiration_date','expiration_date.gte'].includes(key) && !realDate(value)) invalid()
+    if (key === 'contract_type' && !['call','put'].includes(value)) invalid()
+    if (key === 'strike_price' && (!/^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,8})?$/.test(value) || Number(value) <= 0 || Number(value) > 10000000)) invalid()
     if (key === 'limit' && (!integer(value) || Number(value) > 50000)) invalid()
     if (['ticker', 'ticker.eq'].includes(key) && !ticker.test(value)) invalid()
     if (['adjusted', 'include_otc'].includes(key) && !['true', 'false'].includes(value)) invalid()
     if (key === 'order' && !['asc', 'desc'].includes(value)) invalid()
-    if (key === 'sort' && !(kind === 'news' ? value === 'published_utc' : ['asc', 'desc'].includes(value))) invalid()
+    if (key === 'sort' && !(kind === 'news' ? value === 'published_utc' : kind === 'options' ? ['expiration_date','strike_price'].includes(value) : ['asc', 'desc'].includes(value))) invalid()
     if (key === 'timeframe' && !['quarterly', 'annual', 'trailing'].includes(value)) invalid()
   }
   return new URL(path, BASE)

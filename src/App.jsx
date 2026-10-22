@@ -5,6 +5,7 @@ import LocalPreviewNotice from './components/LocalPreviewNotice.jsx'
 import { intelligenceFromSearch } from './lib/intelligenceNavigation.js'
 import { useAiCapability } from './hooks/useAiCapability.js'
 import { useLocalStorage } from './hooks/useStore.js'
+import { daysToExpiry } from './lib/optionSnapshot.js'
 import { useLiveData } from './hooks/useLiveData.js'
 import { useLiveDataMulti } from './hooks/useLiveDataMulti.js'
 import { buildLevelMap } from './lib/levels.js'
@@ -866,7 +867,7 @@ function LegacyApp() {
             { id: 'chart', label: 'Chart' },
             { id: 'bot', label: 'Bot' },
             { id: 'orb', label: 'ORB' },
-            { id: 'iv', label: 'IV' },
+            { id: 'iv', label: 'Options / IV' },
             { id: 'calc', label: 'Calculator' },
             { id: 'command', label: 'Command' },
           ]
@@ -934,7 +935,22 @@ function LegacyApp() {
             </div>
 
             <div style={{ display: tradeSubTab === 'iv' ? 'block' : 'none' }}>
-              <IVAnalyzerTab apiKey={apiKey} instrument={prep.instrument || 'options'} />
+              <IVAnalyzerTab
+                ticker={prep.ticker || 'QQQ'}
+                onSendToPrep={contract => {
+                  setPrep(p => ({ ...p,
+                    ...(p.ticker !== contract.underlying ? { orbHigh: '', orbLow: '', sessionOpen: '', sessionClose: '', keyLevel: '', gamePlan: '', avoidNotes: '' } : {}),
+                    ticker: contract.underlying, instrument: 'options', plannedStrike: String(contract.strike),
+                    plannedDTE: String(daysToExpiry(contract.expiry)), plannedContract: contract,
+                    ivNote: contract.iv == null ? '' : `${(contract.iv * 100).toFixed(2)}% · Massive ${contract.symbol}`,
+                  }))
+                }}
+                onSendToCalc={contract => {
+                  setPrep(p => ({ ...p, instrument: 'options' }))
+                  setCalcPrefill({ ticker: contract.underlying, optType: contract.type, strike: contract.strike, expiry: contract.expiry, dte: daysToExpiry(contract.expiry), source: 'MASSIVE_OPTIONS' })
+                  setTradeSubTab('calc')
+                }}
+              />
             </div>
 
             <div style={{ display: tradeSubTab === 'calc' ? 'block' : 'none' }}>

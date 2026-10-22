@@ -18,6 +18,7 @@
 // PANEL) so the scanner matches the rest of Trade Hub.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import OptionsContracts from './OptionsContracts.jsx'
 import { useState, useMemo, useCallback } from 'react'
 import {
   Crosshair, Target, Plus, X, RefreshCw, Settings, DollarSign,
@@ -706,14 +707,16 @@ ${JSON.stringify(summary, null, 2)}`
               <br /><br />
               <strong style={{ color: '#e8e8e8' }}>Call score</strong>: RSI (28), proximity to resistance (20), strike at or above cost basis (18), annualized yield (22), HV environment bonus (4-8). HARVEST ≥ {HARVEST_CALL_SCORE}.
               <br /><br />
-              <strong style={{ color: '#e8e8e8' }}>Strikes + premiums</strong> are HV-based Black-Scholes estimates (Trade Hub uses Massive's stock-data plan, no live option chains). When the options plan is active, getOptionsData in src/lib/wheelOptions.js will swap in real quotes.
+              <strong style={{ color: '#e8e8e8' }}>Strikes + premiums</strong> are HV-based Black-Scholes estimates (scanner estimates; compare against Massive snapshots below). The contract browser below loads provider data separately; it does not replace these modeled scores.
             </div>
           </div>
         </div>
       )}
 
+      <OptionsContracts ticker={expandedTicker || watchlist?.[0] || 'QQQ'} />
+
       <div style={{ marginTop: 24, padding: 10, borderTop: `1px solid ${BORDER}`, fontSize: 9, color: '#444', textAlign: 'center', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-        HV-based estimates only · Verify chain pricing in your broker before placing
+        Scanner scores use HV estimates · Contract browser uses Massive snapshots
       </div>
     </div>
   )
