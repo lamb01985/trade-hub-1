@@ -2,7 +2,8 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { Card, SLabel, Heading, Tile, Fld, Sel, Btn, Pill, CheckRow, Tip } from './ui.jsx'
 import { LIME, RED, YELLOW, BLUE, PURPLE, ORANGE, MONO, SANS, BORDER, DARK, PANEL, SETUP_TYPES, todayStr, localDateStr, tomorrowStr, uid, f2, fmtD, fmtU, rrColor, ivContext, calcOptionRR, bsCalc, getETMins, SESSION_LABELS, SESSION_COLORS, SESSION_TIPS, nextSessionDayName } from '../constants.js'
-import { getPrevDay, getHistoricalBars, getTopMovers, prevDayPlausible, getPriorSession } from '../lib/massive.js'
+import { getPrevDay, getHistoricalBars, getTopMovers, prevDayPlausible } from '../lib/massive.js'
+import { loadPrepMarketData } from '../lib/prepMarketData.js'
 import { occSymbol, SCHWAB_TRADE_URL, SCHWAB_BLUE } from '../lib/schwabClient.js'
 import { aggregateBars } from '../lib/structure.js'
 import { calcPivots } from '../lib/levels.js'
@@ -1736,6 +1737,9 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
   const [missingFields, setMissingFields] = useState({})
   const [justSaved, setJustSaved] = useState(false)
 
+  const latestPrepRef = useRef(prep)
+  latestPrepRef.current = prep
+
   const dc = ROUTINE.filter((_, i) => rc[i]).length
   const upd = (k, v) => onPrepChange({ ...prep, [k]: v })
 
@@ -1793,13 +1797,14 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
   async function runLoadMarketData() {
     // eslint-disable-next-line no-console
     console.log('[Load Market Data] clicked')
-    const { price, dataTicker } = liveData || {}
+    let price = null
+    let priceError = null
     setLoadError('')
 
     const want = (prep.ticker || '').toUpperCase()
-    const have = (dataTicker || '').toUpperCase()
+
     // eslint-disable-next-line no-console
-    console.log('[Load Market Data] ticker:', want, '| liveData dataTicker:', have || '(none)')
+    console.log('[Load Market Data] ticker:', want)
 
     if (!want) {
       const msg = 'No ticker entered. Type a ticker into Primary Ticker, then hit Load Market Data.'
@@ -1810,23 +1815,8 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
       return
     }
 
-    // Note: pivots and live price come from the useLiveData hook which is
-    // gated by its own ticker prop. If that hook hasn't finished loading
-    // context for `want` yet, dataTicker will not equal want and we cannot
-    // trust pivots / price for this ticker. We DON'T block the whole load on
-    // that, we just skip the pivots-derived fields and tell the user. The
-    // session fields (high/low/open/close) come from a separate, request-
-    // scoped getPriorSession call below that is always for `want`.
-    const liveContextReady = !!have && have === want
-    if (!liveContextReady) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        '[Load Market Data] live context not yet bound to want=' + want
-        + ' (have=' + (have || '(none)') + '). Will populate session fields only,'
-        + ' key level and strike depend on pivots/price and stay empty for now.',
-      )
-    }
-
+    // Fetch the requested ticker directly. Optional background context (weekly
+    // bars, volume profile, etc.) must not gate a price-only prep field.
     // Pull the most-recently-completed regular session from the server. After
     // 16:15 ET this is today's bar; before that it is the prior trading day.
     // Anchored to America/New_York inside mostRecentSessionDate, so the
@@ -1835,7 +1825,7 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
     try {
       // eslint-disable-next-line no-console
       console.log('[Load Market Data] calling getPriorSession(' + want + ') -> /api/polygon/proxy')
-      session = await getPriorSession(want)
+      ;({ session, price, priceError } = await loadPrepMarketData(want))
       // eslint-disable-next-line no-console
       console.log('[Load Market Data] session response:', session)
     } catch (err) {
@@ -1849,6 +1839,9 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
       setDataLoaded(false)
       return
     }
+
+    // Ignore a response if the user selected a different ticker mid-request.
+    if ((latestPrepRef.current.ticker || '').toUpperCase() !== want) return
 
     if (!session) {
       // eslint-disable-next-line no-console
@@ -1865,7 +1858,7 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
     // Secondary backstop: reject a session range wildly off the live price
     // (bad/stale/halted-day bar). Only check if live price is for the right
     // ticker; otherwise skip the plausibility check.
-    if (liveContextReady && price != null
+    if (price != null
       && !prevDayPlausible({ high: session.high, low: session.low }, price)) {
       const msg =
         `Live data looks wrong for ${want}: ` +
@@ -1880,9 +1873,7 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
 
     const sessionPivots = calcPivots(session.high, session.low, session.close)
 
-    // Build the state update. Session fields always populate from the
-    // server-returned bar for `want`. Pivots/strike only populate when the
-    // useLiveData hook has bound the live context to this ticker.
+    // Both inputs belong to the explicitly requested ticker.
     const next = {
       orbHigh: session.high != null ? f2(session.high) : '',
       orbLow: session.low != null ? f2(session.low) : '',
@@ -1891,11 +1882,11 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
       // Pivot from the same bar as the session fields, so PDH/PDL and PP can
       // never come from different days.
       keyLevel: sessionPivots?.pp != null ? f2(sessionPivots.pp) : '',
-      plannedStrike: liveContextReady && price != null ? String(Math.round(price)) : '',
+      plannedStrike: price != null ? String(Math.round(price)) : '',
     }
     // eslint-disable-next-line no-console
     console.log('[Load Market Data] state update payload:', next)
-    onPrepChange({ ...prep, ...next })
+    onPrepChange({ ...latestPrepRef.current, ...next })
     setMissingFields({
       orbHigh: !next.orbHigh,
       orbLow: !next.orbLow,
@@ -1904,13 +1895,8 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
       keyLevel: !next.keyLevel,
       plannedStrike: !next.plannedStrike,
     })
-    if (!liveContextReady) {
-      // Soft warning, not a hard failure: the session fields ARE loaded.
-      setLoadError(
-        `Session levels loaded. Strike Plan is still loading for ${want} ` +
-        `(the live price feed is catching up). Hit Load Market Data again in ` +
-        `a moment to fill it.`,
-      )
+    if (priceError) {
+      setLoadError(`Session levels loaded for ${want}. Strike Plan was left blank: ${priceError} Enter it manually or retry the price request.`)
     }
     setDataLoaded(true)
     // eslint-disable-next-line no-console
