@@ -2,7 +2,10 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { Card, SLabel, Heading, Tile, Fld, Sel, Btn, Pill, CheckRow, Tip } from './ui.jsx'
 import { LIME, RED, YELLOW, BLUE, PURPLE, ORANGE, MONO, SANS, BORDER, DARK, PANEL, SETUP_TYPES, todayStr, localDateStr, tomorrowStr, uid, f2, fmtD, fmtU, rrColor, ivContext, calcOptionRR, bsCalc, getETMins, SESSION_LABELS, SESSION_COLORS, SESSION_TIPS, nextSessionDayName } from '../constants.js'
-import { getPrevDay, getHistoricalBars, getTopMovers, prevDayPlausible, getPriorSession } from '../lib/massive.js'
+import OptionsContracts from './OptionsContracts.jsx'
+import { daysToExpiry } from '../lib/optionSnapshot.js'
+import { getPrevDay, getHistoricalBars, getTopMovers, prevDayPlausible } from '../lib/massive.js'
+import { loadPrepMarketData } from '../lib/prepMarketData.js'
 import { occSymbol, SCHWAB_TRADE_URL, SCHWAB_BLUE } from '../lib/schwabClient.js'
 import { aggregateBars } from '../lib/structure.js'
 import { calcPivots } from '../lib/levels.js'
@@ -436,27 +439,8 @@ export function ORBTab({ settings, onSendToCalc, prepFill, liveData, savedPreps 
 }
 
 // ── IV Analyzer ────────────────────────────────────────────────────────────────
-export function IVAnalyzerTab({ apiKey, instrument }) {
-  if (instrument === 'stock') {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-        <div><SLabel>Black-Scholes Pricing Engine</SLabel><Heading>IV Analyzer</Heading></div>
-        <div style={{ background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 5, padding: '40px 28px', textAlign: 'center' }}>
-          <div style={{ fontSize: 24, marginBottom: 14, color: '#2a2a2a' }}>◈</div>
-          <div style={{ fontSize: 13, fontFamily: MONO, color: '#555', marginBottom: 8 }}>IV analysis is for options contracts only.</div>
-          <div style={{ fontSize: 11, fontFamily: MONO, color: '#333', lineHeight: 1.7 }}>Switch to <strong style={{ color: LIME }}>Options</strong> in the Prep tab to access IV analysis.</div>
-        </div>
-      </div>
-    )
-  }
-  const [fetching, setFetching] = useState(false)
-  const [fetchError, setFetchError] = useState(null)
-  const [fetchTicker, setFetchTicker] = useState('QQQ')
-  const [fetchExpiry, setFetchExpiry] = useState(todayStr())
-  const [fetchStrike, setFetchStrike] = useState('')
-  const [fetchType, setFetchType] = useState('call')
-  const [fetchResults, setFetchResults] = useState([])
-
+export function IVAnalyzerTab({ instrument, ticker = 'QQQ', onSendToPrep, onSendToCalc }) {
+  const [providerContract, setProviderContract] = useState(null)
   const [underlying, setUnderlying] = useState('')
   const [strike, setStrike] = useState('')
   const [dte, setDte] = useState('')
@@ -468,12 +452,17 @@ export function IVAnalyzerTab({ apiKey, instrument }) {
   const [targetP, setTargetP] = useState('')
   const [ivRank, setIvRank] = useLocalStorage('th-iv-rank-input', '')
 
-  async function doFetch() {
-    // Options endpoints are not in the current Polygon plan and are blocked
-    // by the proxy allowlist. Keep the UI in place for a future restoration
-    // but surface a clear error so the user knows why nothing is loading.
-    setFetchError('Options chain unavailable: current Polygon plan does not include options data.')
-    setFetchResults([])
+  function selectContract(contract) {
+    setProviderContract(contract)
+    // Clear absent values so a new contract cannot inherit an old contract's
+    // IV, quote or underlying observation.
+    setUnderlying(contract?.underlyingPrice == null ? '' : String(contract.underlyingPrice))
+    setStrike(contract?.strike == null ? '' : String(contract.strike))
+    setDte(contract?.expiry ? String(daysToExpiry(contract.expiry)) : '')
+    setIv(contract?.iv == null ? '' : String(contract.iv * 100))
+    setMp(contract?.ask == null || contract.ask <= 0 ? '' : String(contract.ask))
+    if (contract?.type) setOptType(contract.type)
+    setStopP(''); setTargetP('')
   }
 
   const S = parseFloat(underlying), K = parseFloat(strike), T = parseFloat(dte) / 365, sigma = parseFloat(iv) / 100, r = 0.045, mpp = parseFloat(mp), n = parseInt(contracts) || 1
@@ -500,47 +489,11 @@ export function IVAnalyzerTab({ apiKey, instrument }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <div><SLabel>Black-Scholes Pricing Engine</SLabel><Heading>IV Analyzer</Heading></div>
-      <div style={{ background: '#080e05', border: '1px solid #1a2a1a', borderRadius: 5, padding: '18px 20px' }}>
-        <SLabel>Fetch Live Contract from Massive</SLabel>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
-          <Fld label="Ticker" value={fetchTicker} onChange={setFetchTicker} type="text" placeholder="QQQ" mono />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-            <label style={{ fontSize: 9, letterSpacing: '0.14em', color: '#3a3a3a', textTransform: 'uppercase', fontFamily: MONO }}>Expiry</label>
-            <input type="date" value={fetchExpiry} onInput={e => setFetchExpiry(e.target.value)} style={{ background: '#0c0c0c', border: `1px solid ${BORDER}`, borderRadius: 4, color: '#e8e8e8', fontFamily: MONO, fontSize: 12, padding: '9px 12px', outline: 'none', width: '100%' }} />
-          </div>
-          <Fld label="Strike" value={fetchStrike} onChange={setFetchStrike} placeholder="714" prefix="$" />
-          <Sel label="Type" value={fetchType} onChange={setFetchType} options={[{ value: 'call', label: 'Call ↑' }, { value: 'put', label: 'Put ↓' }]} />
-        </div>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <Btn onClick={doFetch} disabled={fetching || !apiKey}>{fetching ? 'Fetching...' : apiKey ? 'Fetch Live Contract →' : 'Add API key in Command'}</Btn>
-          {fetchResults.length > 0 && <span style={{ fontSize: 10, fontFamily: MONO, color: LIME }}>✓ {fetchResults.length} contract{fetchResults.length > 1 ? 's' : ''} found — fields populated below</span>}
-        </div>
-        {fetchError && <div style={{ fontSize: 11, color: RED, fontFamily: MONO, marginTop: 8 }}>{fetchError}</div>}
-        {fetchResults.length > 1 && (
-          <div style={{ marginTop: 12 }}>
-            <SLabel>Matching Contracts — click to load</SLabel>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {fetchResults.map((r, i) => (
-                <div key={i} onClick={() => {
-                  if (r.last_quote?.ask) setMp(f2(r.last_quote.ask))
-                  if (r.implied_volatility) setIv(f2(r.implied_volatility * 100))
-                  if (r.details?.strike_price) setStrike(String(r.details.strike_price))
-                  if (r.underlying_asset?.value) setUnderlying(f2(r.underlying_asset.value))
-                }} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 4, cursor: 'pointer' }}>
-                  <span style={{ fontFamily: MONO, fontSize: 11, color: '#ccc' }}>{r.details?.ticker || '—'}</span>
-                  <span style={{ fontFamily: MONO, fontSize: 11, color: LIME }}>Ask: ${f2(r.last_quote?.ask)}</span>
-                  <span style={{ fontFamily: MONO, fontSize: 11, color: BLUE }}>IV: {f2((r.implied_volatility || 0) * 100)}%</span>
-                  <span style={{ fontFamily: MONO, fontSize: 11, color: YELLOW }}>Δ: {f2(r.greeks?.delta, 3)}</span>
-                  <span style={{ fontFamily: MONO, fontSize: 11, color: '#555' }}>OI: {r.open_interest?.toLocaleString() || '—'}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+      <div><SLabel>Massive subscription data + pricing tools</SLabel><Heading>Options & IV</Heading></div>
+      <OptionsContracts ticker={ticker} onSelect={selectContract} onSendToPrep={onSendToPrep} onSendToCalc={onSendToCalc} />
+      {providerContract && <p style={{ color: YELLOW, fontFamily: MONO, fontSize: 11 }}>Selected snapshot loaded below. Quote status: {providerContract.quoteTimeframe}. Missing bid/ask or IV stays blank. The model below is a calculation, separate from provider Greeks above.</p>}
       <Card>
-        <SLabel>Enter from your broker's option chain</SLabel>
+        <SLabel>Pricing inputs · populated from selection or entered manually</SLabel>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 14 }}>
           <Sel label="Option Type" value={optType} onChange={setOptType} options={[{ value: 'call', label: 'Call — Bullish ↑' }, { value: 'put', label: 'Put — Bearish ↓' }]} />
           <Fld label="Underlying Price" value={underlying} onChange={setUnderlying} placeholder="713.36" prefix="$" />
@@ -684,6 +637,13 @@ export function CalculatorTab({ prefill, onLogTrade, checklistPassed, lockedOut,
     if (prefill.ticker) setTicker(prefill.ticker)
     if (prefill.optType) setOptType(prefill.optType)
     if (prefill.setupType) setSetupType(prefill.setupType)
+    if (prefill.strike != null) setStrike(String(prefill.strike))
+    if (prefill.expiry) setExpiry(prefill.expiry)
+    if (prefill.dte != null) setDte(String(prefill.dte))
+    if (prefill.source === 'MASSIVE_OPTIONS') {
+      setEntry(''); setStop(''); setTarget(''); setAskDetail(null)
+      setLiveAskError('Contract selected from Massive. Enter or fetch a current broker premium before sizing.')
+    }
   }, [prefill])
 
   async function fetchSchwabAsk() {
@@ -1736,6 +1696,9 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
   const [missingFields, setMissingFields] = useState({})
   const [justSaved, setJustSaved] = useState(false)
 
+  const latestPrepRef = useRef(prep)
+  latestPrepRef.current = prep
+
   const dc = ROUTINE.filter((_, i) => rc[i]).length
   const upd = (k, v) => onPrepChange({ ...prep, [k]: v })
 
@@ -1793,13 +1756,14 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
   async function runLoadMarketData() {
     // eslint-disable-next-line no-console
     console.log('[Load Market Data] clicked')
-    const { price, dataTicker } = liveData || {}
+    let price = null
+    let priceError = null
     setLoadError('')
 
     const want = (prep.ticker || '').toUpperCase()
-    const have = (dataTicker || '').toUpperCase()
+
     // eslint-disable-next-line no-console
-    console.log('[Load Market Data] ticker:', want, '| liveData dataTicker:', have || '(none)')
+    console.log('[Load Market Data] ticker:', want)
 
     if (!want) {
       const msg = 'No ticker entered. Type a ticker into Primary Ticker, then hit Load Market Data.'
@@ -1810,23 +1774,8 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
       return
     }
 
-    // Note: pivots and live price come from the useLiveData hook which is
-    // gated by its own ticker prop. If that hook hasn't finished loading
-    // context for `want` yet, dataTicker will not equal want and we cannot
-    // trust pivots / price for this ticker. We DON'T block the whole load on
-    // that, we just skip the pivots-derived fields and tell the user. The
-    // session fields (high/low/open/close) come from a separate, request-
-    // scoped getPriorSession call below that is always for `want`.
-    const liveContextReady = !!have && have === want
-    if (!liveContextReady) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        '[Load Market Data] live context not yet bound to want=' + want
-        + ' (have=' + (have || '(none)') + '). Will populate session fields only,'
-        + ' key level and strike depend on pivots/price and stay empty for now.',
-      )
-    }
-
+    // Fetch the requested ticker directly. Optional background context (weekly
+    // bars, volume profile, etc.) must not gate a price-only prep field.
     // Pull the most-recently-completed regular session from the server. After
     // 16:15 ET this is today's bar; before that it is the prior trading day.
     // Anchored to America/New_York inside mostRecentSessionDate, so the
@@ -1835,7 +1784,7 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
     try {
       // eslint-disable-next-line no-console
       console.log('[Load Market Data] calling getPriorSession(' + want + ') -> /api/polygon/proxy')
-      session = await getPriorSession(want)
+      ;({ session, price, priceError } = await loadPrepMarketData(want))
       // eslint-disable-next-line no-console
       console.log('[Load Market Data] session response:', session)
     } catch (err) {
@@ -1849,6 +1798,9 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
       setDataLoaded(false)
       return
     }
+
+    // Ignore a response if the user selected a different ticker mid-request.
+    if ((latestPrepRef.current.ticker || '').toUpperCase() !== want) return
 
     if (!session) {
       // eslint-disable-next-line no-console
@@ -1865,7 +1817,7 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
     // Secondary backstop: reject a session range wildly off the live price
     // (bad/stale/halted-day bar). Only check if live price is for the right
     // ticker; otherwise skip the plausibility check.
-    if (liveContextReady && price != null
+    if (price != null
       && !prevDayPlausible({ high: session.high, low: session.low }, price)) {
       const msg =
         `Live data looks wrong for ${want}: ` +
@@ -1880,9 +1832,7 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
 
     const sessionPivots = calcPivots(session.high, session.low, session.close)
 
-    // Build the state update. Session fields always populate from the
-    // server-returned bar for `want`. Pivots/strike only populate when the
-    // useLiveData hook has bound the live context to this ticker.
+    // Both inputs belong to the explicitly requested ticker.
     const next = {
       orbHigh: session.high != null ? f2(session.high) : '',
       orbLow: session.low != null ? f2(session.low) : '',
@@ -1891,11 +1841,12 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
       // Pivot from the same bar as the session fields, so PDH/PDL and PP can
       // never come from different days.
       keyLevel: sessionPivots?.pp != null ? f2(sessionPivots.pp) : '',
-      plannedStrike: liveContextReady && price != null ? String(Math.round(price)) : '',
+      plannedStrike: prep.plannedContract?.underlying === want && prep.plannedContract?.strike === Number(prep.plannedStrike)
+        ? prep.plannedStrike : price != null ? String(Math.round(price)) : '',
     }
     // eslint-disable-next-line no-console
     console.log('[Load Market Data] state update payload:', next)
-    onPrepChange({ ...prep, ...next })
+    onPrepChange({ ...latestPrepRef.current, ...next })
     setMissingFields({
       orbHigh: !next.orbHigh,
       orbLow: !next.orbLow,
@@ -1904,13 +1855,8 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
       keyLevel: !next.keyLevel,
       plannedStrike: !next.plannedStrike,
     })
-    if (!liveContextReady) {
-      // Soft warning, not a hard failure: the session fields ARE loaded.
-      setLoadError(
-        `Session levels loaded. Strike Plan is still loading for ${want} ` +
-        `(the live price feed is catching up). Hit Load Market Data again in ` +
-        `a moment to fill it.`,
-      )
+    if (priceError && !next.plannedStrike) {
+      setLoadError(`Session levels loaded for ${want}. Strike Plan was left blank: ${priceError} Enter it manually or retry the price request.`)
     }
     setDataLoaded(true)
     // eslint-disable-next-line no-console
@@ -2396,6 +2342,7 @@ STRUCTURED (parsing block, do not modify the format): output exactly one JSON ob
           </div>
           <div>
             <Fld label="Strike Plan" value={prep.plannedStrike || ''} onChange={v => upd('plannedStrike', v)} prefix="$" mono />
+            {prep.plannedContract?.strike === Number(prep.plannedStrike) && prep.plannedContract?.underlying === prep.ticker && <div style={{ fontSize: 10, color: BLUE, marginTop: 4 }}>{prep.plannedContract.type} · {prep.plannedContract.expiry} · {prep.plannedContract.symbol}</div>}
             {missingFields.plannedStrike && <div style={{ fontSize: 8, fontFamily: MONO, color: YELLOW, letterSpacing: '0.08em', marginTop: 4 }}>no live value</div>}
           </div>
         </div>
