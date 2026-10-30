@@ -20,7 +20,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   MassiveStreamClient,
-  getLastTrade,
+  getLastTradeDetails,
   getPriorSession,
   getIntradayBars,
   getIntradayBarsForDate,
@@ -38,10 +38,14 @@ import {
 } from '../lib/levels.js'
 import { computePreMarketStats, filterRegularSession } from '../lib/premarket.js'
 import { getETMins } from '../constants.js'
+import { selectLatestTrade, REST_QUOTE_REFRESH_MS } from '../lib/quoteQuality.js'
 
 function emptyBundle() {
   return {
     price: null,
+    lastTrade: null,
+    priceTimestamp: null,
+    priceSource: null,
     bid: null,
     ask: null,
     prevDay: null,
@@ -100,14 +104,16 @@ export function useLiveDataMulti(tickers = [], { mode = 'legacy' } = {}) {
       },
       onDisconnected: () => setConnected(false),
       onStatus: ({ ticker: sym, trade_available, quote_available }) => {
-        setData(prev => ({ ...prev, [sym]: { ...(prev[sym] || emptyBundle()), ...(!trade_available ? {price: null} : {}), ...(!quote_available ? {bid: null, ask: null} : {}) } }))
+        setData(prev => ({ ...prev, [sym]: { ...(prev[sym] || emptyBundle()), ...(!trade_available ? {price: null, lastTrade: null, priceTimestamp: null, priceSource: null} : {}), ...(!quote_available ? {bid: null, ask: null} : {}) } }))
       },
       onError: (msg) => { setWsError(msg); setConnected(false) },
-      onTrade: ({ ticker: sym, price: p }) => {
+      onTrade: ({ ticker: sym, price: p, timestamp }) => {
         if (p == null) return
         setData(prev => {
           const cur = prev[sym] || emptyBundle()
-          return { ...prev, [sym]: { ...cur, price: p } }
+          const trade = selectLatestTrade(cur.lastTrade, { price: p, timestamp, source: 'Massive REST polling' })
+          if (!trade || trade === cur.lastTrade) return prev
+          return { ...prev, [sym]: { ...cur, lastTrade: trade, price: trade.price, priceTimestamp: trade.timestamp, priceSource: trade.source } }
         })
       },
       onQuote: ({ ticker: sym, bid: b, ask: a }) => {

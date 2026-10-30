@@ -14,6 +14,7 @@
 import { marketDate, normalizeOption } from './optionSnapshot.js'
 import { recordSuccess, recordFailure, recordRateLimit, recordUnavailable } from './apiHealth.js'
 import { MARKET_HOLIDAYS_2026 as HOLIDAY_MAP_2026 } from '../constants.js'
+import { normalizeTradeTimestamp } from './quoteQuality.js'
 
 // Provider credentials exist only on the server. Legacy observations use
 // authenticated same-origin REST polling; Unified quality belongs to Python.
@@ -315,9 +316,15 @@ export async function getOptionChain(ticker, { expiry, type, strike, limit = 250
   return { contracts: (data.results || []).map(raw => normalizeOption(raw, symbol)), hasMore: !!data.next_url, fetchedAt: new Date().toISOString() }
 }
 
-export async function getLastTrade(ticker, { priority = false } = {}) {
+export async function getLastTrade(ticker, options = {}) {
+  return (await getLastTradeDetails(ticker, options))?.price ?? null
+}
+
+export async function getLastTradeDetails(ticker, { priority = false } = {}) {
   const d = await get(`/v2/last/trade/${ticker}`, {}, { priority })
-  return d.results?.p ?? null
+  if (d.results?.p == null) return null
+  if (d.results.T && d.results.T !== ticker) throw new Error('Trade instrument mismatch')
+  return { price: d.results.p, timestamp: normalizeTradeTimestamp(d.results.t), source: 'Massive REST' }
 }
 
 export async function getDayBars(ticker, from, to, { priority = false, fresh = false } = {}) {

@@ -83,7 +83,7 @@ function CurrentPriceMarker({ price }) {
     <div style={{ display: 'flex', alignItems: 'center', padding: '10px 16px', background: '#0a1a0a', borderLeft: `3px solid ${LIME}`, borderTop: `1px solid ${LIME}33`, borderBottom: `1px solid ${LIME}33` }}>
       <div style={{ width: 8, height: 8, borderRadius: '50%', background: LIME, boxShadow: `0 0 10px ${LIME}`, flexShrink: 0, marginRight: 10, animation: 'pulse 1.5s infinite' }} />
       <div style={{ flex: 1 }}>
-        <span style={{ fontSize: 9, fontFamily: MONO, color: '#3a5a3a', letterSpacing: '0.12em', textTransform: 'uppercase' }}>Current Price</span>
+        <span style={{ fontSize: 9, fontFamily: MONO, color: '#3a5a3a', letterSpacing: '0.12em', textTransform: 'uppercase' }}>Last recorded trade (see header timestamp)</span>
       </div>
       <div style={{ fontSize: 18, fontFamily: MONO, fontWeight: 900, color: LIME, letterSpacing: '-0.02em' }}>${f2(price)}</div>
     </div>
