@@ -13,6 +13,7 @@
 
 import { recordSuccess, recordFailure, recordRateLimit, recordUnavailable } from './apiHealth.js'
 import { MARKET_HOLIDAYS_2026 as HOLIDAY_MAP_2026 } from '../constants.js'
+import { normalizeTradeTimestamp } from './quoteQuality.js'
 
 // Polygon REST calls are proxied through /api/polygon/proxy so the
 // POLYGON_API_KEY never reaches the browser. The proxy takes the original
@@ -272,8 +273,13 @@ async function getCachedJson(path, params, endpoint) {
 // ── Market data ───────────────────────────────────────────────────────────────
 
 export async function getLastTrade(ticker) {
+  return (await getLastTradeDetails(ticker))?.price ?? null
+}
+
+export async function getLastTradeDetails(ticker) {
   const d = await get(`/v2/last/trade/${ticker}`)
-  return d.results?.p ?? null
+  if (d.results?.p == null) return null
+  return { price: d.results.p, timestamp: normalizeTradeTimestamp(d.results.t), source: 'Massive REST' }
 }
 
 export async function getDayBars(ticker, from, to, { priority = false, fresh = false } = {}) {
