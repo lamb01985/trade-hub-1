@@ -5,8 +5,32 @@
 // since they hit the live proxy; this file pins the pure date math against
 // fixed UTC instants so DST and the local machine timezone never matter.
 
-import { describe, it, expect } from 'vitest'
-import { mostRecentSessionDate, MARKET_HOLIDAYS_2026 } from './massive.js'
+import { describe, it, expect, vi } from 'vitest'
+import { mostRecentSessionDate, MARKET_HOLIDAYS_2026, marketDateStr, getIntradayBars } from './massive.js'
+
+describe('intraday session requests', () => {
+  it('keeps the current New York market date after UTC midnight', () => {
+    expect(marketDateStr(new Date('2026-10-30T02:00:00Z'))).toBe('2026-10-29')
+    expect(marketDateStr(new Date('2026-12-02T02:00:00Z'))).toBe('2026-12-01')
+    expect(marketDateStr(new Date('2026-10-30T13:30:00Z'))).toBe('2026-10-30')
+  })
+
+  it('requests enough minute bars for premarket, regular session and after hours', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-10-30T02:00:00Z'))
+    vi.stubGlobal('window', { location: { origin: 'https://example.test' } })
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ results: [] }) }))
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      await getIntradayBars('QQQ')
+      const url = new URL(fetchMock.mock.calls[0][0])
+      expect(url.searchParams.get('limit')).toBe('50000')
+      expect(url.searchParams.get('path')).toContain('/range/1/minute/')
+    } finally {
+      now.mockRestore()
+      vi.unstubAllGlobals()
+    }
+  })
+})
 
 describe('mostRecentSessionDate', () => {
   // Reference calendar (verified): June 15, 2026 is a Monday.
