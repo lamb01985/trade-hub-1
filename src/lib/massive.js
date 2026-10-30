@@ -76,6 +76,11 @@ export function listUnavailableEndpoints() {
 const REQUEST_INTERVAL_MS = 25
 const MAX_RETRIES = 3
 const CLIENT_TIMEOUT_MS = 15_000
+const INTRADAY_BAR_LIMIT = '50000'
+
+export function marketDateStr(at = new Date()) {
+  return ymdFromParts(etParts(at))
+}
 
 let lastRequestTime = 0
 let inFlightDelay = Promise.resolve()
@@ -281,13 +286,11 @@ export async function getDayBars(ticker, from, to, { priority = false, fresh = f
 }
 
 export async function getIntradayBars(ticker, multiplier = 1, span = 'minute') {
-  const today = new Date().toISOString().slice(0, 10)
-  const d = await get(`/v2/aggs/ticker/${ticker}/range/${multiplier}/${span}/${today}/${today}`, { adjusted: 'true', sort: 'asc', limit: '500' })
-  return d.results || []
+  return getIntradayBarsForDate(ticker, marketDateStr(), multiplier, span)
 }
 
 export async function getIntradayBarsForDate(ticker, dateStr, multiplier = 1, span = 'minute') {
-  const d = await get(`/v2/aggs/ticker/${ticker}/range/${multiplier}/${span}/${dateStr}/${dateStr}`, { adjusted: 'true', sort: 'asc', limit: '500' })
+  const d = await get(`/v2/aggs/ticker/${ticker}/range/${multiplier}/${span}/${dateStr}/${dateStr}`, { adjusted: 'true', sort: 'asc', limit: INTRADAY_BAR_LIMIT })
   return d.results || []
 }
 

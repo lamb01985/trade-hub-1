@@ -748,6 +748,11 @@ export default function App() {
             <div style={{ display: planSubTab === 'levels' ? 'block' : 'none' }}>
               <ErrorBoundary label="Levels">
                 <Levels
+                  ticker={(prep.ticker || 'QQQ').toUpperCase()}
+                  onSelectTicker={ticker => {
+                    setOrbPrefill(null)
+                    setPrep(p => ({ ...p, ticker, orbHigh: '', orbLow: '', keyLevel: '' }))
+                  }}
                   liveData={{ ...liveData, lastAlerts: liveData.lastAlerts }}
                   orbHigh={orbPrefill?.orbHigh || prep.orbHigh}
                   orbLow={orbPrefill?.orbLow || prep.orbLow}
