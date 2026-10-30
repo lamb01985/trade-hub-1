@@ -20,7 +20,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   MassiveStreamClient,
-  getLastTrade,
+  getLastTradeDetails,
   getPriorSession,
   getIntradayBars,
   getIntradayBarsForDate,
@@ -38,10 +38,14 @@ import {
 } from '../lib/levels.js'
 import { computePreMarketStats, filterRegularSession } from '../lib/premarket.js'
 import { getETMins } from '../constants.js'
+import { selectLatestTrade, REST_QUOTE_REFRESH_MS } from '../lib/quoteQuality.js'
 
 function emptyBundle() {
   return {
     price: null,
+    lastTrade: null,
+    priceTimestamp: null,
+    priceSource: null,
     bid: null,
     ask: null,
     prevDay: null,
@@ -99,11 +103,13 @@ export function useLiveDataMulti(tickers = []) {
       },
       onDisconnected: () => setConnected(false),
       onError: (msg) => { setWsError(msg); setConnected(false) },
-      onTrade: ({ ticker: sym, price: p }) => {
+      onTrade: ({ ticker: sym, price: p, timestamp }) => {
         if (p == null) return
         setData(prev => {
           const cur = prev[sym] || emptyBundle()
-          return { ...prev, [sym]: { ...cur, price: p } }
+          const trade = selectLatestTrade(cur.lastTrade, { price: p, timestamp, source: 'Massive stream' })
+          if (!trade || trade === cur.lastTrade) return prev
+          return { ...prev, [sym]: { ...cur, lastTrade: trade, price: trade.price, priceTimestamp: trade.timestamp, priceSource: trade.source } }
         })
       },
       onQuote: ({ ticker: sym, bid: b, ask: a }) => {
@@ -242,28 +248,30 @@ export function useLiveDataMulti(tickers = []) {
     return () => clearInterval(iv)
   }, [loadContext])
 
-  // ── REST poll fallback for price if WebSocket is down.
+  // REST also catches a connected socket that is no longer receiving trades.
   useEffect(() => {
-    if (connected || normalized.length === 0) return
+    if (normalized.length === 0) return
     let cancelled = false
     const poll = async () => {
       await Promise.all(normalized.map(async (ticker) => {
         try {
-          const p = await getLastTrade(ticker)
+          const incoming = await getLastTradeDetails(ticker)
           if (cancelled) return
-          if (p != null) {
+          if (incoming != null) {
             setData(prev => {
               const cur = prev[ticker] || emptyBundle()
-              return { ...prev, [ticker]: { ...cur, price: p } }
+              const trade = selectLatestTrade(cur.lastTrade, incoming)
+              if (!trade || trade === cur.lastTrade) return prev
+              return { ...prev, [ticker]: { ...cur, lastTrade: trade, price: trade.price, priceTimestamp: trade.timestamp, priceSource: trade.source } }
             })
           }
         } catch {}
       }))
     }
     poll()
-    const iv = setInterval(poll, 10000)
+    const iv = setInterval(poll, REST_QUOTE_REFRESH_MS)
     return () => { cancelled = true; clearInterval(iv) }
-  }, [connected, tickersKey])
+  }, [tickersKey])
 
   return {
     data,

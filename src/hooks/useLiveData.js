@@ -1,12 +1,21 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { MassiveStreamClient, getLastTrade, getPriorSession, getIntradayBars, getIntradayBarsForDate, priorTradingDayStr, getWeeklyData, getHistoricalBars } from '../lib/massive.js'
+import { MassiveStreamClient, getLastTradeDetails, getPriorSession, getIntradayBars, getIntradayBarsForDate, priorTradingDayStr, getWeeklyData, getHistoricalBars } from '../lib/massive.js'
+import { selectLatestTrade, REST_QUOTE_REFRESH_MS } from '../lib/quoteQuality.js'
 import { calcVWAP, calcPivots, detectSDZones, calcIntradayVolumeProfile, calcATR, tickSizeFor } from '../lib/levels.js'
 import { computePreMarketStats, filterRegularSession } from '../lib/premarket.js'
 import { checkLevelAlerts } from '../lib/alerts.js'
 import { todayStr, getETMins } from '../constants.js'
 
 export function useLiveData(ticker = 'QQQ', levelMap = null, settings = {}) {
-  const [price, setPrice] = useState(null)
+  const [lastTrade, setLastTrade] = useState(null)
+  const price = lastTrade?.price ?? null
+  const latestTradeRef = useRef(null)
+  const updateTrade = useCallback(incoming => {
+    const next = selectLatestTrade(latestTradeRef.current, incoming)
+    if (next === latestTradeRef.current) return
+    latestTradeRef.current = next
+    setLastTrade(next)
+  }, [])
   const [bid, setBid] = useState(null)
   const [ask, setAsk] = useState(null)
   const [connected, setConnected] = useState(false)
@@ -47,7 +56,8 @@ export function useLiveData(ticker = 'QQQ', levelMap = null, settings = {}) {
   useEffect(() => {
     if (!ticker) return
     priceRef.current = null
-    setPrice(null)
+    latestTradeRef.current = null
+    setLastTrade(null)
     setBid(null)
     setAsk(null)
 
@@ -59,10 +69,10 @@ export function useLiveData(ticker = 'QQQ', levelMap = null, settings = {}) {
       },
       onDisconnected: () => setConnected(false),
       onError: (msg) => { setWsError(msg); setConnected(false) },
-      onTrade: ({ ticker: sym, price: p }) => {
+      onTrade: ({ ticker: sym, price: p, timestamp }) => {
         if (sym !== ticker || tickerRef.current !== ticker) return
         priceRef.current = p
-        setPrice(p)
+        updateTrade({ price: p, timestamp, source: 'Massive stream' })
         // Update VWAP with new trade (simple approach: re-use bar data)
       },
       onQuote: ({ ticker: sym, bid: b, ask: a }) => {
@@ -183,22 +193,24 @@ export function useLiveData(ticker = 'QQQ', levelMap = null, settings = {}) {
     return () => clearInterval(interval)
   }, [loadContext])
 
-  // Fallback REST poll for price if WebSocket fails
+  // A connected socket can stop sending trades without disconnecting.
   useEffect(() => {
-    if (connected) return
+    let cancelled = false
     const poll = async () => {
       try {
-        const p = await getLastTrade(ticker)
-        if (p && tickerRef.current === ticker) setPrice(p)
+        const trade = await getLastTradeDetails(ticker)
+        if (!cancelled && tickerRef.current === ticker) updateTrade(trade)
       } catch {}
     }
     poll()
-    const iv = setInterval(poll, 10000)
-    return () => clearInterval(iv)
-  }, [connected, ticker])
+    const iv = setInterval(poll, REST_QUOTE_REFRESH_MS)
+    return () => { cancelled = true; clearInterval(iv) }
+  }, [ticker, updateTrade])
 
   return {
     price,
+    priceTimestamp: lastTrade?.timestamp ?? null,
+    priceSource: lastTrade?.source ?? null,
     bid,
     ask,
     connected,

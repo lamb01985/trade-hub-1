@@ -3,6 +3,7 @@ import { useLocalStorage } from './hooks/useStore.js'
 import { useLiveData } from './hooks/useLiveData.js'
 import { useLiveDataMulti } from './hooks/useLiveDataMulti.js'
 import { buildLevelMap } from './lib/levels.js'
+import { tradeFreshness, tradeSession } from './lib/quoteQuality.js'
 import { computeMTF, alignmentScore } from './lib/structure.js'
 import Command from './components/Command.jsx'
 import Levels from './components/Levels.jsx'
@@ -501,6 +502,10 @@ export default function App() {
   }
 
   const session = getSession()
+  const priceStatus = tradeFreshness(liveData.priceTimestamp)
+  const priceTime = liveData.priceTimestamp ? new Date(liveData.priceTimestamp).toLocaleString('en-US', {
+    timeZone: 'America/Chicago', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit',
+  }) + ' CT' : 'timestamp unavailable'
 
   return (
     <div style={{ minHeight: '100vh', background: DARK, fontFamily: MONO }}>
@@ -511,9 +516,10 @@ export default function App() {
             <div style={{ fontSize: 15, fontWeight: 900, color: '#e8e8e8', fontFamily: MONO, letterSpacing: '-0.03em' }}>TRADE HUB</div>
             {liveData.price ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 6, height: 6, borderRadius: '50%', background: liveData.connected ? LIME : YELLOW, boxShadow: liveData.connected ? `0 0 6px ${LIME}` : 'none' }} />
+                <div title={`${priceStatus.label}. Socket ${liveData.connected ? 'connected' : 'disconnected'}; connection does not establish price freshness.`} style={{ width: 6, height: 6, borderRadius: '50%', background: priceStatus.fresh ? LIME : YELLOW }} />
                 <span style={{ fontSize: 13, fontFamily: MONO, fontWeight: 700, color: '#888' }}>{prep.ticker || 'QQQ'}</span>
-                <span style={{ fontSize: 16, fontFamily: MONO, fontWeight: 900, color: LIME }}>${liveData.price?.toFixed(2)}</span>
+                <span style={{ fontSize: 16, fontFamily: MONO, fontWeight: 900, color: priceStatus.fresh ? LIME : YELLOW }}>${liveData.price?.toFixed(2)}</span>
+                <span style={{ fontSize: 9, color: priceStatus.fresh ? '#aaa' : YELLOW }} title={liveData.priceSource || 'Massive'}>{priceStatus.label}<br />{tradeSession(liveData.priceTimestamp)}: {priceTime}</span>
               </div>
             ) : (
               <span style={{ fontSize: 10, fontFamily: MONO, color: '#444', letterSpacing: '0.08em' }}>
@@ -607,7 +613,17 @@ export default function App() {
         </div>
       </div>
 
-      {/* High-impact event banner — visible on every tab */}
+      {!priceStatus.fresh && (
+        <div role="status" style={{ background: '#211a08', borderBottom: `1px solid ${YELLOW}66`, color: YELLOW }}>
+          <div style={{ maxWidth: 960, margin: '0 auto', padding: '10px 20px', fontSize: 12, lineHeight: 1.6 }}>
+            <strong>{priceStatus.label}.</strong> Massive stocks coverage is 3 a.m. to 7 p.m. CT. BOATS overnight prices are not connected.
+            {liveData.price != null ? ` Displayed $${liveData.price.toFixed(2)} is a recorded ${tradeSession(liveData.priceTimestamp).toLowerCase()} (${priceTime}), not a verified current price.` : ' No verified current trade is available.'}
+            {liveData.dataTicker === (prep.ticker || 'QQQ') && liveData.prevDay?.close != null && ` Last completed regular-session close: $${liveData.prevDay.close.toFixed(2)} (${liveData.prevDay.date}).`}
+          </div>
+        </div>
+      )}
+
+      {/* High-impact event banner, visible on every tab */}
       {todayHighImpact.length > 0 && (
         <div style={{ background: '#110d04', borderBottom: `1px solid ${YELLOW}33` }}>
           <div style={{ maxWidth: 960, margin: '0 auto', padding: '7px 20px', display: 'flex', alignItems: 'center', gap: 10, fontFamily: MONO }}>
