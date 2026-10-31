@@ -1,3 +1,4 @@
+import { THEME } from '../lib/theme.js'
 // ─────────────────────────────────────────────────────────────────────────────
 // BotWatchlistChips.jsx — multi-ticker watchlist editor + status row.
 //
@@ -15,11 +16,11 @@ import { nearestTradableLevel } from '../lib/bot.js'
 export const MAX_BOT_WATCHLIST = 5
 
 const STATE_COLOR = {
-  WAIT:     '#888',
+  WAIT:     THEME.colors.secondary,
   WATCH:    YELLOW,
   GO:       LIME,
   IN_TRADE: BLUE,
-  CLOSED:   '#aaa',
+  CLOSED:   THEME.colors.secondary,
   LOCKED:   RED,
 }
 
@@ -53,7 +54,7 @@ function levelsFromBundle(bundle) {
 }
 
 function Chip({ chip, isExpanded, onToggleExpand, onRemove, locked }) {
-  const stateColor = STATE_COLOR[chip.state] || '#888'
+  const stateColor = STATE_COLOR[chip.state] || THEME.colors.secondary
   const stateLabel = STATE_LABEL[chip.state] || 'WAIT'
   const accent = chip.state === 'GO' || chip.state === 'WATCH' || chip.state === 'IN_TRADE'
   return (
@@ -61,7 +62,7 @@ function Chip({ chip, isExpanded, onToggleExpand, onRemove, locked }) {
       onClick={onToggleExpand}
       style={{
         display: 'flex', alignItems: 'center', gap: 10,
-        background: isExpanded ? '#101010' : 'transparent',
+        background: isExpanded ? THEME.colors.background : 'transparent',
         border: `1px solid ${accent ? stateColor : BORDER}`,
         borderRadius: 4,
         padding: '6px 10px 6px 12px',
@@ -70,11 +71,11 @@ function Chip({ chip, isExpanded, onToggleExpand, onRemove, locked }) {
         boxShadow: accent ? `0 0 0 2px ${stateColor}22` : 'none',
       }}
     >
-      <span style={{ fontSize: 11, color: '#e8e8e8', fontWeight: 800, letterSpacing: '0.08em' }}>{chip.ticker}</span>
+      <span style={{ fontSize: 11, color: THEME.colors.text, fontWeight: 800, letterSpacing: '0.08em' }}>{chip.ticker}</span>
       <span style={{ width: 1, height: 12, background: BORDER }} />
       <span style={{ fontSize: 9, color: stateColor, fontWeight: 700, letterSpacing: '0.14em' }}>{stateLabel}</span>
       <span style={{ width: 1, height: 12, background: BORDER }} />
-      <span style={{ fontSize: 11, color: '#aaa', fontWeight: 700 }}>
+      <span style={{ fontSize: 11, color: THEME.colors.secondary, fontWeight: 700 }}>
         {chip.price != null ? `$${f2(chip.price)}` : '—'}
       </span>
       {!locked && (
@@ -87,7 +88,7 @@ function Chip({ chip, isExpanded, onToggleExpand, onRemove, locked }) {
           style={{
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             width: 16, height: 16, borderRadius: 8,
-            color: '#666', fontSize: 10, marginLeft: 4,
+            color: THEME.colors.secondary, fontSize: 10, marginLeft: 4,
             cursor: 'pointer', background: 'transparent', border: '1px solid transparent',
           }}
         >×</span>
@@ -115,8 +116,8 @@ function AddInput({ onAdd, disabled }) {
         disabled={disabled}
         maxLength={6}
         style={{
-          width: 96, background: '#0a0a0a', border: `1px dashed ${BORDER}`, borderRadius: 4,
-          color: '#e8e8e8', fontFamily: MONO, fontSize: 11, padding: '6px 10px', outline: 'none',
+          width: 96, background: THEME.colors.background, border: `1px dashed ${BORDER}`, borderRadius: 4,
+          color: THEME.colors.text, fontFamily: MONO, fontSize: 11, padding: '6px 10px', outline: 'none',
           letterSpacing: '0.1em', textTransform: 'uppercase',
           opacity: disabled ? 0.4 : 1, cursor: disabled ? 'not-allowed' : 'text',
         }}
@@ -126,7 +127,7 @@ function AddInput({ onAdd, disabled }) {
         disabled={disabled || !value.trim()}
         style={{
           background: 'transparent', border: `1px solid ${BORDER}`,
-          color: disabled ? '#444' : '#aaa', fontFamily: MONO, fontSize: 10,
+          color: disabled ? THEME.colors.secondary : THEME.colors.secondary, fontFamily: MONO, fontSize: 10,
           padding: '6px 10px', borderRadius: 3,
           cursor: disabled || !value.trim() ? 'not-allowed' : 'pointer',
           letterSpacing: '0.1em',
@@ -158,64 +159,64 @@ function ExpandedDrawer({ chip, bundle }) {
 
   return (
     <div style={{
-      background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 4,
+      background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 4,
       padding: '12px 14px', marginTop: -2, display: 'flex', flexDirection: 'column', gap: 10,
       fontFamily: MONO,
     }}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
         <div>
-          <div style={{ fontSize: 9, color: '#666', letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 6 }}>Nearest level</div>
+          <div style={{ fontSize: 9, color: THEME.colors.secondary, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 6 }}>Nearest level</div>
           {near ? (
             <>
-              <div style={{ fontSize: 12, color: '#e8e8e8', fontWeight: 800 }}>{near.name} ${f2(near.price)}</div>
-              <div style={{ fontSize: 10, color: '#666' }}>{`$${f2(near.distance)} away`}</div>
+              <div style={{ fontSize: 12, color: THEME.colors.text, fontWeight: 800 }}>{near.name} ${f2(near.price)}</div>
+              <div style={{ fontSize: 10, color: THEME.colors.secondary }}>{`$${f2(near.distance)} away`}</div>
             </>
           ) : (
-            <div style={{ fontSize: 11, color: '#444' }}>No tradable level loaded.</div>
+            <div style={{ fontSize: 11, color: THEME.colors.secondary }}>No tradable level loaded.</div>
           )}
         </div>
 
         <div>
-          <div style={{ fontSize: 9, color: '#666', letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 6 }}>Regime</div>
+          <div style={{ fontSize: 9, color: THEME.colors.secondary, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 6 }}>Regime</div>
           {align ? (
             <>
-              <div style={{ fontSize: 12, color: '#e8e8e8', fontWeight: 800 }}>{align.label || align.direction}</div>
-              <div style={{ fontSize: 10, color: '#666' }}>Score {align.score ?? '—'}/100</div>
+              <div style={{ fontSize: 12, color: THEME.colors.text, fontWeight: 800 }}>{align.label || align.direction}</div>
+              <div style={{ fontSize: 10, color: THEME.colors.secondary }}>Score {align.score ?? '—'}/100</div>
             </>
           ) : (
-            <div style={{ fontSize: 11, color: '#444' }}>Waiting for bars.</div>
+            <div style={{ fontSize: 11, color: THEME.colors.secondary }}>Waiting for bars.</div>
           )}
         </div>
 
         <div>
-          <div style={{ fontSize: 9, color: '#666', letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 6 }}>Current setup</div>
+          <div style={{ fontSize: 9, color: THEME.colors.secondary, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 6 }}>Current setup</div>
           {chip.setup ? (
             <>
-              <div style={{ fontSize: 12, color: '#e8e8e8', fontWeight: 800 }}>{chip.setup.setupName}</div>
+              <div style={{ fontSize: 12, color: THEME.colors.text, fontWeight: 800 }}>{chip.setup.setupName}</div>
               <div style={{ fontSize: 10, color: chip.setup.direction === 'long' ? LIME : RED, letterSpacing: '0.12em', fontWeight: 700 }}>
                 {(chip.setup.direction || '').toUpperCase()}{chip.setup.confidence ? `, ${chip.setup.confidence}/10` : ''}
               </div>
             </>
           ) : chip.position ? (
             <>
-              <div style={{ fontSize: 12, color: '#e8e8e8', fontWeight: 800 }}>{chip.position.setupName}</div>
+              <div style={{ fontSize: 12, color: THEME.colors.text, fontWeight: 800 }}>{chip.position.setupName}</div>
               <div style={{ fontSize: 10, color: BLUE, letterSpacing: '0.12em', fontWeight: 700 }}>Position open</div>
             </>
           ) : (
-            <div style={{ fontSize: 11, color: '#444' }}>None yet.</div>
+            <div style={{ fontSize: 11, color: THEME.colors.secondary }}>None yet.</div>
           )}
         </div>
       </div>
 
       {sortedLevels.length > 0 && (
         <div style={{ paddingTop: 8, borderTop: `1px solid ${BORDER}` }}>
-          <div style={{ fontSize: 9, color: '#666', letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 6 }}>Levels in range</div>
+          <div style={{ fontSize: 9, color: THEME.colors.secondary, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 6 }}>Levels in range</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {sortedLevels.map(l => (
               <span key={l.name} style={{
-                fontSize: 10, color: '#aaa', fontFamily: MONO,
+                fontSize: 10, color: THEME.colors.secondary, fontFamily: MONO,
                 border: `1px solid ${BORDER}`, borderRadius: 3, padding: '3px 8px',
-              }}>{l.name} ${f2(l.price)} <span style={{ color: '#555' }}>({l.distance < 0.5 ? '<$0.50' : `$${f2(l.distance)}`})</span></span>
+              }}>{l.name} ${f2(l.price)} <span style={{ color: THEME.colors.secondary }}>({l.distance < 0.5 ? '<$0.50' : `$${f2(l.distance)}`})</span></span>
             ))}
           </div>
         </div>
@@ -258,7 +259,7 @@ export default function BotWatchlistChips({
   return (
     <div style={{ background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 6, padding: '10px 14px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 9, color: '#666', fontFamily: MONO, letterSpacing: '0.14em', textTransform: 'uppercase', marginRight: 4 }}>
+        <span style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, letterSpacing: '0.14em', textTransform: 'uppercase', marginRight: 4 }}>
           Watchlist
         </span>
         {chips.map(chip => (
@@ -272,7 +273,7 @@ export default function BotWatchlistChips({
           />
         ))}
         <AddInput onAdd={handleAdd} disabled={!canAdd} />
-        <span style={{ marginLeft: 'auto', fontSize: 9, color: '#444', fontFamily: MONO, letterSpacing: '0.08em' }}>
+        <span style={{ marginLeft: 'auto', fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, letterSpacing: '0.08em' }}>
           {chips.length}/{MAX_BOT_WATCHLIST} tickers
         </span>
       </div>

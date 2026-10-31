@@ -1,3 +1,4 @@
+import { THEME } from '../lib/theme.js'
 // ─────────────────────────────────────────────────────────────────────────────
 // MoversScanner.jsx — daily gainers / losers with quality filters.
 //
@@ -21,9 +22,9 @@ import { getTopMovers, getHistoricalBars, getTickerDetails, getRecentNews } from
 import { lastEMA, lastRSI } from '../lib/indicators.js'
 import { universeAppendTickers } from '../lib/universeResolver.js'
 
-const FG = '#e8e8e8'
-const DIM = '#888'
-const MUTED = '#666'
+const FG = THEME.colors.text
+const DIM = THEME.colors.secondary
+const MUTED = THEME.colors.secondary
 
 const TIMEFRAMES = [
   { id: 'today', label: 'Today', days: 0 },
@@ -83,9 +84,9 @@ function fmtDollarVol(n) {
 function capBadge(mc) {
   if (mc == null) return null
   if (mc >= 200e9) return { label: 'mega', color: LIME }
-  if (mc >= 10e9) return { label: 'large', color: '#94a3b8' }
+  if (mc >= 10e9) return { label: 'large', color: THEME.colors.blue }
   if (mc >= 2e9) return { label: 'mid', color: YELLOW }
-  return { label: 'small', color: '#94a3b8' }
+  return { label: 'small', color: THEME.colors.blue }
 }
 
 function Sparkline({ closes, width = 60, height = 16 }) {
@@ -229,20 +230,20 @@ function MoverRow({ row, isExpanded, onToggle, onAddToSetup, setupsForMenu, apiK
         <span style={{ color: row.rvol == null ? MUTED : row.rvol >= 1.5 ? LIME : row.rvol >= 1 ? YELLOW : RED }}>
           {row.rvol == null ? 'RVOL —' : `RVOL ${row.rvol.toFixed(2)}`}
         </span>
-        <span style={{ color: row.dollarVolume == null ? MUTED : '#aaa' }}>{fmtDollarVol(row.dollarVolume)}</span>
-        <span style={{ color: row.rsi == null ? MUTED : row.rsi >= 70 ? RED : row.rsi <= 30 ? LIME : '#aaa' }}>
+        <span style={{ color: row.dollarVolume == null ? MUTED : THEME.colors.secondary }}>{fmtDollarVol(row.dollarVolume)}</span>
+        <span style={{ color: row.rsi == null ? MUTED : row.rsi >= 70 ? RED : row.rsi <= 30 ? LIME : THEME.colors.secondary }}>
           {row.rsi == null ? '—' : `RSI ${row.rsi.toFixed(0)}`}
         </span>
-        <span style={{ color: row.dist50 == null ? MUTED : '#aaa' }}>
+        <span style={{ color: row.dist50 == null ? MUTED : THEME.colors.secondary }}>
           {row.dist50 == null ? '50 —' : `50 ${row.dist50 >= 0 ? '+' : ''}${row.dist50.toFixed(1)}%`}
         </span>
-        <span style={{ color: '#aaa', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ color: THEME.colors.secondary, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
           {cap && <span style={{ fontSize: 9, color: cap.color, border: `1px solid ${cap.color}44`, padding: '2px 5px', borderRadius: 2, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{cap.label}</span>}
-          <span style={{ fontSize: 10, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: 10, color: THEME.colors.secondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {fmtBigCap(row.marketCap)}{row.sector ? ` · ${row.sector}` : ''}
           </span>
         </span>
-        <span style={{ color: '#444', fontSize: 12 }}>{isExpanded ? '−' : '+'}</span>
+        <span style={{ color: THEME.colors.secondary, fontSize: 12 }}>{isExpanded ? '−' : '+'}</span>
       </div>
 
       {isExpanded && (
@@ -289,7 +290,7 @@ function ExpandedRow({ row, onAddToSetup, setupsForMenu, apiKey }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {news.slice(0, 4).map((n, i) => (
                 <a key={i} href={n.article_url} target="_blank" rel="noopener noreferrer" style={{
-                  fontSize: 11, color: '#aaa', textDecoration: 'none', fontFamily: MONO,
+                  fontSize: 11, color: THEME.colors.secondary, textDecoration: 'none', fontFamily: MONO,
                   borderLeft: `2px solid ${BORDER}`, paddingLeft: 8, lineHeight: 1.5,
                 }}>
                   {n.title} <span style={{ color: MUTED }}>— {new Date(n.published_utc).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
@@ -300,8 +301,8 @@ function ExpandedRow({ row, onAddToSetup, setupsForMenu, apiKey }) {
         </div>
         <div style={{ position: 'relative' }}>
           <button onClick={() => setMenuOpen(o => !o)} disabled={setupsForMenu.length === 0} style={{
-            background: setupsForMenu.length ? LIME : '#1a1a1a',
-            color: setupsForMenu.length ? '#000' : '#666',
+            background: setupsForMenu.length ? LIME : THEME.colors.surface,
+            color: setupsForMenu.length ? THEME.colors.background : THEME.colors.secondary,
             border: 'none', padding: '7px 14px', borderRadius: 3,
             fontFamily: MONO, fontSize: 10, fontWeight: 800,
             letterSpacing: '0.12em', textTransform: 'uppercase',
@@ -310,16 +311,16 @@ function ExpandedRow({ row, onAddToSetup, setupsForMenu, apiKey }) {
           {menuOpen && setupsForMenu.length > 0 && (
             <div style={{
               position: 'absolute', right: 0, top: '100%', marginTop: 4,
-              background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 4,
+              background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 4,
               minWidth: 220, maxHeight: 260, overflowY: 'auto', zIndex: 10,
               boxShadow: '0 6px 24px rgba(0,0,0,0.5)',
             }}>
               {setupsForMenu.map(s => (
                 <button key={s.id} onClick={() => { onAddToSetup(s.id, row.ticker); setMenuOpen(false) }} style={{
                   display: 'block', width: '100%', textAlign: 'left',
-                  background: 'transparent', border: 'none', color: '#aaa',
+                  background: 'transparent', border: 'none', color: THEME.colors.secondary,
                   padding: '8px 12px', fontFamily: MONO, fontSize: 11,
-                  cursor: 'pointer', borderBottom: `1px solid #131313`,
+                  cursor: 'pointer', borderBottom: `1px solid ${THEME.colors.surface}`,
                 }}>{s.name}</button>
               ))}
             </div>
@@ -448,7 +449,7 @@ export default function MoversScanner({ apiKey, setups = [], onSetupsChange, sav
           {TIMEFRAMES.map(tf => (
             <button key={tf.id} onClick={() => setTimeframe(tf.id)} style={{
               background: timeframe === tf.id ? LIME : 'transparent',
-              color: timeframe === tf.id ? '#000' : '#aaa',
+              color: timeframe === tf.id ? THEME.colors.background : THEME.colors.secondary,
               border: `1px solid ${timeframe === tf.id ? LIME : BORDER}`,
               padding: '5px 10px', borderRadius: 3, fontFamily: MONO,
               fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase',
@@ -457,7 +458,7 @@ export default function MoversScanner({ apiKey, setups = [], onSetupsChange, sav
           ))}
           <span style={{ width: 6 }} />
           <button onClick={loadMovers} disabled={loading || !apiKey} title={!apiKey ? 'Add Massive API key' : ''} style={{
-            background: loading || !apiKey ? '#1a1a1a' : LIME, color: loading || !apiKey ? '#666' : '#000',
+            background: loading || !apiKey ? THEME.colors.surface : LIME, color: loading || !apiKey ? THEME.colors.secondary : THEME.colors.background,
             border: 'none', padding: '7px 14px', borderRadius: 3,
             fontFamily: MONO, fontSize: 11, fontWeight: 800,
             letterSpacing: '0.14em', textTransform: 'uppercase',
@@ -467,7 +468,7 @@ export default function MoversScanner({ apiKey, setups = [], onSetupsChange, sav
       </div>
 
       {error && (
-        <div style={{ background: '#150505', border: `1px solid ${RED}55`, color: RED, padding: '8px 12px', borderRadius: 4, fontSize: 11, fontFamily: MONO }}>{error}</div>
+        <div style={{ background: THEME.colors.negativeSurface, border: `1px solid ${RED}55`, color: RED, padding: '8px 12px', borderRadius: 4, fontSize: 11, fontFamily: MONO }}>{error}</div>
       )}
 
       {/* Quality filter bar */}
@@ -501,7 +502,7 @@ export default function MoversScanner({ apiKey, setups = [], onSetupsChange, sav
           <span style={{ fontSize: 10, color: FG, fontFamily: MONO, letterSpacing: '0.06em' }}>Include unfiltered</span>
         </label>
         <div style={{ flex: 1 }} />
-        <button onClick={resetFilters} style={{ background: 'transparent', border: `1px dashed ${BORDER}`, color: '#aaa', padding: '6px 10px', borderRadius: 3, fontFamily: MONO, fontSize: 10, cursor: 'pointer', letterSpacing: '0.12em', textTransform: 'uppercase' }}>Reset defaults</button>
+        <button onClick={resetFilters} style={{ background: 'transparent', border: `1px dashed ${BORDER}`, color: THEME.colors.secondary, padding: '6px 10px', borderRadius: 3, fontFamily: MONO, fontSize: 10, cursor: 'pointer', letterSpacing: '0.12em', textTransform: 'uppercase' }}>Reset defaults</button>
       </div>
       {totalRaw > 0 && (
         <div style={{ fontSize: 10, color: MUTED, fontFamily: MONO, letterSpacing: '0.06em' }}>

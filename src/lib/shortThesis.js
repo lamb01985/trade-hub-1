@@ -1,3 +1,4 @@
+import { THEME } from './theme.js'
 // Short Thesis screener — scores a ticker 0..100 on the bear case.
 // Composite of valuation, fundamental deterioration, short flow, and technical
 // breakdown. Missing data is allowed — score is computed against available
@@ -244,46 +245,46 @@ export function setupStage(d) {
   if (p >= -15) return {
     stage: 1, label: 'PRE-BREAKDOWN', icon: '🎯',
     dteRange: '45-60',
-    background: '#170d22',
+    background: THEME.colors.surface,
     dteCopy: 'Stock still near highs. Thesis developing but not confirmed. Best risk/reward — most downside still available. Wait for the first technical signal but build a watchlist position.',
   }
   if (p >= -35) return {
     stage: 2, label: 'CRACK FORMING', icon: '⚠',
     dteRange: '30-45',
-    background: '#1a0e04',
+    background: THEME.colors.negativeSurface,
     dteCopy: 'Breakdown beginning. Fundamentals clearly deteriorating, structure starting to roll. Enter on failed bounces — solid setup with most of the move still ahead.',
   }
   if (p >= -60) return {
     stage: 3, label: 'IN PROGRESS', icon: '📉',
     dteRange: '21-30',
-    background: '#150505',
+    background: THEME.colors.negativeSurface,
     dteCopy: 'Partial move done. Thesis playing out but less upside remains. Tradeable on continuation but size smaller.',
   }
   return {
     stage: 4, label: 'TOO LATE', icon: '❌',
     dteRange: 'skip',
-    background: '#0a0a0a',
+    background: THEME.colors.background,
     dteCopy: 'Most of the move already played out. Skip — find earlier setups instead.',
   }
 }
 
 export function stageColor(stage) {
   switch (stage) {
-    case 1: return '#a78bfa'  // purple
-    case 2: return '#F97316'  // orange
-    case 3: return '#FF4D4D'  // red
-    case 4: return '#555'     // gray
-    default: return '#666'
+    case 1: return THEME.colors.blue  // purple
+    case 2: return THEME.colors.orange  // orange
+    case 3: return THEME.colors.negative  // red
+    case 4: return THEME.colors.border     // gray
+    default: return THEME.colors.secondary
   }
 }
 
 // Days-since-52w-high freshness indicator
 export function highFreshness(daysFromHigh) {
   if (daysFromHigh == null) return null
-  if (daysFromHigh < 30) return { label: 'Very recent high', icon: '🔴', color: '#FF4D4D' }
-  if (daysFromHigh < 90) return { label: 'Recent high', icon: '🟠', color: '#F97316' }
-  if (daysFromHigh < 180) return { label: 'Aging high', icon: '🟡', color: '#FFD166' }
-  return { label: 'Old high', icon: '⚪', color: '#888' }
+  if (daysFromHigh < 30) return { label: 'Very recent high', icon: '🔴', color: THEME.colors.negative }
+  if (daysFromHigh < 90) return { label: 'Recent high', icon: '🟠', color: THEME.colors.orange }
+  if (daysFromHigh < 180) return { label: 'Aging high', icon: '🟡', color: THEME.colors.caution }
+  return { label: 'Old high', icon: '⚪', color: THEME.colors.secondary }
 }
 
 // Timing-risk overlay — separate from conviction score because a high-quality

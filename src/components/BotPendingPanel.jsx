@@ -1,3 +1,4 @@
+import { THEME } from '../lib/theme.js'
 // ─────────────────────────────────────────────────────────────────────────────
 // BotPendingPanel.jsx — "Also live" pending setups queue.
 //
@@ -13,9 +14,9 @@
 import { useState } from 'react'
 import { LIME, RED, YELLOW, BLUE, PANEL, BORDER, MONO, SANS, f2 } from '../constants.js'
 
-const FG = '#e8e8e8'
-const DIM = '#888'
-const MUTED = '#666'
+const FG = THEME.colors.text
+const DIM = THEME.colors.secondary
+const MUTED = THEME.colors.secondary
 
 const STATE_STYLE = {
   GO:       { color: LIME,   label: 'GO' },
@@ -47,7 +48,7 @@ function PendingRow({ card, onTakeIt, onSkipIt }) {
 
   return (
     <div style={{
-      background: '#0a0a0a', border: `1px solid ${style.color}44`, borderRadius: 5,
+      background: THEME.colors.background, border: `1px solid ${style.color}44`, borderRadius: 5,
       padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
@@ -61,7 +62,7 @@ function PendingRow({ card, onTakeIt, onSkipIt }) {
             {card.ticker}
           </span>
           {setup && (
-            <span style={{ fontSize: 11, color: '#bbb', fontFamily: SANS, fontWeight: 700 }}>
+            <span style={{ fontSize: 11, color: THEME.colors.secondary, fontFamily: SANS, fontWeight: 700 }}>
               {setup.setupName}
             </span>
           )}
@@ -80,7 +81,7 @@ function PendingRow({ card, onTakeIt, onSkipIt }) {
             <button
               onClick={() => setTakeOpen(o => !o)}
               style={{
-                background: LIME, color: '#000', border: 'none', borderRadius: 3,
+                background: LIME, color: THEME.colors.background, border: 'none', borderRadius: 3,
                 padding: '6px 14px', fontFamily: MONO, fontSize: 10, fontWeight: 800,
                 letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer',
               }}
@@ -120,22 +121,22 @@ function PendingRow({ card, onTakeIt, onSkipIt }) {
           <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             <span style={{ fontSize: 9, color: MUTED, fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Strike</span>
             <input type="number" step="0.01" value={strike} onChange={e => setStrike(e.target.value)} placeholder="opt"
-              style={{ background: '#000', color: FG, border: `1px solid ${BORDER}`, borderRadius: 3, padding: '5px 8px', fontFamily: MONO, fontSize: 11 }} />
+              style={{ background: THEME.colors.background, color: FG, border: `1px solid ${BORDER}`, borderRadius: 3, padding: '5px 8px', fontFamily: MONO, fontSize: 11 }} />
           </label>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             <span style={{ fontSize: 9, color: MUTED, fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Premium</span>
             <input type="number" step="0.01" value={premium} onChange={e => setPremium(e.target.value)} placeholder="opt"
-              style={{ background: '#000', color: FG, border: `1px solid ${BORDER}`, borderRadius: 3, padding: '5px 8px', fontFamily: MONO, fontSize: 11 }} />
+              style={{ background: THEME.colors.background, color: FG, border: `1px solid ${BORDER}`, borderRadius: 3, padding: '5px 8px', fontFamily: MONO, fontSize: 11 }} />
           </label>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             <span style={{ fontSize: 9, color: MUTED, fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Qty</span>
             <input type="number" min="1" value={contracts} onChange={e => setContracts(e.target.value)}
-              style={{ background: '#000', color: FG, border: `1px solid ${BORDER}`, borderRadius: 3, padding: '5px 8px', fontFamily: MONO, fontSize: 11 }} />
+              style={{ background: THEME.colors.background, color: FG, border: `1px solid ${BORDER}`, borderRadius: 3, padding: '5px 8px', fontFamily: MONO, fontSize: 11 }} />
           </label>
           <button
             onClick={handleConfirmTake}
             style={{
-              background: LIME, color: '#000', border: 'none', borderRadius: 3,
+              background: LIME, color: THEME.colors.background, border: 'none', borderRadius: 3,
               padding: '6px 14px', fontFamily: MONO, fontSize: 10, fontWeight: 800,
               letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer',
               alignSelf: 'end',
@@ -161,7 +162,7 @@ export default function BotPendingPanel({ pendingCards = [], onTakeIt, onSkipIt 
         <span style={{ fontSize: 9, color: MUTED, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
           Also live
         </span>
-        <span style={{ fontSize: 9, color: '#444', letterSpacing: '0.08em' }}>
+        <span style={{ fontSize: 9, color: THEME.colors.secondary, letterSpacing: '0.08em' }}>
           {pendingCards.length} additional setup{pendingCards.length === 1 ? '' : 's'}
         </span>
       </div>

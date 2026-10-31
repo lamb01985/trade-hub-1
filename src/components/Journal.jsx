@@ -1,3 +1,4 @@
+import { THEME } from '../lib/theme.js'
 import { useState, useEffect, useMemo } from 'react'
 import { useLocalStorage } from '../hooks/useStore.js'
 import { Card, SLabel, Heading, Btn, Pill } from './ui.jsx'
@@ -73,8 +74,8 @@ function OpenTradeCard({ trade, onUpdateCurrent, onCloseTrade, onEdit }) {
   const range = stop != null && target != null && target > stop ? target - stop : null
   const pos = range && hasCurrent ? Math.max(0, Math.min(1, (current - stop) / range)) : null
 
-  const borderC = stopHit ? RED : targetReached ? LIME : '#1e2a1e'
-  const bgC = stopHit ? '#150505' : targetReached ? '#0a1408' : '#0a0d08'
+  const borderC = stopHit ? RED : targetReached ? LIME : THEME.colors.positiveSurface
+  const bgC = stopHit ? THEME.colors.negativeSurface : targetReached ? THEME.colors.positiveSurface : THEME.colors.positiveSurface
 
   return (
     <div style={{ background: bgC, border: `1.5px solid ${borderC}`, borderRadius: 6, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12, animation: stopHit || targetReached ? 'hdrpulse 1.5s infinite' : 'none' }}>
@@ -86,15 +87,15 @@ function OpenTradeCard({ trade, onUpdateCurrent, onCloseTrade, onEdit }) {
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
         <div>
-          <div style={{ fontSize: 14, fontFamily: MONO, fontWeight: 900, color: '#e8e8e8', letterSpacing: '0.04em' }}>
+          <div style={{ fontSize: 14, fontFamily: MONO, fontWeight: 900, color: THEME.colors.text, letterSpacing: '0.04em' }}>
             {trade.ticker} {trade.strike ? `$${trade.strike}` : ''} {(trade.optType || '').toUpperCase()}
           </div>
-          <div style={{ fontSize: 10, fontFamily: MONO, color: '#555', marginTop: 3 }}>
+          <div style={{ fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary, marginTop: 3 }}>
             Exp {trade.expiry || '—'} · Entry {fmtTime(trade.date)} CT · {mins} min ago · {trade.contracts || 1}c
           </div>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: 22, fontFamily: MONO, fontWeight: 900, color: livePnl == null ? '#444' : livePnl >= 0 ? LIME : RED, lineHeight: 1, letterSpacing: '-0.02em' }}>
+          <div style={{ fontSize: 22, fontFamily: MONO, fontWeight: 900, color: livePnl == null ? THEME.colors.secondary : livePnl >= 0 ? LIME : RED, lineHeight: 1, letterSpacing: '-0.02em' }}>
             {livePnl == null ? '— P&L' : fmtD(livePnl)}
           </div>
           {pctMove != null && (
@@ -106,20 +107,20 @@ function OpenTradeCard({ trade, onUpdateCurrent, onCloseTrade, onEdit }) {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, fontFamily: MONO, fontSize: 11 }}>
-        <div><span style={{ color: '#555' }}>Entry</span> <strong style={{ color: '#e8e8e8' }}>${f2(trade.entry)}</strong></div>
-        <div><span style={{ color: '#555' }}>Stop</span> <strong style={{ color: RED }}>${f2(stop)}</strong></div>
-        <div><span style={{ color: '#555' }}>Target</span> <strong style={{ color: LIME }}>${f2(target)}</strong></div>
+        <div><span style={{ color: THEME.colors.secondary }}>Entry</span> <strong style={{ color: THEME.colors.text }}>${f2(trade.entry)}</strong></div>
+        <div><span style={{ color: THEME.colors.secondary }}>Stop</span> <strong style={{ color: RED }}>${f2(stop)}</strong></div>
+        <div><span style={{ color: THEME.colors.secondary }}>Target</span> <strong style={{ color: LIME }}>${f2(target)}</strong></div>
       </div>
 
       {range && (
         <div>
-          <div style={{ position: 'relative', height: 6, background: '#1a1a1a', borderRadius: 3, overflow: 'hidden' }}>
-            <div style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, background: `linear-gradient(to right, ${RED}33 0%, #1a1a1a 50%, ${LIME}33 100%)` }} />
+          <div style={{ position: 'relative', height: 6, background: THEME.colors.surface, borderRadius: 3, overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, background: `linear-gradient(to right, ${RED}33 0%, ${THEME.colors.surface} 50%, ${LIME}33 100%)` }} />
             {pos != null && (
               <div style={{ position: 'absolute', left: `${pos * 100}%`, top: '50%', transform: 'translate(-50%, -50%)', width: 10, height: 10, borderRadius: '50%', background: livePnl >= 0 ? LIME : RED, boxShadow: `0 0 6px ${livePnl >= 0 ? LIME : RED}88` }} />
             )}
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 8, color: '#444', fontFamily: MONO, marginTop: 4 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 8, color: THEME.colors.secondary, fontFamily: MONO, marginTop: 4 }}>
             <span>STOP ${f2(stop)}</span><span>TARGET ${f2(target)}</span>
           </div>
         </div>
@@ -130,11 +131,11 @@ function OpenTradeCard({ trade, onUpdateCurrent, onCloseTrade, onEdit }) {
           type="number" step="0.01" value={priceInput}
           onChange={e => setPriceInput(e.target.value)}
           placeholder="Current $"
-          style={{ flex: 1, background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 4, color: '#e8e8e8', fontFamily: MONO, fontSize: 13, padding: '9px 12px', outline: 'none' }}
+          style={{ flex: 1, background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 4, color: THEME.colors.text, fontFamily: MONO, fontSize: 13, padding: '9px 12px', outline: 'none' }}
         />
-        <button onClick={() => onUpdateCurrent(trade.id, parseFloat(priceInput))} style={{ background: '#1a1a1a', border: `1px solid ${BORDER}`, color: '#aaa', fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', padding: '9px 12px', borderRadius: 4, cursor: 'pointer', whiteSpace: 'nowrap' }}>UPDATE</button>
-        <button onClick={() => onCloseTrade(trade)} style={{ background: LIME, border: 'none', color: '#000', fontFamily: MONO, fontSize: 10, fontWeight: 900, letterSpacing: '0.1em', padding: '9px 14px', borderRadius: 4, cursor: 'pointer', whiteSpace: 'nowrap' }}>CLOSE →</button>
-        <button onClick={() => onEdit(trade)} title="Edit" style={{ background: 'transparent', border: `1px solid ${BORDER}`, color: '#888', padding: '8px 10px', borderRadius: 4, cursor: 'pointer', fontFamily: MONO, fontSize: 12 }}>✎</button>
+        <button onClick={() => onUpdateCurrent(trade.id, parseFloat(priceInput))} style={{ background: THEME.colors.surface, border: `1px solid ${BORDER}`, color: THEME.colors.secondary, fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', padding: '9px 12px', borderRadius: 4, cursor: 'pointer', whiteSpace: 'nowrap' }}>UPDATE</button>
+        <button onClick={() => onCloseTrade(trade)} style={{ background: LIME, border: 'none', color: THEME.colors.background, fontFamily: MONO, fontSize: 10, fontWeight: 900, letterSpacing: '0.1em', padding: '9px 14px', borderRadius: 4, cursor: 'pointer', whiteSpace: 'nowrap' }}>CLOSE →</button>
+        <button onClick={() => onEdit(trade)} title="Edit" style={{ background: 'transparent', border: `1px solid ${BORDER}`, color: THEME.colors.secondary, padding: '8px 10px', borderRadius: 4, cursor: 'pointer', fontFamily: MONO, fontSize: 12 }}>✎</button>
       </div>
     </div>
   )
@@ -153,7 +154,7 @@ function TradeRow({ trade, onUpdate, onEdit, onDelete }) {
     setOpen(false)
   }
 
-  const sideColor = trade.status === 'win' ? LIME : trade.status === 'loss' ? RED : '#555'
+  const sideColor = trade.status === 'win' ? LIME : trade.status === 'loss' ? RED : THEME.colors.border
   const time = trade.entryTime || (trade.date ? fmtTime(trade.date) : '—')
   const tradeDate = trade.tradeDate || trade.date?.slice(0, 10) || ''
   const dateLabel = tradeDate === localDateStr()
@@ -161,31 +162,31 @@ function TradeRow({ trade, onUpdate, onEdit, onDelete }) {
     : tradeDate ? `${tradeDate.slice(5, 7)}/${tradeDate.slice(8, 10)}` : '—'
 
   return (
-    <div style={{ borderLeft: `3px solid ${sideColor}`, background: '#0a0a0a', borderBottom: '1px solid #111' }}>
+    <div style={{ borderLeft: `3px solid ${sideColor}`, background: THEME.colors.background, borderBottom: `1px solid ${THEME.colors.surface}` }}>
       <div onClick={() => setOpen(o => !o)} style={{ display: 'grid', gridTemplateColumns: '50px 50px 56px 56px 50px 50px 70px 70px 78px 60px 1fr 30px', gap: 8, padding: '10px 14px', cursor: 'pointer', alignItems: 'center', fontFamily: MONO, fontSize: 11 }}>
-        <span style={{ color: '#666' }}>{time}</span>
-        <span style={{ color: '#888' }} title={tradeDate}>{dateLabel}</span>
+        <span style={{ color: THEME.colors.secondary }}>{time}</span>
+        <span style={{ color: THEME.colors.secondary }} title={tradeDate}>{dateLabel}</span>
         <span style={{ color: LIME, fontWeight: 700 }}>{trade.ticker || '—'}</span>
-        <span style={{ color: '#666' }}>{trade.strike ? `$${trade.strike}` : '—'}</span>
-        <span style={{ color: trade.optType === 'call' ? LIME : trade.optType === 'put' ? RED : '#666', fontWeight: 700, fontSize: 10 }}>{(trade.optType || '—').toUpperCase()}</span>
-        <span style={{ color: trade.dte == null ? '#444' : trade.dte === 0 ? YELLOW : trade.dte >= 3 ? '#60A5FA' : '#aaa', fontSize: 10, fontWeight: 700 }}>{trade.dte != null ? `${trade.dte}DTE` : '—'}</span>
-        <span style={{ color: '#aaa' }}>${f2(trade.entry)}</span>
-        <span style={{ color: '#aaa' }}>{trade.exitPrice != null ? `$${f2(trade.exitPrice)}` : '—'}</span>
-        <span style={{ color: trade.pnl != null ? (trade.pnl >= 0 ? LIME : RED) : '#666', fontWeight: 700 }}>{trade.pnl != null ? fmtD(trade.pnl) : '—'}</span>
-        <span style={{ color: '#666', fontSize: 10 }}>{trade.rr ? `1:${f2(trade.rr)}` : '—'}</span>
-        <span style={{ color: '#555', fontSize: 10, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: 5 }}>
-          {trade.paper && <span title="Bot coach paper trade" style={{ display: 'inline-block', padding: '1px 5px', borderRadius: 2, background: '#1d1230', color: '#C084FC', fontSize: 8, fontWeight: 800, letterSpacing: '0.12em' }}>PAPER</span>}
+        <span style={{ color: THEME.colors.secondary }}>{trade.strike ? `$${trade.strike}` : '—'}</span>
+        <span style={{ color: trade.optType === 'call' ? LIME : trade.optType === 'put' ? RED : THEME.colors.secondary, fontWeight: 700, fontSize: 10 }}>{(trade.optType || '—').toUpperCase()}</span>
+        <span style={{ color: trade.dte == null ? THEME.colors.secondary : trade.dte === 0 ? YELLOW : trade.dte >= 3 ? THEME.colors.blue : THEME.colors.secondary, fontSize: 10, fontWeight: 700 }}>{trade.dte != null ? `${trade.dte}DTE` : '—'}</span>
+        <span style={{ color: THEME.colors.secondary }}>${f2(trade.entry)}</span>
+        <span style={{ color: THEME.colors.secondary }}>{trade.exitPrice != null ? `$${f2(trade.exitPrice)}` : '—'}</span>
+        <span style={{ color: trade.pnl != null ? (trade.pnl >= 0 ? LIME : RED) : THEME.colors.secondary, fontWeight: 700 }}>{trade.pnl != null ? fmtD(trade.pnl) : '—'}</span>
+        <span style={{ color: THEME.colors.secondary, fontSize: 10 }}>{trade.rr ? `1:${f2(trade.rr)}` : '—'}</span>
+        <span style={{ color: THEME.colors.secondary, fontSize: 10, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: 5 }}>
+          {trade.paper && <span title="Bot coach paper trade" style={{ display: 'inline-block', padding: '1px 5px', borderRadius: 2, background: THEME.colors.surface, color: THEME.colors.purple, fontSize: 8, fontWeight: 800, letterSpacing: '0.12em' }}>PAPER</span>}
           <span style={{ overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{trade.setupType || '—'}</span>
         </span>
-        <button onClick={e => { e.stopPropagation(); onEdit(trade) }} style={{ background: 'transparent', border: 'none', color: '#444', cursor: 'pointer', fontFamily: MONO, fontSize: 14 }}>✎</button>
+        <button onClick={e => { e.stopPropagation(); onEdit(trade) }} style={{ background: 'transparent', border: 'none', color: THEME.colors.secondary, cursor: 'pointer', fontFamily: MONO, fontSize: 14 }}>✎</button>
       </div>
       {open && (
-        <div style={{ background: '#080808', padding: '14px 18px 16px', borderTop: '1px solid #111', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ background: THEME.colors.background, padding: '14px 18px 16px', borderTop: `1px solid ${THEME.colors.surface}`, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, fontSize: 11, fontFamily: MONO }}>
-            <div><div style={{ color: '#444', fontSize: 9, letterSpacing: '0.1em', marginBottom: 3 }}>STOP</div><div style={{ color: RED }}>${f2(trade.stop)}</div></div>
-            <div><div style={{ color: '#444', fontSize: 9, letterSpacing: '0.1em', marginBottom: 3 }}>TARGET</div><div style={{ color: LIME }}>${f2(trade.target)}</div></div>
-            <div><div style={{ color: '#444', fontSize: 9, letterSpacing: '0.1em', marginBottom: 3 }}>CONTRACTS</div><div style={{ color: '#aaa' }}>{trade.contracts || 1}</div></div>
-            <div><div style={{ color: '#444', fontSize: 9, letterSpacing: '0.1em', marginBottom: 3 }}>EXIT TIME</div><div style={{ color: '#aaa' }}>{trade.exitTime || '—'}</div></div>
+            <div><div style={{ color: THEME.colors.secondary, fontSize: 9, letterSpacing: '0.1em', marginBottom: 3 }}>STOP</div><div style={{ color: RED }}>${f2(trade.stop)}</div></div>
+            <div><div style={{ color: THEME.colors.secondary, fontSize: 9, letterSpacing: '0.1em', marginBottom: 3 }}>TARGET</div><div style={{ color: LIME }}>${f2(trade.target)}</div></div>
+            <div><div style={{ color: THEME.colors.secondary, fontSize: 9, letterSpacing: '0.1em', marginBottom: 3 }}>CONTRACTS</div><div style={{ color: THEME.colors.secondary }}>{trade.contracts || 1}</div></div>
+            <div><div style={{ color: THEME.colors.secondary, fontSize: 9, letterSpacing: '0.1em', marginBottom: 3 }}>EXIT TIME</div><div style={{ color: THEME.colors.secondary }}>{trade.exitTime || '—'}</div></div>
           </div>
 
           {/* Holding period — only meaningful on closed multi-bar trades */}
@@ -197,23 +198,23 @@ function TradeRow({ trade, onUpdate, onEdit, onDelete }) {
             const mins = Math.floor((ms % 3600000) / 60000)
             const label = days > 0 ? `${days} day${days !== 1 ? 's' : ''}, ${hours} hour${hours !== 1 ? 's' : ''}` : hours > 0 ? `${hours} hour${hours !== 1 ? 's' : ''}, ${mins} min` : `${mins} min`
             return (
-              <div style={{ fontSize: 10, fontFamily: MONO, color: '#666' }}>
-                <span style={{ color: '#444', letterSpacing: '0.1em' }}>HELD</span> {label}
+              <div style={{ fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary }}>
+                <span style={{ color: THEME.colors.secondary, letterSpacing: '0.1em' }}>HELD</span> {label}
               </div>
             )
           })()}
           <div>
-            <div style={{ fontSize: 9, color: '#444', letterSpacing: '0.1em', fontFamily: MONO, marginBottom: 4 }}>NOTES</div>
-            <input type="text" value={notes} onChange={e => setNotes(e.target.value)} style={{ width: '100%', background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 4, color: '#aaa', fontFamily: MONO, fontSize: 11, padding: '8px 10px', outline: 'none' }} />
+            <div style={{ fontSize: 9, color: THEME.colors.secondary, letterSpacing: '0.1em', fontFamily: MONO, marginBottom: 4 }}>NOTES</div>
+            <input type="text" value={notes} onChange={e => setNotes(e.target.value)} style={{ width: '100%', background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 4, color: THEME.colors.secondary, fontFamily: MONO, fontSize: 11, padding: '8px 10px', outline: 'none' }} />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>
               <div style={{ fontSize: 9, color: LIME, letterSpacing: '0.1em', fontFamily: MONO, marginBottom: 4 }}>WHAT WENT WELL</div>
-              <input type="text" value={whatWell} onChange={e => setWhatWell(e.target.value)} placeholder="One sentence" style={{ width: '100%', background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 4, color: '#aaa', fontFamily: MONO, fontSize: 11, padding: '8px 10px', outline: 'none' }} />
+              <input type="text" value={whatWell} onChange={e => setWhatWell(e.target.value)} placeholder="One sentence" style={{ width: '100%', background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 4, color: THEME.colors.secondary, fontFamily: MONO, fontSize: 11, padding: '8px 10px', outline: 'none' }} />
             </div>
             <div>
               <div style={{ fontSize: 9, color: YELLOW, letterSpacing: '0.1em', fontFamily: MONO, marginBottom: 4 }}>WHAT TO IMPROVE</div>
-              <input type="text" value={whatImprove} onChange={e => setWhatImprove(e.target.value)} placeholder="One sentence" style={{ width: '100%', background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 4, color: '#aaa', fontFamily: MONO, fontSize: 11, padding: '8px 10px', outline: 'none' }} />
+              <input type="text" value={whatImprove} onChange={e => setWhatImprove(e.target.value)} placeholder="One sentence" style={{ width: '100%', background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 4, color: THEME.colors.secondary, fontFamily: MONO, fontSize: 11, padding: '8px 10px', outline: 'none' }} />
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -400,7 +401,7 @@ Be direct and specific. No generic advice. Max 150 words total. End with "GRADE:
     setCoachLoading(false)
   }
 
-  const gradeColor = g => g === 'A' ? LIME : g === 'B' ? YELLOW : g === 'C' ? ORANGE : g === 'D' ? RED : '#555'
+  const gradeColor = g => g === 'A' ? LIME : g === 'B' ? YELLOW : g === 'C' ? ORANGE : g === 'D' ? RED : THEME.colors.border
 
   // ── CSV export ─────────────────────────────────────────────────────────────
   function exportCsv() {
@@ -415,7 +416,7 @@ Be direct and specific. No generic advice. Max 150 words total. End with "GRADE:
         <div><SLabel>Real-Time Trade Tracker</SLabel><Heading>Journal</Heading></div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           {schwabConnected && (
-            <button onClick={syncFromSchwab} disabled={syncStatus.state === 'loading'} style={{ background: syncStatus.state === 'loading' ? '#1a1a1a' : SCHWAB_BLUE, color: syncStatus.state === 'loading' ? '#666' : '#fff', border: 'none', borderRadius: 4, padding: '8px 14px', fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', cursor: syncStatus.state === 'loading' ? 'not-allowed' : 'pointer' }}>
+            <button onClick={syncFromSchwab} disabled={syncStatus.state === 'loading'} style={{ background: syncStatus.state === 'loading' ? THEME.colors.surface : SCHWAB_BLUE, color: syncStatus.state === 'loading' ? THEME.colors.secondary : THEME.colors.text, border: 'none', borderRadius: 4, padding: '8px 14px', fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', cursor: syncStatus.state === 'loading' ? 'not-allowed' : 'pointer' }}>
               {syncStatus.state === 'loading' ? 'Syncing...' : 'Sync from Schwab →'}
             </button>
           )}
@@ -423,8 +424,8 @@ Be direct and specific. No generic advice. Max 150 words total. End with "GRADE:
         </div>
       </div>
       {schwabConnected && syncStatus.at && (
-        <div style={{ fontSize: 10, fontFamily: MONO, color: syncStatus.state === 'err' ? RED : '#888', padding: '4px 0' }}>
-          {syncStatus.msg} <span style={{ color: '#444' }}>· {new Date(syncStatus.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
+        <div style={{ fontSize: 10, fontFamily: MONO, color: syncStatus.state === 'err' ? RED : THEME.colors.secondary, padding: '4px 0' }}>
+          {syncStatus.msg} <span style={{ color: THEME.colors.secondary }}>· {new Date(syncStatus.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
         </div>
       )}
 
@@ -457,8 +458,8 @@ Be direct and specific. No generic advice. Max 150 words total. End with "GRADE:
           ].map(p => <Pill key={p.id} label={p.label} active={period === p.id} onClick={() => setPeriod(p.id)} />)}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={exportCsv} style={{ background: 'transparent', border: `1px solid ${BORDER}`, color: '#aaa', fontFamily: MONO, fontSize: 10, padding: '6px 12px', borderRadius: 3, cursor: 'pointer', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Export CSV</button>
-          <button disabled title="Coming soon, Schwab sync" style={{ background: 'transparent', border: `1px solid #222`, color: '#333', fontFamily: MONO, fontSize: 10, padding: '6px 12px', borderRadius: 3, cursor: 'not-allowed', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Import CSV, soon</button>
+          <button onClick={exportCsv} style={{ background: 'transparent', border: `1px solid ${BORDER}`, color: THEME.colors.secondary, fontFamily: MONO, fontSize: 10, padding: '6px 12px', borderRadius: 3, cursor: 'pointer', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Export CSV</button>
+          <button disabled title="Coming soon, Schwab sync" style={{ background: 'transparent', border: `1px solid ${THEME.colors.surface}`, color: THEME.colors.secondary, fontFamily: MONO, fontSize: 10, padding: '6px 12px', borderRadius: 3, cursor: 'not-allowed', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Import CSV, soon</button>
         </div>
       </div>
 
@@ -480,14 +481,14 @@ Be direct and specific. No generic advice. Max 150 words total. End with "GRADE:
 
       {/* ── TRADES TABLE ────────────────────────────────────────────────────── */}
       {visibleSorted.length === 0 ? (
-        <div style={{ padding: '40px 24px', background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 5 }}>
-          <div style={{ fontSize: 11, fontFamily: MONO, color: '#2a2a2a', marginBottom: 8 }}>No trades for this filter.</div>
-          <div style={{ fontSize: 10, fontFamily: MONO, color: '#1e1e1e', lineHeight: 1.8 }}>Hit the + button to log your first trade. Open trades show at the top of this tab with live P&L.</div>
+        <div style={{ padding: '40px 24px', background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 5 }}>
+          <div style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary, marginBottom: 8 }}>No trades for this filter.</div>
+          <div style={{ fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary, lineHeight: 1.8 }}>Hit the + button to log your first trade. Open trades show at the top of this tab with live P&L.</div>
         </div>
       ) : (
-        <div style={{ background: '#090909', border: `1px solid ${BORDER}`, borderRadius: 5, overflow: 'hidden' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '50px 50px 56px 56px 50px 50px 70px 70px 78px 60px 1fr 30px', gap: 8, padding: '9px 14px', borderBottom: '1px solid #111', background: '#0a0a0a' }}>
-            {['Time', 'Date', 'Ticker', 'Strike', 'Type', 'DTE', 'Entry', 'Exit', 'P&L', 'R:R', 'Setup', ''].map(h => <span key={h} style={{ fontSize: 9, letterSpacing: '0.1em', color: '#333', textTransform: 'uppercase', fontFamily: MONO }}>{h}</span>)}
+        <div style={{ background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 5, overflow: 'hidden' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '50px 50px 56px 56px 50px 50px 70px 70px 78px 60px 1fr 30px', gap: 8, padding: '9px 14px', borderBottom: `1px solid ${THEME.colors.surface}`, background: THEME.colors.background }}>
+            {['Time', 'Date', 'Ticker', 'Strike', 'Type', 'DTE', 'Entry', 'Exit', 'P&L', 'R:R', 'Setup', ''].map(h => <span key={h} style={{ fontSize: 9, letterSpacing: '0.1em', color: THEME.colors.secondary, textTransform: 'uppercase', fontFamily: MONO }}>{h}</span>)}
           </div>
           {visibleSorted.map(t => <TradeRow key={t.id} trade={t} onUpdate={onUpdate} onEdit={onEdit} onDelete={onDelete} />)}
         </div>
@@ -497,26 +498,26 @@ Be direct and specific. No generic advice. Max 150 words total. End with "GRADE:
       {closedFiltered.length > 0 && (
         <div style={{ background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 5, padding: '14px 18px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 14, fontFamily: MONO }}>
           {[
-            { l: 'Trades', v: summary.count, c: '#e8e8e8' },
+            { l: 'Trades', v: summary.count, c: THEME.colors.text },
             { l: 'Wins', v: summary.wins, c: LIME },
             { l: 'Losses', v: summary.losses, c: RED },
             { l: 'Win Rate', v: summary.winRate != null ? `${Math.round(summary.winRate)}%` : '—', c: summary.winRate >= 50 ? LIME : YELLOW },
             { l: 'Total P&L', v: fmtD(summary.totalPnl), c: summary.totalPnl >= 0 ? LIME : RED },
             { l: 'Best', v: summary.best ? fmtD(summary.best) : '—', c: LIME },
             { l: 'Worst', v: summary.worst ? fmtD(summary.worst) : '—', c: RED },
-            { l: 'Avg R:R', v: summary.avgRr ? `1:${f2(summary.avgRr)}` : '—', c: '#aaa' },
+            { l: 'Avg R:R', v: summary.avgRr ? `1:${f2(summary.avgRr)}` : '—', c: THEME.colors.secondary },
           ].map(s => (
             <div key={s.l}>
-              <div style={{ fontSize: 9, color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 3 }}>{s.l}</div>
+              <div style={{ fontSize: 9, color: THEME.colors.secondary, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 3 }}>{s.l}</div>
               <div style={{ fontSize: 14, fontWeight: 700, color: s.c }}>{s.v}</div>
             </div>
           ))}
           {(summary.bestSetup || summary.bestTicker) && (
-            <div style={{ gridColumn: '1 / -1', borderTop: '1px solid #1a1a1a', paddingTop: 10, marginTop: 4, display: 'flex', gap: 18, flexWrap: 'wrap', fontSize: 11 }}>
-              {summary.bestSetup && <span style={{ color: '#666' }}>Best setup: <strong style={{ color: '#aaa' }}>{summary.bestSetup[0]}</strong> ({fmtD(summary.bestSetup[1])})</span>}
-              {summary.bestTicker && <span style={{ color: '#666' }}>Best ticker: <strong style={{ color: '#aaa' }}>{summary.bestTicker[0]}</strong> ({fmtD(summary.bestTicker[1])})</span>}
-              {summary.bestDay && <span style={{ color: '#666' }}>Best day: <strong style={{ color: LIME }}>{fmtD(summary.bestDay[1])}</strong></span>}
-              {summary.worstDay && summary.worstDay[1] < 0 && <span style={{ color: '#666' }}>Worst day: <strong style={{ color: RED }}>{fmtD(summary.worstDay[1])}</strong></span>}
+            <div style={{ gridColumn: '1 / -1', borderTop: `1px solid ${THEME.colors.surface}`, paddingTop: 10, marginTop: 4, display: 'flex', gap: 18, flexWrap: 'wrap', fontSize: 11 }}>
+              {summary.bestSetup && <span style={{ color: THEME.colors.secondary }}>Best setup: <strong style={{ color: THEME.colors.secondary }}>{summary.bestSetup[0]}</strong> ({fmtD(summary.bestSetup[1])})</span>}
+              {summary.bestTicker && <span style={{ color: THEME.colors.secondary }}>Best ticker: <strong style={{ color: THEME.colors.secondary }}>{summary.bestTicker[0]}</strong> ({fmtD(summary.bestTicker[1])})</span>}
+              {summary.bestDay && <span style={{ color: THEME.colors.secondary }}>Best day: <strong style={{ color: LIME }}>{fmtD(summary.bestDay[1])}</strong></span>}
+              {summary.worstDay && summary.worstDay[1] < 0 && <span style={{ color: THEME.colors.secondary }}>Worst day: <strong style={{ color: RED }}>{fmtD(summary.worstDay[1])}</strong></span>}
             </div>
           )}
         </div>
@@ -536,13 +537,13 @@ Be direct and specific. No generic advice. Max 150 words total. End with "GRADE:
                 </div>
                 <Btn small variant="ghost" onClick={generateCoaching} disabled={coachLoading}>{coachLoading ? 'Coaching...' : 'Regenerate'}</Btn>
               </div>
-              <pre style={{ fontFamily: MONO, fontSize: 11, color: '#888', lineHeight: 1.75, whiteSpace: 'pre-wrap', margin: 0 }}>{todayNote.note}</pre>
+              <pre style={{ fontFamily: MONO, fontSize: 11, color: THEME.colors.secondary, lineHeight: 1.75, whiteSpace: 'pre-wrap', margin: 0 }}>{todayNote.note}</pre>
             </>
           ) : (
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
               <div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#aaa', fontFamily: MONO, marginBottom: 4 }}>EOD Coach</div>
-                <div style={{ fontSize: 11, color: '#555', fontFamily: MONO }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: THEME.colors.secondary, fontFamily: MONO, marginBottom: 4 }}>EOD Coach</div>
+                <div style={{ fontSize: 11, color: THEME.colors.secondary, fontFamily: MONO }}>
                   {todayTrades.length} trade{todayTrades.length !== 1 ? 's' : ''} today. Get Claude's coaching and discipline grade.
                 </div>
               </div>

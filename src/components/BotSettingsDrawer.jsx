@@ -1,3 +1,4 @@
+import { THEME } from '../lib/theme.js'
 // ─────────────────────────────────────────────────────────────────────────────
 // BotSettingsDrawer.jsx — collapsible settings panel for the coach.
 //
@@ -15,9 +16,9 @@
 import { useState } from 'react'
 import { LIME, RED, YELLOW, PANEL, BORDER, MONO, SANS } from '../constants.js'
 
-const FG = '#e8e8e8'
-const DIM = '#888'
-const MUTED = '#666'
+const FG = THEME.colors.text
+const DIM = THEME.colors.secondary
+const MUTED = THEME.colors.secondary
 
 const MAX_LOSS_LIMIT = 200    // hard cap per spec
 
@@ -130,7 +131,7 @@ export default function BotSettingsDrawer({ settings, onUpdateSettings, onResetS
                 <button
                   onClick={tryEnableLive}
                   disabled={liveTyped.trim().toUpperCase() !== 'LIVE'}
-                  style={liveTyped.trim().toUpperCase() === 'LIVE' ? { ...primaryBtn, background: RED, color: '#0a0a0a' } : { ...primaryBtn, background: '#1a1a1a', color: '#555', cursor: 'not-allowed' }}
+                  style={liveTyped.trim().toUpperCase() === 'LIVE' ? { ...primaryBtn, background: RED, color: THEME.colors.background } : { ...primaryBtn, background: THEME.colors.surface, color: THEME.colors.secondary, cursor: 'not-allowed' }}
                 >Enable live</button>
               </div>
             )}
@@ -150,7 +151,7 @@ export default function BotSettingsDrawer({ settings, onUpdateSettings, onResetS
               <button
                 onClick={tryResetSession}
                 disabled={resetTyped.trim().toUpperCase() !== 'RESET'}
-                style={resetTyped.trim().toUpperCase() === 'RESET' ? { ...primaryBtn, background: YELLOW, color: '#0a0a0a' } : { ...primaryBtn, background: '#1a1a1a', color: '#555', cursor: 'not-allowed' }}
+                style={resetTyped.trim().toUpperCase() === 'RESET' ? { ...primaryBtn, background: YELLOW, color: THEME.colors.background } : { ...primaryBtn, background: THEME.colors.surface, color: THEME.colors.secondary, cursor: 'not-allowed' }}
               >Reset session</button>
             </div>
             <div style={{ fontSize: 10, color: MUTED, fontFamily: MONO, marginTop: 6, letterSpacing: '0.04em', lineHeight: 1.5 }}>
@@ -180,17 +181,17 @@ function Toggle({ checked, onChange }) {
     <button
       onClick={() => onChange(!checked)}
       style={{
-        width: 44, height: 24, borderRadius: 12, background: checked ? LIME : '#2a2a2a', border: `1px solid ${checked ? LIME : BORDER}`,
+        width: 44, height: 24, borderRadius: 12, background: checked ? LIME : THEME.colors.border, border: `1px solid ${checked ? LIME : BORDER}`,
         position: 'relative', cursor: 'pointer', transition: 'background 0.15s',
       }}
     >
-      <span style={{ position: 'absolute', top: 2, left: checked ? 22 : 2, width: 18, height: 18, borderRadius: '50%', background: checked ? '#0a0a0a' : DIM, transition: 'left 0.15s' }} />
+      <span style={{ position: 'absolute', top: 2, left: checked ? 22 : 2, width: 18, height: 18, borderRadius: '50%', background: checked ? THEME.colors.background : DIM, transition: 'left 0.15s' }} />
     </button>
   )
 }
 
 const input = {
-  background: '#0a0a0a',
+  background: THEME.colors.background,
   color: FG,
   border: `1px solid ${BORDER}`,
   borderRadius: 3,
@@ -202,7 +203,7 @@ const input = {
 
 const primaryBtn = {
   background: LIME,
-  color: '#0a0a0a',
+  color: THEME.colors.background,
   border: 'none',
   borderRadius: 3,
   padding: '7px 14px',

@@ -1,3 +1,4 @@
+import { THEME } from '../lib/theme.js'
 // ─────────────────────────────────────────────────────────────────────────────
 // BotRightNowCard.jsx — hero card driven by the coach engine state.
 //
@@ -16,12 +17,12 @@ import { useEffect, useState } from 'react'
 import { LIME, RED, YELLOW, BLUE, PURPLE, ORANGE, PANEL, BORDER, MONO, SANS, f2, fmtD } from '../constants.js'
 
 const CARD_BG = PANEL
-const CARD_BG_GO = '#0e1707'
-const CARD_BG_WATCH = '#16140a'
-const CARD_BG_LOCKED = '#170a0a'
-const MUTED = '#666'
-const FG = '#e8e8e8'
-const DIM = '#888'
+const CARD_BG_GO = THEME.colors.positiveSurface
+const CARD_BG_WATCH = THEME.colors.surface
+const CARD_BG_LOCKED = THEME.colors.negativeSurface
+const MUTED = THEME.colors.secondary
+const FG = THEME.colors.text
+const DIM = THEME.colors.secondary
 
 function StateTag({ label, color }) {
   return (
@@ -49,8 +50,8 @@ function Btn({ children, onClick, color = LIME, ghost = false, disabled = false,
       disabled={disabled}
       title={title}
       style={{
-        background: disabled ? '#1a1a1a' : ghost ? 'transparent' : color,
-        color: disabled ? '#555' : ghost ? color : '#0a0a0a',
+        background: disabled ? THEME.colors.surface : ghost ? 'transparent' : color,
+        color: disabled ? THEME.colors.secondary : ghost ? color : THEME.colors.secondary,
         border: ghost ? `1px solid ${color}55` : 'none',
         borderRadius: 4,
         padding,
@@ -203,7 +204,7 @@ function PaperField({ label, value, setValue, placeholder }) {
         value={value}
         onChange={e => setValue(e.target.value)}
         placeholder={placeholder}
-        style={{ background: '#0a0a0a', color: FG, border: `1px solid ${BORDER}`, borderRadius: 3, padding: '6px 9px', fontFamily: MONO, fontSize: 12 }}
+        style={{ background: THEME.colors.background, color: FG, border: `1px solid ${BORDER}`, borderRadius: 3, padding: '6px 9px', fontFamily: MONO, fontSize: 12 }}
       />
     </label>
   )
@@ -264,7 +265,7 @@ function InTradeView({ position, ticker, onCloseManually }) {
           <Btn onClick={() => setShowClose(true)} color={BLUE} size="md">Close manually</Btn>
         </div>
       ) : (
-        <div style={{ marginTop: 16, padding: 12, background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 4 }}>
+        <div style={{ marginTop: 16, padding: 12, background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 4 }}>
           <div style={{ fontSize: 10, color: MUTED, fontFamily: MONO, letterSpacing: '0.12em', marginBottom: 8, textTransform: 'uppercase' }}>
             Exit premium per contract
           </div>
@@ -275,7 +276,7 @@ function InTradeView({ position, ticker, onCloseManually }) {
               value={exitPremium}
               onChange={e => setExitPremium(e.target.value)}
               placeholder={f2(position.premiumPaid)}
-              style={{ flex: 1, background: '#000', color: FG, border: `1px solid ${BORDER}`, borderRadius: 3, padding: '7px 10px', fontFamily: MONO, fontSize: 13 }}
+              style={{ flex: 1, background: THEME.colors.background, color: FG, border: `1px solid ${BORDER}`, borderRadius: 3, padding: '7px 10px', fontFamily: MONO, fontSize: 13 }}
             />
             <Btn onClick={handleConfirmClose} color={RED} size="sm">Confirm close</Btn>
             <Btn onClick={() => { setShowClose(false); setExitPremium('') }} ghost color={DIM} size="sm">Cancel</Btn>
@@ -361,7 +362,7 @@ function LockedView({ realizedPL, settings, onUnlock, perTickerBreakdown = [] })
                   display: 'grid',
                   gridTemplateColumns: '60px 1fr 80px 80px',
                   alignItems: 'center', gap: 12,
-                  padding: '6px 10px', background: '#0a0a0a',
+                  padding: '6px 10px', background: THEME.colors.background,
                   border: `1px solid ${BORDER}`, borderRadius: 3,
                 }}>
                   <span style={{ fontSize: 11, color: FG, fontFamily: MONO, fontWeight: 800, letterSpacing: '0.08em' }}>{row.ticker}</span>
@@ -381,7 +382,7 @@ function LockedView({ realizedPL, settings, onUnlock, perTickerBreakdown = [] })
         </div>
       )}
 
-      <div style={{ marginTop: 16, padding: 12, background: '#0a0a0a', border: `1px solid ${RED}33`, borderRadius: 4 }}>
+      <div style={{ marginTop: 16, padding: 12, background: THEME.colors.background, border: `1px solid ${RED}33`, borderRadius: 4 }}>
         <div style={{ fontSize: 10, color: RED, fontFamily: MONO, letterSpacing: '0.14em', marginBottom: 8, textTransform: 'uppercase' }}>
           Override (not recommended)
         </div>
@@ -390,7 +391,7 @@ function LockedView({ realizedPL, settings, onUnlock, perTickerBreakdown = [] })
             value={typed}
             onChange={e => setTyped(e.target.value)}
             placeholder="Type UNLOCK"
-            style={{ flex: 1, background: '#000', color: FG, border: `1px solid ${BORDER}`, borderRadius: 3, padding: '7px 10px', fontFamily: MONO, fontSize: 12, letterSpacing: '0.14em' }}
+            style={{ flex: 1, background: THEME.colors.background, color: FG, border: `1px solid ${BORDER}`, borderRadius: 3, padding: '7px 10px', fontFamily: MONO, fontSize: 12, letterSpacing: '0.14em' }}
           />
           <Btn onClick={() => { if (ready) { onUnlock(); setTyped('') } }} disabled={!ready} color={RED} size="md">Unlock</Btn>
         </div>

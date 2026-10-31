@@ -1,3 +1,5 @@
+import { useModalFocus } from './workspace/useModalFocus.js'
+import { THEME } from '../lib/theme.js'
 import { useState, useEffect, useMemo } from 'react'
 import { LIME, RED, YELLOW, MONO, BORDER, PANEL, uid, f2, todayStr, localDateStr, JOURNAL_SETUP_OPTIONS } from '../constants.js'
 
@@ -6,28 +8,28 @@ const SETUP_OPTIONS = JOURNAL_SETUP_OPTIONS
 function Field({ label, children }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-      <label style={{ fontSize: 9, letterSpacing: '0.14em', color: '#666', textTransform: 'uppercase', fontFamily: MONO }}>{label}</label>
+      <label style={{ fontSize: 9, letterSpacing: '0.14em', color: THEME.colors.secondary, textTransform: 'uppercase', fontFamily: MONO }}>{label}</label>
       {children}
     </div>
   )
 }
 
 const inputStyle = {
-  background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 4,
-  color: '#e8e8e8', fontFamily: MONO, fontSize: 13, padding: '10px 12px',
+  background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 4,
+  color: THEME.colors.text, fontFamily: MONO, fontSize: 13, padding: '10px 12px',
   outline: 'none', width: '100%', boxSizing: 'border-box',
 }
 
 function ToggleGroup({ options, value, onChange }) {
   return (
-    <div style={{ display: 'flex', gap: 4, background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 4, padding: 3 }}>
+    <div style={{ display: 'flex', gap: 4, background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 4, padding: 3 }}>
       {options.map(opt => {
         const active = value === opt.value
         return (
           <button key={opt.value} type="button" onClick={() => onChange(opt.value)} style={{
             flex: 1, padding: '10px 6px',
             background: active ? (opt.activeBg || LIME) : 'transparent',
-            color: active ? (opt.activeText || '#000') : (opt.idleText || '#888'),
+            color: active ? (opt.activeText || THEME.colors.background) : (opt.idleText || THEME.colors.secondary),
             border: 'none', cursor: 'pointer', borderRadius: 3,
             fontFamily: MONO, fontSize: 11, fontWeight: 700, letterSpacing: '0.1em',
             transition: 'all 0.12s',
@@ -39,6 +41,7 @@ function ToggleGroup({ options, value, onChange }) {
 }
 
 export default function QuickLog({ open, onClose, onSubmit, prep, editing }) {
+  const dialogRef = useModalFocus(open, onClose)
   const [ticker, setTicker] = useState('')
   const [optType, setOptType] = useState('call')
   const [strike, setStrike] = useState('')
@@ -182,11 +185,11 @@ export default function QuickLog({ open, onClose, onSubmit, prep, editing }) {
   const valid = !!ticker.trim() && !!entry && !isNaN(parseFloat(entry)) && !!tradeDate && tradeDate <= localDateStr() && !timeWarning
 
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.82)', zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', overflow: 'auto' }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: PANEL, width: '100%', maxWidth: 560, maxHeight: '94vh', overflow: 'auto', borderRadius: '12px 12px 0 0', padding: '20px 22px 26px', border: `1px solid ${BORDER}`, borderBottom: 'none' }}>
+    <div className="eq-modal-overlay" onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.82)', zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', overflow: 'auto' }}>
+      <div ref={dialogRef} className="eq-modal-panel" role="dialog" aria-modal="true" aria-label={editing ? 'Edit trade' : 'Log a trade'} tabIndex={-1} onClick={e => e.stopPropagation()} style={{ background: PANEL, width: '100%', maxWidth: 560, maxHeight: '94vh', overflow: 'auto', borderRadius: '12px 12px 0 0', padding: '20px 22px 26px', border: `1px solid ${BORDER}`, borderBottom: 'none' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
           <div style={{ fontSize: 14, fontFamily: MONO, fontWeight: 900, color: LIME, letterSpacing: '0.1em' }}>{editing ? 'EDIT TRADE' : 'LOG TRADE'}</div>
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#666', fontFamily: MONO, fontSize: 12, cursor: 'pointer', letterSpacing: '0.1em' }}>CLOSE ✕</button>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: THEME.colors.secondary, fontFamily: MONO, fontSize: 12, cursor: 'pointer', letterSpacing: '0.1em' }}>CLOSE ✕</button>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -195,8 +198,8 @@ export default function QuickLog({ open, onClose, onSubmit, prep, editing }) {
             <Field label="Trade Date"><input type="date" value={tradeDate} max={localDateStr()} onChange={e => setTradeDate(e.target.value)} style={inputStyle} required /></Field>
             <Field label="Type">
               <ToggleGroup options={[
-                { value: 'call', label: 'CALL', activeBg: LIME, activeText: '#000' },
-                { value: 'put', label: 'PUT', activeBg: RED, activeText: '#000' },
+                { value: 'call', label: 'CALL', activeBg: LIME, activeText: THEME.colors.background },
+                { value: 'put', label: 'PUT', activeBg: RED, activeText: THEME.colors.background },
               ]} value={optType} onChange={setOptType} />
             </Field>
           </div>
@@ -214,17 +217,17 @@ export default function QuickLog({ open, onClose, onSubmit, prep, editing }) {
           </div>
 
           {calc && (
-            <div style={{ fontSize: 11, fontFamily: MONO, color: calc.rr >= 2 ? LIME : YELLOW, padding: '6px 12px', background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 4 }}>
+            <div style={{ fontSize: 11, fontFamily: MONO, color: calc.rr >= 2 ? LIME : YELLOW, padding: '6px 12px', background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 4 }}>
               R:R 1:{f2(calc.rr)} · Risk -${f2(calc.dollarRisk)} · Reward +${f2(calc.dollarReward)} · Cost ${f2(calc.totalCost)}
             </div>
           )}
 
           <Field label="Status">
             <ToggleGroup options={[
-              { value: 'open', label: 'OPEN', activeBg: '#888', activeText: '#000' },
-              { value: 'win', label: 'WIN', activeBg: LIME, activeText: '#000' },
-              { value: 'loss', label: 'LOSS', activeBg: RED, activeText: '#000' },
-              { value: 'scratch', label: 'SCRATCH', activeBg: YELLOW, activeText: '#000' },
+              { value: 'open', label: 'OPEN', activeBg: THEME.colors.secondary, activeText: THEME.colors.background },
+              { value: 'win', label: 'WIN', activeBg: LIME, activeText: THEME.colors.background },
+              { value: 'loss', label: 'LOSS', activeBg: RED, activeText: THEME.colors.background },
+              { value: 'scratch', label: 'SCRATCH', activeBg: YELLOW, activeText: THEME.colors.background },
             ]} value={status} onChange={setStatus} />
           </Field>
 
@@ -243,9 +246,9 @@ export default function QuickLog({ open, onClose, onSubmit, prep, editing }) {
                     an option so the dropdown reflects what was originally logged
                     without forcing a rewrite. */}
                 {!SETUP_OPTIONS.includes(setupType) && setupType && (
-                  <option value={setupType} style={{ background: '#0a0a0a' }}>{setupType} (legacy)</option>
+                  <option value={setupType} style={{ background: THEME.colors.background }}>{setupType} (legacy)</option>
                 )}
-                {SETUP_OPTIONS.map(s => <option key={s} value={s} style={{ background: '#0a0a0a' }}>{s}</option>)}
+                {SETUP_OPTIONS.map(s => <option key={s} value={s} style={{ background: THEME.colors.background }}>{s}</option>)}
               </select>
             </Field>
           </div>
@@ -260,19 +263,19 @@ export default function QuickLog({ open, onClose, onSubmit, prep, editing }) {
           )}
 
           {timeWarning && (
-            <div style={{ fontSize: 11, fontFamily: MONO, color: RED, padding: '6px 12px', background: '#1a0505', border: `1px solid ${RED}33`, borderRadius: 4 }}>
+            <div style={{ fontSize: 11, fontFamily: MONO, color: RED, padding: '6px 12px', background: THEME.colors.negativeSurface, border: `1px solid ${RED}33`, borderRadius: 4 }}>
               {timeWarning}
             </div>
           )}
 
           <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
             <button onClick={onClose} style={{
-              flex: 1, background: 'transparent', border: `1px solid ${BORDER}`, color: '#888',
+              flex: 1, background: 'transparent', border: `1px solid ${BORDER}`, color: THEME.colors.secondary,
               fontFamily: MONO, fontSize: 11, fontWeight: 700, letterSpacing: '0.14em',
               padding: '12px', borderRadius: 4, cursor: 'pointer',
             }}>CANCEL</button>
             <button onClick={submit} disabled={!valid} style={{
-              flex: 2, background: valid ? LIME : '#1a1a1a', color: valid ? '#000' : '#444',
+              flex: 2, background: valid ? LIME : THEME.colors.surface, color: valid ? THEME.colors.background : THEME.colors.secondary,
               border: 'none', fontFamily: MONO, fontSize: 11, fontWeight: 900, letterSpacing: '0.14em',
               padding: '12px', borderRadius: 4, cursor: valid ? 'pointer' : 'not-allowed',
             }}>{editing ? 'SAVE TRADE →' : 'LOG TRADE →'}</button>

@@ -1,0 +1,13 @@
+private-reports/
+.local/
+tests/
+
+# Protected-preview credential and workspace exclusions.
+.env
+.env.*
+.git
+.venv
+node_modules
+data/
+*.pem
+*.crt

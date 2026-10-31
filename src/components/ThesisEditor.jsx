@@ -1,3 +1,4 @@
+import { THEME } from '../lib/theme.js'
 // ─────────────────────────────────────────────────────────────────────────────
 // ThesisEditor.jsx — modal form for the per-ticker thesis structure.
 //
@@ -10,8 +11,8 @@
 import { useEffect, useState } from 'react'
 import { LIME, RED, YELLOW, MONO, BORDER, PANEL, DARK } from '../constants.js'
 
-const FG = '#e8e8e8'
-const MUTED = '#666'
+const FG = THEME.colors.text
+const MUTED = THEME.colors.secondary
 
 const inputStyle = {
   background: DARK, border: `1px solid ${BORDER}`, borderRadius: 3,
@@ -26,7 +27,7 @@ const sectionStyle = {
   padding: 14, display: 'flex', flexDirection: 'column', gap: 10,
 }
 const sectionLabel = {
-  fontSize: 10, color: '#aaa', fontFamily: MONO, letterSpacing: '0.16em',
+  fontSize: 10, color: THEME.colors.secondary, fontFamily: MONO, letterSpacing: '0.16em',
   textTransform: 'uppercase', fontWeight: 700,
 }
 
@@ -41,7 +42,7 @@ function ZoneRow({ row, onChange, onRemove }) {
         <input type="text" value={row.notes || ''} onChange={e => onChange({ ...row, notes: e.target.value })} placeholder="Notes" style={inputStyle} />
       </div>
       <button onClick={onRemove} style={{
-        background: 'transparent', border: `1px solid ${BORDER}`, color: '#aaa',
+        background: 'transparent', border: `1px solid ${BORDER}`, color: THEME.colors.secondary,
         padding: '5px 10px', borderRadius: 3, cursor: 'pointer', fontFamily: MONO,
         fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', alignSelf: 'flex-start',
       }}>Remove</button>
@@ -61,7 +62,7 @@ function TargetRow({ row, onChange, onRemove }) {
       </select>
       <input type="text" value={row.notes || ''} onChange={e => onChange({ ...row, notes: e.target.value })} placeholder="Notes" style={inputStyle} />
       <button onClick={onRemove} style={{
-        background: 'transparent', border: `1px solid ${BORDER}`, color: '#aaa',
+        background: 'transparent', border: `1px solid ${BORDER}`, color: THEME.colors.secondary,
         padding: '5px 10px', borderRadius: 3, cursor: 'pointer', fontFamily: MONO,
         fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase',
       }}>Remove</button>
@@ -126,7 +127,7 @@ export default function ThesisEditor({ initial, isNew = false, onSave, onCancel 
       padding: 28, zIndex: 240, overflowY: 'auto',
     }}>
       <div style={{
-        background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 6,
+        background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 6,
         width: '100%', maxWidth: 800, display: 'flex', flexDirection: 'column', gap: 14,
         padding: 18, fontFamily: MONO,
       }}>
@@ -134,7 +135,7 @@ export default function ThesisEditor({ initial, isNew = false, onSave, onCancel 
           <div style={{ fontSize: 16, fontWeight: 800, color: FG, letterSpacing: '-0.01em' }}>
             {isNew ? 'New focused ticker' : `Edit thesis: ${record.ticker}`}
           </div>
-          <button onClick={onCancel} style={{ background: 'transparent', border: 'none', color: '#aaa', fontSize: 16, cursor: 'pointer' }}>✕</button>
+          <button onClick={onCancel} style={{ background: 'transparent', border: 'none', color: THEME.colors.secondary, fontSize: 16, cursor: 'pointer' }}>✕</button>
         </div>
 
         {/* Identity + direction */}
@@ -158,7 +159,7 @@ export default function ThesisEditor({ initial, isNew = false, onSave, onCancel 
                 {['long', 'short', 'neutral'].map(d => (
                   <button key={d} onClick={() => patch({ thesisDirection: d })} style={{
                     background: record.thesisDirection === d ? (d === 'short' ? RED : d === 'neutral' ? YELLOW : LIME) : 'transparent',
-                    color: record.thesisDirection === d ? '#000' : '#aaa',
+                    color: record.thesisDirection === d ? THEME.colors.background : THEME.colors.secondary,
                     border: `1px solid ${record.thesisDirection === d ? (d === 'short' ? RED : d === 'neutral' ? YELLOW : LIME) : BORDER}`,
                     padding: '5px 12px', borderRadius: 3, cursor: 'pointer',
                     fontFamily: MONO, fontSize: 10, letterSpacing: '0.14em',
@@ -232,19 +233,19 @@ export default function ThesisEditor({ initial, isNew = false, onSave, onCancel 
         </div>
 
         {error && (
-          <div style={{ background: '#150505', border: `1px solid ${RED}55`, color: RED, padding: '8px 12px', borderRadius: 4, fontSize: 11, fontFamily: MONO }}>
+          <div style={{ background: THEME.colors.negativeSurface, border: `1px solid ${RED}55`, color: RED, padding: '8px 12px', borderRadius: 4, fontSize: 11, fontFamily: MONO }}>
             {error}
           </div>
         )}
 
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button onClick={onCancel} style={{
-            background: 'transparent', border: `1px solid ${BORDER}`, color: '#aaa',
+            background: 'transparent', border: `1px solid ${BORDER}`, color: THEME.colors.secondary,
             padding: '9px 18px', borderRadius: 4, cursor: 'pointer',
             fontFamily: MONO, fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase',
           }}>Cancel</button>
           <button onClick={handleSave} style={{
-            background: LIME, color: '#000', border: 'none',
+            background: LIME, color: THEME.colors.background, border: 'none',
             padding: '9px 18px', borderRadius: 4, cursor: 'pointer',
             fontFamily: MONO, fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase',
             fontWeight: 800,

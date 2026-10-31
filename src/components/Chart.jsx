@@ -1,3 +1,5 @@
+import { EmptyState } from './workspace/primitives.jsx'
+import { THEME } from '../lib/theme.js'
 import { useEffect, useRef, useState, useMemo } from 'react'
 import { createChart, CandlestickSeries, HistogramSeries, LineSeries, LineStyle, createSeriesMarkers } from 'lightweight-charts'
 import { Pill } from './ui.jsx'
@@ -48,12 +50,12 @@ function VolumeSparkline({ values, threshold, width = 84, height = 16 }) {
         const y = height - h
         const above = threshold > 0 && v >= threshold
         return (
-          <rect key={i} x={x} y={y} width={Math.max(1, barW - gap)} height={h} fill={above ? LIME : '#555'} />
+          <rect key={i} x={x} y={y} width={Math.max(1, barW - gap)} height={h} fill={above ? LIME : THEME.colors.border} />
         )
       })}
       {threshold > 0 && (() => {
         const ty = height - Math.min(height - 1, (threshold / peak) * height)
-        return <line x1={0} x2={width} y1={ty} y2={ty} stroke="#888" strokeWidth={0.5} strokeDasharray="2 2" />
+        return <line x1={0} x2={width} y1={ty} y2={ty} stroke={THEME.colors.secondary} strokeWidth={0.5} strokeDasharray="2 2" />
       })()}
     </svg>
   )
@@ -78,30 +80,30 @@ const LAYER_GROUPS = [
 ]
 
 function colorFor(type, label = '') {
-  if (label.includes('Prev Day Close')) return '#888'
-  if (label.includes('Prev Day')) return '#FFFFFF'
+  if (label.includes('Prev Day Close')) return THEME.colors.secondary
+  if (label.includes('Prev Day')) return THEME.colors.text
   if (label.includes('Fib 61.8')) return LIME
   switch (type) {
     case 'vwap': return PURPLE
-    case 'vwap-band': return '#7050A0'
-    case 'pivot': return '#888'
+    case 'vwap-band': return THEME.colors.purple
+    case 'pivot': return THEME.colors.secondary
     case 'pivot-r': return ORANGE
     case 'pivot-s': return BLUE
-    case 'structure': return '#FFFFFF'
-    case 'weekly': return '#FF6600'
+    case 'structure': return THEME.colors.text
+    case 'weekly': return THEME.colors.caution
     case 'orb': return LIME
     case 'fib': return YELLOW
     case 'supply': return RED
     case 'demand': return BLUE
-    case 'poc': return '#FFFFFF'
-    case 'vah': return '#FFFFFF'
-    case 'val': return '#FFFFFF'
-    case 'hvn': return '#6699FF'
-    case 'lvn': return '#445'
-    case 'custom': return '#FFFFFF'
+    case 'poc': return THEME.colors.text
+    case 'vah': return THEME.colors.text
+    case 'val': return THEME.colors.text
+    case 'hvn': return THEME.colors.blue
+    case 'lvn': return THEME.colors.secondary
+    case 'custom': return THEME.colors.text
     case 'premarket-high': return LIME
     case 'premarket-low': return RED
-    default: return '#666'
+    default: return THEME.colors.secondary
   }
 }
 
@@ -165,15 +167,15 @@ function withAlpha(color, alpha) {
 const FADE_DISTANCE = 1.50
 const ACTIVE_BAND_FILL = 'rgba(209, 255, 121, 0.06)'
 const HALO_FILL = 'rgba(209, 255, 121, 0.12)'
-const ABOVE_BG = '#15191A', ABOVE_BORDER = '#2A3320', ABOVE_TEXT = '#9DB877'
-const BELOW_BG = '#1A1515', BELOW_BORDER = '#332020', BELOW_TEXT = '#C77575'
+const ABOVE_BG = THEME.colors.surface, ABOVE_BORDER = THEME.colors.positiveSurface, ABOVE_TEXT = THEME.colors.positive
+const BELOW_BG = THEME.colors.surface, BELOW_BORDER = THEME.colors.negativeSurface, BELOW_TEXT = THEME.colors.negative
 
 // Support/resistance overrides for level lines. Applied per-render in the
 // fade effect so the color follows the level's position relative to current
 // price rather than its static type (PDH stays red as resistance until price
 // crosses above it; PP can swap depending on the day's structure).
-const RESISTANCE_COLOR = '#ef4444'
-const SUPPORT_COLOR = '#22c55e'
+const RESISTANCE_COLOR = THEME.colors.negative
+const SUPPORT_COLOR = THEME.colors.positive
 
 // Synthesize the four timeframe states into one bias label. Returns
 // { text, color } shaped for the top-right indicator. Distinguishes
@@ -183,7 +185,7 @@ function synthesizeBias(mtf) {
   const order = ['1h', '15m', '5m', '1m']
   const states = order.map(tf => ({ tf, state: mtf?.[tf]?.state || null }))
   const present = states.filter(s => s.state)
-  if (present.length === 0) return { text: '— NO DATA', color: '#666' }
+  if (present.length === 0) return { text: '— NO DATA', color: THEME.colors.secondary }
 
   const bulls = present.filter(s => s.state === 'BULLISH')
   const bears = present.filter(s => s.state === 'BEARISH')
@@ -213,9 +215,9 @@ function buildActionBanner(mtfAlignment, levelMap) {
   if (score < 50) {
     return {
       tone: 'watch',
-      bg: '#141414',
-      border: '#252525',
-      color: '#888',
+      bg: THEME.colors.background,
+      border: THEME.colors.border,
+      color: THEME.colors.secondary,
       text: `WATCH ONLY — Setup Score ${score} / 100 — ${label}`,
     }
   }
@@ -229,7 +231,7 @@ function buildActionBanner(mtfAlignment, levelMap) {
       : 'confirmation on 5M'
     return {
       tone: 'approach',
-      bg: '#1a1605',
+      bg: THEME.colors.surface,
       border: `${YELLOW}55`,
       color: YELLOW,
       text: `APPROACHING — Setup Score ${score} / 100 — Watch for ${trigger}`,
@@ -258,7 +260,7 @@ function buildActionBanner(mtfAlignment, levelMap) {
   parts.push(target != null ? `Target $${f2(target)}` : 'Target open')
   return {
     tone: 'ready',
-    bg: '#071208',
+    bg: THEME.colors.positiveSurface,
     border: `${LIME}55`,
     color: LIME,
     text: `SETUP READY — ${side} — ${parts.join(' / ')}`,
@@ -313,8 +315,8 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
     return (
       <div style={{ padding: '40px 24px', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center', maxWidth: 460, margin: '60px auto' }}>
         <div style={{ fontSize: 36, opacity: 0.4 }}>📊</div>
-        <div style={{ fontSize: 14, fontFamily: MONO, fontWeight: 700, color: '#e8e8e8', letterSpacing: '0.04em' }}>Open on desktop for the full chart view.</div>
-        <div style={{ fontSize: 12, fontFamily: MONO, color: '#666', lineHeight: 1.7 }}>
+        <div style={{ fontSize: 14, fontFamily: MONO, fontWeight: 700, color: THEME.colors.text, letterSpacing: '0.04em' }}>Open on desktop for the full chart view.</div>
+        <div style={{ fontSize: 12, fontFamily: MONO, color: THEME.colors.secondary, lineHeight: 1.7 }}>
           Use the <strong style={{ color: LIME }}>Levels</strong> tab for real-time level intelligence, setup quality, alignment score, and entry conditions. Use <strong style={{ color: LIME }}>Journal</strong> with the floating + button to log trades from your phone.
         </div>
       </div>
@@ -391,18 +393,18 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
       width: el.clientWidth,
       height: el.clientHeight,
       layout: {
-        background: { color: '#0a0a0a' },
-        textColor: '#aaa',
+        background: { color: THEME.colors.background },
+        textColor: THEME.colors.secondary,
         fontFamily: 'DM Mono, monospace',
         fontSize: 12,
       },
       grid: {
-        vertLines: { color: '#141414' },
-        horzLines: { color: '#141414' },
+        vertLines: { color: THEME.colors.surface },
+        horzLines: { color: THEME.colors.surface },
       },
       crosshair: { mode: 1 },
-      rightPriceScale: { borderColor: '#2c2c2c', scaleMargins: { top: 0.05, bottom: 0.22 } },
-      timeScale: { borderColor: '#2c2c2c', timeVisible: true, secondsVisible: false, rightOffset: 10 },
+      rightPriceScale: { borderColor: THEME.colors.border, scaleMargins: { top: 0.05, bottom: 0.22 } },
+      timeScale: { borderColor: THEME.colors.border, timeVisible: true, secondsVisible: false, rightOffset: 10 },
     })
 
     const candle = chart.addSeries(CandlestickSeries, {
@@ -421,7 +423,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
     const volume = chart.addSeries(HistogramSeries, {
       priceFormat: { type: 'volume' },
       priceScaleId: 'vol',
-      color: '#444',
+      color: THEME.colors.secondary,
     })
     chart.priceScale('vol').applyOptions({
       scaleMargins: { top: 0.78, bottom: 0 },
@@ -430,7 +432,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
 
     const avgVolLine = chart.addSeries(LineSeries, {
       priceScaleId: 'vol',
-      color: '#FFD16677',
+      color: THEME.colors.caution + '77',
       lineWidth: 1,
       lineStyle: LineStyle.Dashed,
       lastValueVisible: false,
@@ -442,7 +444,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
     // lime when current candle volume is at or above the threshold).
     const thresholdLine = chart.addSeries(LineSeries, {
       priceScaleId: 'vol',
-      color: '#666',
+      color: THEME.colors.secondary,
       lineWidth: 2,
       lineStyle: LineStyle.Dashed,
       lastValueVisible: false,
@@ -451,11 +453,11 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
     })
 
     const swingHighLine = chart.addSeries(LineSeries, {
-      color: '#888', lineWidth: 1, lineStyle: LineStyle.Dotted,
+      color: THEME.colors.secondary, lineWidth: 1, lineStyle: LineStyle.Dotted,
       lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
     })
     const swingLowLine = chart.addSeries(LineSeries, {
-      color: '#888', lineWidth: 1, lineStyle: LineStyle.Dotted,
+      color: THEME.colors.secondary, lineWidth: 1, lineStyle: LineStyle.Dotted,
       lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
     })
 
@@ -501,7 +503,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
       const isPm = isPreMarketBar(b)
       const up = b.c >= b.o
       const baseUp = LIME, baseDown = RED
-      const pmUp = '#7a8a6a', pmDown = '#8a5a5a'
+      const pmUp = THEME.colors.positive, pmDown = THEME.colors.negative
       const color = isPm ? (up ? pmUp : pmDown) : (up ? baseUp : baseDown)
       return {
         time: Math.floor(b.t / 1000),
@@ -558,7 +560,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
     const lastTime = Math.floor(aggregated[aggregated.length - 1].t / 1000)
     const lastVol = aggregated[aggregated.length - 1].v || 0
     const above = lastVol >= currentThreshold
-    tline.applyOptions({ color: above ? LIME : '#666' })
+    tline.applyOptions({ color: above ? LIME : THEME.colors.secondary })
     tline.setData([
       { time: firstTime, value: currentThreshold },
       { time: lastTime, value: currentThreshold },
@@ -616,7 +618,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
         lineWidth: widthFor(level.type, level.label),
         lineStyle: styleFor(level.type, level.label),
         axisLabelVisible: true,
-        axisLabelColor: '#1a1a1a',
+        axisLabelColor: THEME.colors.surface,
         axisLabelTextColor: color,
         title: `${shortName(level.label)} $${f2(level.price)}`,
       })
@@ -634,7 +636,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
         lineStyle: LineStyle.Solid,
         axisLabelVisible: true,
         axisLabelColor: `${LIME}33`,
-        axisLabelTextColor: '#000',
+        axisLabelTextColor: THEME.colors.background,
         title: `${cluster.label} $${f2(cluster.price)}`,
       })
       linesRef.current.push({ line, level: { price: cluster.price, label: cluster.label, type: 'confluence' }, baseColor: LIME, isConfluence: true, lastNear: null })
@@ -705,7 +707,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
           color: faded,
           lineWidth: isImmediate ? 2 : widthFor(entry.level.type, entry.level.label),
           axisLabelTextColor: entry.isConfluence
-            ? (near ? '#000' : 'rgba(0,0,0,0.6)')
+            ? (near ? THEME.colors.background : 'rgba(0,0,0,0.6)')
             : isImmediate ? srColor : faded,
         })
       } catch {}
@@ -748,7 +750,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
         markers.push({
           time: Math.floor(firstReg.t / 1000),
           position: 'aboveBar',
-          color: '#888',
+          color: THEME.colors.secondary,
           shape: 'square',
           text: '◐ Open 8:30 CT',
         })
@@ -770,7 +772,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
       for (const s of toRender) {
         const isNewest = (s.type === 'high' && s.time === newestHighTime)
           || (s.type === 'low' && s.time === newestLowTime)
-        const color = isNewest ? (s.type === 'high' ? RED : LIME) : '#3a3a3a'
+        const color = isNewest ? (s.type === 'high' ? RED : LIME) : THEME.colors.border
         const text = isNewest
           ? (s.type === 'high' ? `SH $${f2(s.price)}` : `SL $${f2(s.price)}`)
           : (s.type === 'high' ? 'SH' : 'SL')
@@ -819,7 +821,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
       if (t.stop != null) {
         const l = candleRef.current.createPriceLine({
           price: t.stop, color: RED, lineWidth: 1, lineStyle: LineStyle.Dashed,
-          axisLabelVisible: true, axisLabelColor: '#1a1a1a', axisLabelTextColor: RED,
+          axisLabelVisible: true, axisLabelColor: THEME.colors.surface, axisLabelTextColor: RED,
           title: `STOP ${t.ticker} $${f2(t.stop)}`,
         })
         tradeLinesRef.current.push(l)
@@ -827,7 +829,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
       if (t.target != null) {
         const l = candleRef.current.createPriceLine({
           price: t.target, color: LIME, lineWidth: 1, lineStyle: LineStyle.Dashed,
-          axisLabelVisible: true, axisLabelColor: '#1a1a1a', axisLabelTextColor: LIME,
+          axisLabelVisible: true, axisLabelColor: THEME.colors.surface, axisLabelTextColor: LIME,
           title: `TGT ${t.ticker} $${f2(t.target)}`,
         })
         tradeLinesRef.current.push(l)
@@ -855,8 +857,8 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
 
     const lastHighLabel = highs[highs.length - 1]?.label
     const lastLowLabel = lows[lows.length - 1]?.label
-    const highColor = lastHighLabel === 'HH' ? LIME : lastHighLabel === 'LH' ? RED : '#666'
-    const lowColor = lastLowLabel === 'HL' ? LIME : lastLowLabel === 'LL' ? RED : '#666'
+    const highColor = lastHighLabel === 'HH' ? LIME : lastHighLabel === 'LH' ? RED : THEME.colors.secondary
+    const lowColor = lastLowLabel === 'HL' ? LIME : lastLowLabel === 'LL' ? RED : THEME.colors.secondary
 
     swingHighLineRef.current.applyOptions({ color: highColor })
     swingLowLineRef.current.applyOptions({ color: lowColor })
@@ -869,7 +871,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
       const color = b.type === 'bullish' ? LIME : RED
       bosLineRef.current = candleRef.current.createPriceLine({
         price: b.price, color, lineWidth: 2, lineStyle: LineStyle.Dashed,
-        axisLabelVisible: true, axisLabelColor: '#1a1a1a', axisLabelTextColor: color,
+        axisLabelVisible: true, axisLabelColor: THEME.colors.surface, axisLabelTextColor: color,
         title: `BOS ${b.type === 'bullish' ? '▲' : '▼'} $${f2(b.price)}`,
       })
     }
@@ -889,7 +891,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
         lineWidth: 2,
         lineStyle: LineStyle.Dashed,
         axisLabelVisible: true,
-        axisLabelColor: '#1a1a1a',
+        axisLabelColor: THEME.colors.surface,
         axisLabelTextColor: RED,
         title: `PUT ENTRY $${f2(putThesis.trigger)}`,
       })
@@ -916,17 +918,17 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
         if (y == null) continue
         const w = Math.max(1, (vol / maxVol) * innerW)
         const isPoc = Math.abs(price - vp.poc) < 1e-9
-        const fill = isPoc ? '#FFFFFF' : '#FFFFFF55'
+        const fill = isPoc ? THEME.colors.text : THEME.colors.text + '55'
         parts.push(`<rect x="${width - w - 3}" y="${y - 1.5}" width="${w}" height="3" fill="${fill}" />`)
       }
 
       if (vp.vah != null) {
         const y = candleRef.current.priceToCoordinate(vp.vah)
-        if (y != null) parts.push(`<line x1="0" y1="${y}" x2="${width}" y2="${y}" stroke="#FFFFFF" stroke-opacity="0.55" stroke-dasharray="3,3" />`)
+        if (y != null) parts.push(`<line x1="0" y1="${y}" x2="${width}" y2="${y}" stroke="${THEME.colors.text}" stroke-opacity="0.55" stroke-dasharray="3,3" />`)
       }
       if (vp.val != null) {
         const y = candleRef.current.priceToCoordinate(vp.val)
-        if (y != null) parts.push(`<line x1="0" y1="${y}" x2="${width}" y2="${y}" stroke="#FFFFFF" stroke-opacity="0.55" stroke-dasharray="3,3" />`)
+        if (y != null) parts.push(`<line x1="0" y1="${y}" x2="${width}" y2="${y}" stroke="${THEME.colors.text}" stroke-opacity="0.55" stroke-dasharray="3,3" />`)
       }
       parts.push('</svg>')
       overlay.innerHTML = parts.join('')
@@ -969,7 +971,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 11, fontFamily: MONO, color: '#666', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{ticker || 'QQQ'}</span>
+          <span style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{ticker || 'QQQ'}</span>
           {liveData?.price && (
             <span style={{ fontSize: 18, fontFamily: MONO, fontWeight: 900, color: LIME }}>${f2(liveData.price)}</span>
           )}
@@ -995,17 +997,17 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
           <span style={{ width: 8 }} />
           <button onClick={() => setAddOpen(s => !s)} style={{
             background: addOpen ? LIME : 'transparent', border: `1px solid ${addOpen ? LIME : BORDER}`,
-            color: addOpen ? '#000' : '#aaa', fontFamily: MONO, fontSize: 9, padding: '4px 10px',
+            color: addOpen ? THEME.colors.background : THEME.colors.secondary, fontFamily: MONO, fontSize: 9, padding: '4px 10px',
             borderRadius: 3, cursor: 'pointer', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700,
           }}>+ Level</button>
           <button onClick={autoFit} style={{
-            background: 'transparent', border: `1px solid ${BORDER}`, color: '#888',
+            background: 'transparent', border: `1px solid ${BORDER}`, color: THEME.colors.secondary,
             fontFamily: MONO, fontSize: 9, padding: '4px 10px', borderRadius: 3,
             cursor: 'pointer', letterSpacing: '0.1em', textTransform: 'uppercase',
           }}>Auto-fit</button>
           <button onClick={() => setShowAllSwings(s => !s)} title="Toggle every detected swing vs only the most recent pair" style={{
-            background: showAllSwings ? '#1a1a1a' : 'transparent', border: `1px solid ${BORDER}`,
-            color: showAllSwings ? LIME : '#888',
+            background: showAllSwings ? THEME.colors.surface : 'transparent', border: `1px solid ${BORDER}`,
+            color: showAllSwings ? LIME : THEME.colors.secondary,
             fontFamily: MONO, fontSize: 9, padding: '4px 10px', borderRadius: 3,
             cursor: 'pointer', letterSpacing: '0.1em', textTransform: 'uppercase',
           }}>{showAllSwings ? 'All Swings ✓' : 'Show All Swings'}</button>
@@ -1015,17 +1017,17 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
       {addOpen && (
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 4, padding: '10px 12px' }}>
           <input type="text" value={newLabel} onInput={e => setNewLabel(e.target.value)} placeholder="Label (e.g. Supply Top)"
-            style={{ flex: 1, background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 3, color: '#e8e8e8', fontFamily: MONO, fontSize: 11, padding: '7px 10px', outline: 'none' }} />
+            style={{ flex: 1, background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 3, color: THEME.colors.text, fontFamily: MONO, fontSize: 11, padding: '7px 10px', outline: 'none' }} />
           <input type="number" value={newPrice} onInput={e => setNewPrice(e.target.value)} placeholder="Price" step="0.01"
-            style={{ width: 110, background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 3, color: '#e8e8e8', fontFamily: MONO, fontSize: 11, padding: '7px 10px', outline: 'none' }}
+            style={{ width: 110, background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 3, color: THEME.colors.text, fontFamily: MONO, fontSize: 11, padding: '7px 10px', outline: 'none' }}
             onKeyDown={e => e.key === 'Enter' && submitAddLevel()} />
           <button onClick={submitAddLevel} disabled={!newLabel.trim() || isNaN(parseFloat(newPrice))} style={{
-            background: LIME, border: 'none', color: '#000', fontFamily: MONO, fontSize: 10, padding: '7px 14px',
+            background: LIME, border: 'none', color: THEME.colors.background, fontFamily: MONO, fontSize: 10, padding: '7px 14px',
             borderRadius: 3, cursor: 'pointer', fontWeight: 700, letterSpacing: '0.08em',
             opacity: !newLabel.trim() || isNaN(parseFloat(newPrice)) ? 0.4 : 1,
           }}>Add</button>
           <button onClick={() => { setAddOpen(false); setNewLabel(''); setNewPrice('') }} style={{
-            background: 'transparent', border: `1px solid ${BORDER}`, color: '#666', fontFamily: MONO, fontSize: 10,
+            background: 'transparent', border: `1px solid ${BORDER}`, color: THEME.colors.secondary, fontFamily: MONO, fontSize: 10,
             padding: '7px 12px', borderRadius: 3, cursor: 'pointer',
           }}>Cancel</button>
         </div>
@@ -1034,7 +1036,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
       {/* ── Volume threshold readout ───────────────────────────────────────── */}
       {(() => {
         const above = volumeState.current >= currentThreshold && currentThreshold > 0
-        const statusColor = above ? LIME : RED
+        const statusColor = !liveData?.intradayBars?.length ? THEME.colors.secondary : above ? LIME : RED
         const statusGlyph = above ? '✓' : '✗'
         return (
           <div style={{
@@ -1042,13 +1044,13 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
             background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 4,
             padding: '8px 12px',
           }}>
-            <span style={{ fontSize: 9, color: '#666', fontFamily: MONO, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+            <span style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
               Vol Threshold, {tickerKey}
             </span>
             <span style={{ fontSize: 13, fontFamily: MONO, fontWeight: 800, color: statusColor }}>
-              {humanVol(volumeState.current)}
+              {liveData?.intradayBars?.length ? humanVol(volumeState.current) : '—'}
             </span>
-            <span style={{ fontSize: 11, fontFamily: MONO, color: '#666' }}>/</span>
+            <span style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary }}>/</span>
             <input
               type="text"
               value={thresholdDraft}
@@ -1058,8 +1060,8 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
               placeholder="50k"
               title="Threshold for the active ticker. Accepts 50000, 50k, 1.2M."
               style={{
-                width: 64, background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 3,
-                color: '#e8e8e8', fontFamily: MONO, fontSize: 12, padding: '4px 8px', outline: 'none',
+                width: 64, background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 3,
+                color: THEME.colors.text, fontFamily: MONO, fontSize: 12, padding: '4px 8px', outline: 'none',
                 textAlign: 'right',
               }}
             />
@@ -1068,10 +1070,10 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
               border: `1px solid ${statusColor}55`, borderRadius: 3, padding: '2px 8px',
               letterSpacing: '0.08em',
             }}>
-              {statusGlyph} {above ? 'ABOVE' : 'BELOW'}
+              {liveData?.intradayBars?.length ? `${statusGlyph} ${above ? 'ABOVE' : 'BELOW'}` : 'Not observed'}
             </span>
             <VolumeSparkline values={volumeState.lastN} threshold={currentThreshold} />
-            <span style={{ fontSize: 9, color: '#444', fontFamily: MONO, letterSpacing: '0.08em' }}>
+            <span style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, letterSpacing: '0.08em' }}>
               last 10 {timeframe} candles
             </span>
           </div>
@@ -1093,17 +1095,18 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
             <span style={{
               fontSize: 13, fontWeight: 800, letterSpacing: '0.08em',
               color: banner.color,
-            }}>{banner.text}</span>
+            }}>{liveData?.intradayBars?.length ? banner.text : 'Market data unavailable · Setup not evaluated'}</span>
           </div>
         )
       })()}
 
-      <div style={{ position: 'relative', width: '100%', height: '70vh', minHeight: 480, background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 5 }}>
+      <div style={{ position: 'relative', width: '100%', height: 'clamp(320px, 48vh, 560px)', minHeight: 300, background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 5 }}>
         <div ref={wrapRef} style={{ width: '100%', height: '100%' }} />
+        {!liveData?.intradayBars?.length && <div className="eq-chart-unavailable"><EmptyState title="Waiting for verified market observations">The chart will populate from your authenticated Massive connection. No sample candles or prices are substituted.</EmptyState></div>}
         <div ref={profileOverlayRef} style={{ position: 'absolute', top: 0, right: 60, width: 60, height: '100%', pointerEvents: 'none' }} />
 
         {/* ── Top-right bias indicator + score panel ─────────────────────── */}
-        {mtfAlignment && (() => {
+        {liveData?.intradayBars?.length > 0 && mtfAlignment && (() => {
           const a = mtfAlignment
           const bias = synthesizeBias(a.mtf)
           const c = a.score >= 85 ? LIME : a.score >= 70 ? LIME : a.score >= 55 ? YELLOW : a.score >= 40 ? ORANGE : RED
@@ -1124,7 +1127,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
               }}>{bias.text}</div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
                 <span style={{ fontSize: 32, fontWeight: 900, color: c, lineHeight: 1, letterSpacing: '-0.02em' }}>{a.score}</span>
-                <span style={{ fontSize: 10, color: '#666' }}>/ 100</span>
+                <span style={{ fontSize: 10, color: THEME.colors.secondary }}>/ 100</span>
                 <span style={{ fontSize: 10, color: c, fontWeight: 700, marginLeft: 4, letterSpacing: '0.06em' }}>{a.label}</span>
               </div>
               <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 6 }}>
@@ -1138,11 +1141,11 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
                   )
                 })}
               </div>
-              <div style={{ display: 'flex', gap: 10, fontSize: 9, color: '#888', marginBottom: 6 }}>
-                <span><span style={{ color: '#555' }}>Dir:</span> <strong style={{ color: c }}>{a.direction}</strong></span>
-                <span><span style={{ color: '#555' }}>Conf:</span> <strong style={{ color: c }}>{a.confidence}</strong></span>
+              <div style={{ display: 'flex', gap: 10, fontSize: 9, color: THEME.colors.secondary, marginBottom: 6 }}>
+                <span><span style={{ color: THEME.colors.secondary }}>Dir:</span> <strong style={{ color: c }}>{a.direction}</strong></span>
+                <span><span style={{ color: THEME.colors.secondary }}>Conf:</span> <strong style={{ color: c }}>{a.confidence}</strong></span>
               </div>
-              <div style={{ fontSize: 10, color: '#aaa', lineHeight: 1.45, fontStyle: 'italic' }}>
+              <div style={{ fontSize: 10, color: THEME.colors.secondary, lineHeight: 1.45, fontStyle: 'italic' }}>
                 "{a.recommendation}"
               </div>
             </div>
@@ -1218,7 +1221,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
                 position: 'absolute',
                 right: 4,
                 top: o.currentY - 11,
-                background: LIME, color: '#000',
+                background: LIME, color: THEME.colors.background,
                 fontFamily: MONO, fontSize: 13, fontWeight: 700,
                 padding: '3px 8px', borderRadius: 4, lineHeight: 1.2,
                 whiteSpace: 'nowrap',
@@ -1234,7 +1237,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
                     top: bandTop,
                     width: 3,
                     height: bandBottom - bandTop,
-                    background: '#1a1a1a', borderRadius: 1.5,
+                    background: THEME.colors.surface, borderRadius: 1.5,
                     overflow: 'hidden',
                   }}>
                     <div style={{
@@ -1252,8 +1255,8 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
                     lineHeight: 1.1,
                   }}>
                     <div>{o.positionPct}%</div>
-                    <div style={{ color: '#666', fontSize: 8, marginTop: 2, fontWeight: 400, letterSpacing: '0.06em' }}>IN ZONE</div>
-                    <div style={{ color: '#555', fontSize: 8, fontWeight: 400, letterSpacing: '0.06em' }}>off floor</div>
+                    <div style={{ color: THEME.colors.secondary, fontSize: 8, marginTop: 2, fontWeight: 400, letterSpacing: '0.06em' }}>IN ZONE</div>
+                    <div style={{ color: THEME.colors.secondary, fontSize: 8, fontWeight: 400, letterSpacing: '0.06em' }}>off floor</div>
                   </div>
                 </>
               )}
@@ -1263,8 +1266,8 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
 
         {noData && (
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 8, pointerEvents: 'none' }}>
-            <div style={{ fontSize: 12, fontFamily: MONO, color: '#444' }}>Waiting for bars...</div>
-            <div style={{ fontSize: 10, fontFamily: MONO, color: '#2a2a2a' }}>Add a Massive API key in Command to populate the chart.</div>
+            <div style={{ fontSize: 12, fontFamily: MONO, color: THEME.colors.secondary }}>Waiting for bars...</div>
+            <div style={{ fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary }}>Add a Massive API key in Command to populate the chart.</div>
           </div>
         )}
       </div>
@@ -1275,17 +1278,17 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
         return (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 0, background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 5 }}>
             {[
-              { label: 'IN ZONE', value: `$${f2(o.floor)} to $${f2(o.ceiling)}`, color: '#aaa' },
-              { label: 'POSITION', value: `${o.positionPct}% off floor`, color: '#aaa' },
+              { label: 'IN ZONE', value: `$${f2(o.floor)} to $${f2(o.ceiling)}`, color: THEME.colors.secondary },
+              { label: 'POSITION', value: `${o.positionPct}% off floor`, color: THEME.colors.secondary },
               { label: 'TO CEILING', value: `+$${f2(o.toCeiling)}`, color: ABOVE_TEXT },
               { label: 'TO FLOOR', value: `−$${f2(o.toFloor)}`, color: BELOW_TEXT },
             ].map((col, i) => (
               <div key={col.label} style={{
                 padding: '10px 14px',
-                borderLeft: i > 0 ? '1px solid #161616' : 'none',
+                borderLeft: i > 0 ? `1px solid ${THEME.colors.surface}` : 'none',
                 display: 'flex', flexDirection: 'column', gap: 3,
               }}>
-                <span style={{ fontSize: 9, fontFamily: MONO, color: '#555', textTransform: 'uppercase', letterSpacing: '1px' }}>{col.label}</span>
+                <span style={{ fontSize: 9, fontFamily: MONO, color: THEME.colors.secondary, textTransform: 'uppercase', letterSpacing: '1px' }}>{col.label}</span>
                 <span style={{ fontSize: 13, fontFamily: MONO, color: col.color, fontWeight: 600 }}>{col.value}</span>
               </div>
             ))}
@@ -1295,13 +1298,14 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
 
       {/* Market Structure Panel */}
       {(() => {
+        if (!liveData?.intradayBars?.length) return <div className="eq-no-structure"><strong>Market structure not evaluated</strong><span>Verified bars are required before a trend, strength or setup score can be shown.</span></div>
         const a = currentAnalysis
         const mtf = mtfAnalysis
         const stateColor = a?.state === 'BULLISH' ? LIME : a?.state === 'BEARISH' ? RED : a?.state === 'TRANSITION' ? ORANGE : YELLOW
         const strength = a?.strength || 0
         const strengthLabel = strength >= 5 ? 'Strong trend' : strength >= 3 ? 'Moderate trend' : strength >= 1 ? 'Weak trend' : 'No trend'
         const strengthPct = Math.min(100, (strength / 6) * 100)
-        const labelColor = lbl => (lbl === 'HH' || lbl === 'HL') ? LIME : (lbl === 'LH' || lbl === 'LL') ? RED : '#888'
+        const labelColor = lbl => (lbl === 'HH' || lbl === 'HL') ? LIME : (lbl === 'LH' || lbl === 'LL') ? RED : THEME.colors.secondary
 
         // Multi-timeframe alignment
         const states = mtf ? [mtf['1m']?.state, mtf['5m']?.state, mtf['15m']?.state] : []
@@ -1315,7 +1319,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
         return (
           <div style={{ background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 5, padding: '14px 18px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <span style={{ fontSize: 9, fontFamily: MONO, color: '#666', textTransform: 'uppercase', letterSpacing: '0.14em' }}>Market Structure — {timeframe}</span>
+              <span style={{ fontSize: 9, fontFamily: MONO, color: THEME.colors.secondary, textTransform: 'uppercase', letterSpacing: '0.14em' }}>Market Structure — {timeframe}</span>
               {mtf && (
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                   {['1h', '15m', '5m', '1m'].map(tf => {
@@ -1337,17 +1341,17 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
             <div style={{ display: 'grid', gridTemplateColumns: '170px 1fr', gap: 16, alignItems: 'stretch' }}>
               {/* Badge */}
               <div style={{ background: `${stateColor}11`, border: `1px solid ${stateColor}55`, borderRadius: 4, padding: '12px 14px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                <div style={{ fontSize: 9, color: '#555', fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>Current</div>
+                <div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>Current</div>
                 <div style={{ fontSize: 18, fontFamily: MONO, fontWeight: 900, color: stateColor, letterSpacing: '0.04em' }}>{a?.state || 'NO DATA'}</div>
-                <div style={{ fontSize: 9, fontFamily: MONO, color: '#555', marginTop: 4 }}>{strengthLabel}</div>
-                <div style={{ height: 3, background: '#1a1a1a', borderRadius: 2, overflow: 'hidden', marginTop: 6 }}>
+                <div style={{ fontSize: 9, fontFamily: MONO, color: THEME.colors.secondary, marginTop: 4 }}>{strengthLabel}</div>
+                <div style={{ height: 3, background: THEME.colors.surface, borderRadius: 2, overflow: 'hidden', marginTop: 6 }}>
                   <div style={{ height: '100%', width: `${strengthPct}%`, background: stateColor, transition: 'width 0.3s' }} />
                 </div>
               </div>
 
               {/* Last 4 swings */}
-              <div style={{ background: '#080808', border: '1px solid #161616', borderRadius: 4, padding: '10px 14px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 8 }}>
-                <div style={{ fontSize: 9, color: '#555', fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Last 4 Swings</div>
+              <div style={{ background: THEME.colors.background, border: `1px solid ${THEME.colors.surface}`, borderRadius: 4, padding: '10px 14px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 8 }}>
+                <div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Last 4 Swings</div>
                 {a?.lastSwings?.length ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                     {a.lastSwings.map((s, i) => (
@@ -1355,12 +1359,12 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
                         <span style={{ fontSize: 11, fontFamily: MONO, fontWeight: 700, color: labelColor(s.label) }}>
                           {s.label} ${f2(s.price)}
                         </span>
-                        {i < a.lastSwings.length - 1 && <span style={{ fontSize: 11, color: '#333' }}>→</span>}
+                        {i < a.lastSwings.length - 1 && <span style={{ fontSize: 11, color: THEME.colors.secondary }}>→</span>}
                       </span>
                     ))}
                   </div>
                 ) : (
-                  <div style={{ fontSize: 10, fontFamily: MONO, color: '#3a3a3a' }}>Not enough bars to detect swings yet.</div>
+                  <div style={{ fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary }}>Not enough bars to detect swings yet.</div>
                 )}
               </div>
             </div>
@@ -1368,12 +1372,12 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
             {(showBOS || showCHoCH) && (
               <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {showBOS && (
-                  <div style={{ background: a.bos.type === 'bullish' ? '#0a1208' : '#150808', border: `1px solid ${a.bos.type === 'bullish' ? LIME : RED}44`, borderRadius: 4, padding: '10px 14px', fontSize: 11, fontFamily: MONO, color: a.bos.type === 'bullish' ? LIME : RED, fontWeight: 700, animation: 'hdrpulse 1.5s infinite' }}>
+                  <div style={{ background: a.bos.type === 'bullish' ? THEME.colors.positiveSurface : THEME.colors.negativeSurface, border: `1px solid ${a.bos.type === 'bullish' ? LIME : RED}44`, borderRadius: 4, padding: '10px 14px', fontSize: 11, fontFamily: MONO, color: a.bos.type === 'bullish' ? LIME : RED, fontWeight: 700, animation: 'hdrpulse 1.5s infinite' }}>
                     ⚡ BREAK OF STRUCTURE {a.bos.type === 'bullish' ? '▲' : '▼'} at ${f2(a.bos.price)} — trend may be reversing. Watch next swing point.
                   </div>
                 )}
                 {showCHoCH && (
-                  <div style={{ background: '#110d04', border: `1px solid ${YELLOW}44`, borderRadius: 4, padding: '10px 14px', fontSize: 11, fontFamily: MONO, color: YELLOW, fontWeight: 700 }}>
+                  <div style={{ background: THEME.colors.cautionSurface, border: `1px solid ${YELLOW}44`, borderRadius: 4, padding: '10px 14px', fontSize: 11, fontFamily: MONO, color: YELLOW, fontWeight: 700 }}>
                     ⚠ CHARACTER CHANGE — first sign of reversal at ${f2(a.choch.swing.price)}. Do not fight the new direction.
                   </div>
                 )}
@@ -1385,15 +1389,15 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
 
       <div style={{ background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 5, padding: '10px 14px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <span style={{ fontSize: 9, fontFamily: MONO, color: '#666', textTransform: 'uppercase', letterSpacing: '0.14em' }}>Nearest 5 Levels</span>
+          <span style={{ fontSize: 9, fontFamily: MONO, color: THEME.colors.secondary, textTransform: 'uppercase', letterSpacing: '0.14em' }}>Nearest 5 Levels</span>
           {levelMap?.setupQuality && (
-            <span style={{ fontSize: 9, fontFamily: MONO, color: levelMap.setupQuality === 'ON LEVEL' ? LIME : levelMap.setupQuality === 'APPROACHING' ? YELLOW : '#444', letterSpacing: '0.14em' }}>
+            <span style={{ fontSize: 9, fontFamily: MONO, color: levelMap.setupQuality === 'ON LEVEL' ? LIME : levelMap.setupQuality === 'APPROACHING' ? YELLOW : THEME.colors.secondary, letterSpacing: '0.14em' }}>
               {levelMap.setupQuality}
             </span>
           )}
         </div>
         {nearby.length === 0 ? (
-          <div style={{ fontSize: 10, fontFamily: MONO, color: '#2a2a2a' }}>No levels mapped yet.</div>
+          <div style={{ fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary }}>No levels mapped yet.</div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
             {nearby.map((l, i) => {
@@ -1403,9 +1407,9 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
               const arrow = isOnLevel ? '●' : above ? '▲' : '▼'
               const arrowColor = isOnLevel ? LIME : above ? ORANGE : BLUE
               return (
-                <div key={i} style={{ background: '#0a0a0a', border: `1px solid ${isOnLevel ? LIME + '44' : '#161616'}`, borderRadius: 3, padding: '8px 10px' }}>
+                <div key={i} style={{ background: THEME.colors.background, border: `1px solid ${isOnLevel ? LIME + '44' : THEME.colors.surface}`, borderRadius: 3, padding: '8px 10px' }}>
                   <div style={{ fontSize: 9, fontFamily: MONO, color: c, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 3, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{shortName(l.label)}</div>
-                  <div style={{ fontSize: 13, fontFamily: MONO, fontWeight: 700, color: '#e8e8e8' }}>${f2(l.price)}</div>
+                  <div style={{ fontSize: 13, fontFamily: MONO, fontWeight: 700, color: THEME.colors.text }}>${f2(l.price)}</div>
                   <div style={{ fontSize: 10, fontFamily: MONO, color: arrowColor, marginTop: 2, fontWeight: 700 }}>
                     {arrow} ${f2(Math.abs(l.dist))}
                   </div>

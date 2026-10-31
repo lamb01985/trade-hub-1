@@ -7,18 +7,26 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "preview:local": "node scripts/local-preview.mjs",
+    "build:ui-preview": "node scripts/build-ui-preview.mjs"
   },
   "dependencies": {
     "@polygon.io/client-js": "^7.3.0",
     "@upstash/redis": "^1.34.0",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
     "lightweight-charts": "^5.2.0",
     "lucide-react": "^1.16.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.3.0",
     "@vitejs/plugin-react": "^4.3.1",
+    "jsdom": "^26.1.0",
+    "playwright": "^1.56.1",
     "vite": "^5.4.11",
     "vitest": "^4.1.8"
   }

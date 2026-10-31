@@ -1,3 +1,4 @@
+import { THEME } from '../lib/theme.js'
 // ─────────────────────────────────────────────────────────────────────────────
 // UniverseBuilder.jsx — screen a base universe and act on the result.
 //
@@ -23,9 +24,9 @@ import { notify } from '../lib/notify.js'
 import { suggestTemplates } from '../lib/templateSuggestions.js'
 import { CONDITIONS_BY_ID } from '../lib/conditionLibrary.js'
 
-const FG = '#e8e8e8'
-const DIM = '#888'
-const MUTED = '#666'
+const FG = THEME.colors.text
+const DIM = THEME.colors.secondary
+const MUTED = THEME.colors.secondary
 
 const BASE_UNIVERSE = [
   'AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL', 'META', 'AVGO', 'COST', 'JPM', 'V',
@@ -211,17 +212,17 @@ function Row({ row, selected, onToggleSelect }) {
       display: 'grid',
       gridTemplateColumns: '24px 70px 70px 65px 70px 70px 1fr',
       gap: 8, padding: '7px 10px', cursor: 'pointer',
-      background: selected ? '#0c1408' : 'transparent',
+      background: selected ? THEME.colors.positiveSurface : 'transparent',
       borderBottom: `1px solid ${BORDER}`,
       fontFamily: MONO, fontSize: 11, alignItems: 'center',
     }}>
       <input type="checkbox" checked={selected} readOnly style={{ accentColor: LIME, cursor: 'pointer' }} />
       <span style={{ color: FG, fontWeight: 800, letterSpacing: '0.04em' }}>{row.ticker}</span>
       <span style={{ color: FG }}>${f2(row.price)}</span>
-      <span style={{ color: row.rsi14 == null ? MUTED : row.rsi14 >= 70 ? RED : row.rsi14 <= 30 ? LIME : '#aaa' }}>{row.rsi14 == null ? '—' : `RSI ${row.rsi14.toFixed(0)}`}</span>
-      <span style={{ color: row.dist50 == null ? MUTED : '#aaa' }}>{row.dist50 == null ? '50 —' : `50 ${row.dist50 >= 0 ? '+' : ''}${row.dist50.toFixed(1)}%`}</span>
-      <span style={{ color: row.dist200 == null ? MUTED : '#aaa' }}>{row.dist200 == null ? '200 —' : `200 ${row.dist200 >= 0 ? '+' : ''}${row.dist200.toFixed(1)}%`}</span>
-      <span style={{ color: '#aaa', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+      <span style={{ color: row.rsi14 == null ? MUTED : row.rsi14 >= 70 ? RED : row.rsi14 <= 30 ? LIME : THEME.colors.secondary }}>{row.rsi14 == null ? '—' : `RSI ${row.rsi14.toFixed(0)}`}</span>
+      <span style={{ color: row.dist50 == null ? MUTED : THEME.colors.secondary }}>{row.dist50 == null ? '50 —' : `50 ${row.dist50 >= 0 ? '+' : ''}${row.dist50.toFixed(1)}%`}</span>
+      <span style={{ color: row.dist200 == null ? MUTED : THEME.colors.secondary }}>{row.dist200 == null ? '200 —' : `200 ${row.dist200 >= 0 ? '+' : ''}${row.dist200.toFixed(1)}%`}</span>
+      <span style={{ color: THEME.colors.secondary, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <span>{fmtBigCap(row.marketCap)}</span>
         {row.sector && <span style={{ fontSize: 10, color: MUTED }}>{row.sector}</span>}
       </span>
@@ -240,7 +241,7 @@ function SuggestionPanel({ rows, onClone, onClose }) {
       padding: 0, zIndex: 240,
     }}>
       <div style={{
-        background: '#0a0a0a', border: `1px solid ${BORDER}`,
+        background: THEME.colors.background, border: `1px solid ${BORDER}`,
         width: '100%', maxWidth: 520, height: '100%', overflowY: 'auto',
         padding: 18, fontFamily: MONO, display: 'flex', flexDirection: 'column', gap: 12,
       }}>
@@ -249,7 +250,7 @@ function SuggestionPanel({ rows, onClone, onClose }) {
             <div style={{ fontSize: 10, color: MUTED, letterSpacing: '0.16em', textTransform: 'uppercase' }}>Template suggestions</div>
             <div style={{ fontSize: 16, color: FG, fontWeight: 800 }}>Best fits for your selection</div>
           </div>
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#aaa', fontSize: 16, cursor: 'pointer' }}>✕</button>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: THEME.colors.secondary, fontSize: 16, cursor: 'pointer' }}>✕</button>
         </div>
 
         {suggestions.length === 0 && (
@@ -268,20 +269,20 @@ function SuggestionPanel({ rows, onClone, onClose }) {
                 <span style={{ fontSize: 9, color: dirColor, fontFamily: MONO, fontWeight: 700, border: `1px solid ${dirColor}55`, padding: '2px 6px', borderRadius: 3, letterSpacing: '0.14em', textTransform: 'uppercase' }}>{dir}</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ flex: 1, height: 4, background: '#1a1a1a', borderRadius: 2, overflow: 'hidden' }}>
+                <div style={{ flex: 1, height: 4, background: THEME.colors.surface, borderRadius: 2, overflow: 'hidden' }}>
                   <div style={{ height: '100%', width: `${s.matchScore}%`, background: LIME }} />
                 </div>
                 <span style={{ fontSize: 10, color: LIME, fontFamily: MONO, fontWeight: 700, minWidth: 60, textAlign: 'right' }}>{s.matchScore}% match</span>
               </div>
               <div style={{ fontSize: 10, color: MUTED, fontFamily: MONO, letterSpacing: '0.06em' }}>{s.template.source}</div>
-              <div style={{ fontSize: 11, color: '#aaa', fontFamily: MONO, lineHeight: 1.5 }}>{s.reasoning}</div>
+              <div style={{ fontSize: 11, color: THEME.colors.secondary, fontFamily: MONO, lineHeight: 1.5 }}>{s.reasoning}</div>
               <div style={{ fontSize: 10, color: MUTED, fontFamily: MONO }}>
                 Conditions:{' '}
                 {(s.template.defaultConditions || []).map(c => CONDITIONS_BY_ID[c.type]?.label || c.type).join(' · ')}
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
                 <button onClick={() => onClone(s.template)} style={{
-                  background: LIME, color: '#000', border: 'none', padding: '7px 14px', borderRadius: 3,
+                  background: LIME, color: THEME.colors.background, border: 'none', padding: '7px 14px', borderRadius: 3,
                   fontFamily: MONO, fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase',
                   cursor: 'pointer',
                 }}>Clone with this universe →</button>
@@ -304,7 +305,7 @@ function SaveModal({ initialName, count, onSave, onCancel }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 250,
     }}>
       <div style={{
-        background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 6,
+        background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 6,
         width: '100%', maxWidth: 440, padding: 18, fontFamily: MONO,
         display: 'flex', flexDirection: 'column', gap: 12,
       }}>
@@ -325,12 +326,12 @@ function SaveModal({ initialName, count, onSave, onCancel }) {
         />
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <button onClick={onCancel} style={{
-            background: 'transparent', border: `1px solid ${BORDER}`, color: '#aaa',
+            background: 'transparent', border: `1px solid ${BORDER}`, color: THEME.colors.secondary,
             padding: '7px 14px', borderRadius: 3, cursor: 'pointer',
             fontFamily: MONO, fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase',
           }}>Cancel</button>
           <button onClick={() => name.trim() && onSave(name.trim())} disabled={!name.trim()} style={{
-            background: name.trim() ? LIME : '#1a1a1a', color: name.trim() ? '#000' : '#666',
+            background: name.trim() ? LIME : THEME.colors.surface, color: name.trim() ? THEME.colors.background : THEME.colors.secondary,
             border: 'none', padding: '7px 14px', borderRadius: 3,
             fontFamily: MONO, fontSize: 10, fontWeight: 800,
             letterSpacing: '0.12em', textTransform: 'uppercase',
@@ -355,8 +356,8 @@ function SavedUniversesChips({ list, onLoad, onRename, onDelete }) {
   return (
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
       {list.map(u => (
-        <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 3, padding: '4px 8px', fontFamily: MONO, fontSize: 10 }}>
-          <button onClick={() => onLoad(u)} title={`Load ${u.name}`} style={{ background: 'transparent', border: 'none', color: '#aaa', cursor: 'pointer', fontFamily: MONO, fontSize: 10 }}>
+        <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 6, background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 3, padding: '4px 8px', fontFamily: MONO, fontSize: 10 }}>
+          <button onClick={() => onLoad(u)} title={`Load ${u.name}`} style={{ background: 'transparent', border: 'none', color: THEME.colors.secondary, cursor: 'pointer', fontFamily: MONO, fontSize: 10 }}>
             <strong style={{ color: FG }}>{u.name}</strong> <span style={{ color: MUTED }}>{u.tickers?.length || 0}</span>
           </button>
           <button onClick={() => onRename(u)} title="Rename" style={{ background: 'transparent', border: 'none', color: MUTED, cursor: 'pointer', padding: 0, fontSize: 11 }}>✎</button>
@@ -512,21 +513,21 @@ export default function UniverseBuilder({
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
           <button onClick={loadOrHydrate} disabled={loading || !apiKey} title={!apiKey ? 'Add Massive API key' : ''} style={{
-            background: 'transparent', border: `1px solid ${BORDER}`, color: loading || !apiKey ? '#666' : '#aaa',
+            background: 'transparent', border: `1px solid ${BORDER}`, color: loading || !apiKey ? THEME.colors.secondary : THEME.colors.secondary,
             padding: '7px 12px', borderRadius: 3,
             fontFamily: MONO, fontSize: 10, fontWeight: 700,
             letterSpacing: '0.12em', textTransform: 'uppercase',
             cursor: loading || !apiKey ? 'not-allowed' : 'pointer',
           }}>{loading ? `Hydrating ${progress.done}/${progress.total}` : rows.length ? 'Reload universe' : 'Load universe'}</button>
           <button onClick={() => setSuggestOpen(true)} disabled={!canAct} title={canAct ? 'Match templates to this selection' : 'Pick tickers first'} style={{
-            background: 'transparent', border: `1px solid ${canAct ? '#aaa' : BORDER}`, color: canAct ? '#aaa' : '#666',
+            background: 'transparent', border: `1px solid ${canAct ? THEME.colors.secondary : BORDER}`, color: canAct ? THEME.colors.secondary : THEME.colors.secondary,
             padding: '7px 12px', borderRadius: 3,
             fontFamily: MONO, fontSize: 10, fontWeight: 700,
             letterSpacing: '0.12em', textTransform: 'uppercase',
             cursor: canAct ? 'pointer' : 'not-allowed',
           }}>Suggest templates</button>
           <button onClick={handleCreateSetup} disabled={!canAct || !onCreateSetupFromTickers} title={canAct ? 'Open SetupBuilder with these tickers' : 'Pick tickers first'} style={{
-            background: 'transparent', color: canAct ? LIME : '#666',
+            background: 'transparent', color: canAct ? LIME : THEME.colors.secondary,
             border: `1px solid ${canAct ? LIME : BORDER}`,
             padding: '7px 12px', borderRadius: 3,
             fontFamily: MONO, fontSize: 10, fontWeight: 700,
@@ -534,7 +535,7 @@ export default function UniverseBuilder({
             cursor: canAct ? 'pointer' : 'not-allowed',
           }}>Create setup →</button>
           <button onClick={() => setSaveOpen(true)} disabled={!canAct || !onSavedUniversesChange} title={canAct ? 'Save this filter + selection' : 'Pick tickers first'} style={{
-            background: canAct ? LIME : '#1a1a1a', color: canAct ? '#000' : '#666',
+            background: canAct ? LIME : THEME.colors.surface, color: canAct ? THEME.colors.background : THEME.colors.secondary,
             border: 'none', padding: '8px 14px', borderRadius: 3,
             fontFamily: MONO, fontSize: 11, fontWeight: 800,
             letterSpacing: '0.14em', textTransform: 'uppercase',
@@ -543,7 +544,7 @@ export default function UniverseBuilder({
         </div>
       </div>
 
-      {error && <div style={{ background: '#150505', border: `1px solid ${RED}55`, color: RED, padding: '8px 12px', borderRadius: 4, fontSize: 11, fontFamily: MONO }}>{error}</div>}
+      {error && <div style={{ background: THEME.colors.negativeSurface, border: `1px solid ${RED}55`, color: RED, padding: '8px 12px', borderRadius: 4, fontSize: 11, fontFamily: MONO }}>{error}</div>}
 
       <div style={{ background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 5, padding: 10 }}>
         <div style={{ fontSize: 9, color: MUTED, fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 6 }}>Saved universes</div>
@@ -573,7 +574,7 @@ export default function UniverseBuilder({
               onMin={v => patch({ peRatioMin: v })} onMax={v => patch({ peRatioMax: v })} />
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
               <input type="checkbox" checked={filters.includeNegativePE} onChange={e => patch({ includeNegativePE: e.target.checked })} />
-              <span style={{ fontSize: 10, color: '#aaa', fontFamily: MONO }}>Include negative P/E</span>
+              <span style={{ fontSize: 10, color: THEME.colors.secondary, fontFamily: MONO }}>Include negative P/E</span>
             </label>
           </FilterGroup>
           <FilterGroup label="RSI range">
@@ -596,7 +597,7 @@ export default function UniverseBuilder({
             <span style={{ fontSize: 11, color: FG, fontFamily: MONO }}>Price above 200 EMA</span>
           </label>
           <button onClick={() => setFilters({ ...DEFAULT_FILTERS })} style={{
-            background: 'transparent', border: `1px dashed ${BORDER}`, color: '#aaa',
+            background: 'transparent', border: `1px dashed ${BORDER}`, color: THEME.colors.secondary,
             padding: '6px 10px', borderRadius: 3, cursor: 'pointer',
             fontFamily: MONO, fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase',
           }}>Reset filters</button>
@@ -609,8 +610,8 @@ export default function UniverseBuilder({
             <span style={{ fontSize: 10, color: MUTED, fontFamily: MONO }}>matches</span>
             <span style={{ fontSize: 10, color: MUTED, fontFamily: MONO }}>· {selected.size} selected</span>
             <div style={{ flex: 1 }} />
-            <button onClick={selectAllFiltered} style={{ background: 'transparent', border: `1px solid ${BORDER}`, color: '#aaa', padding: '4px 10px', borderRadius: 3, fontFamily: MONO, fontSize: 10, cursor: 'pointer', letterSpacing: '0.12em' }}>SELECT ALL</button>
-            <button onClick={clearSelection} style={{ background: 'transparent', border: `1px solid ${BORDER}`, color: '#aaa', padding: '4px 10px', borderRadius: 3, fontFamily: MONO, fontSize: 10, cursor: 'pointer', letterSpacing: '0.12em' }}>CLEAR</button>
+            <button onClick={selectAllFiltered} style={{ background: 'transparent', border: `1px solid ${BORDER}`, color: THEME.colors.secondary, padding: '4px 10px', borderRadius: 3, fontFamily: MONO, fontSize: 10, cursor: 'pointer', letterSpacing: '0.12em' }}>SELECT ALL</button>
+            <button onClick={clearSelection} style={{ background: 'transparent', border: `1px solid ${BORDER}`, color: THEME.colors.secondary, padding: '4px 10px', borderRadius: 3, fontFamily: MONO, fontSize: 10, cursor: 'pointer', letterSpacing: '0.12em' }}>CLEAR</button>
           </div>
 
           {rows.length === 0 && !loading && (
@@ -620,12 +621,12 @@ export default function UniverseBuilder({
           )}
 
           {filtered.length > 0 && (
-            <div style={{ background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 4 }}>
+            <div style={{ background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 4 }}>
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: '24px 70px 70px 65px 70px 70px 1fr',
                 gap: 8, padding: '6px 10px',
-                background: '#0a0606', borderBottom: `1px solid ${BORDER}`,
+                background: THEME.colors.negativeSurface, borderBottom: `1px solid ${BORDER}`,
                 fontSize: 9, color: MUTED, fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase',
               }}>
                 <span></span><span>Ticker</span><span>Price</span><span>RSI</span><span>Dist 50</span><span>Dist 200</span><span>Cap · Sector</span>

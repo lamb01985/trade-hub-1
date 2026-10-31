@@ -183,12 +183,14 @@ function deriveTickerOrder(state, watchlist, activeTicker) {
 // ── Hook ────────────────────────────────────────────────────────────────────
 
 export function useBot({
+  mode = 'legacy',
   watchlist = [],
   liveDataMulti = {},
   activeTicker = null,
   checklistComplete = false,
   onPaperTrade = null,
 } = {}) {
+  if (mode === 'unified') throw new Error('Migration pending: coach unavailable in Unified mode')
   const [state, dispatch] = useReducer(reducer, null, createInitialState)
   const hydratedRef = useRef(false)
   const stateRef = useRef(state)

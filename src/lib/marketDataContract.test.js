@@ -1,0 +1,10 @@
+import { describe,it,expect } from 'vitest'
+import { validateMarketDataEnvelope,assertMarketDataEnvelope,displayFreshness } from './marketDataContract.js'
+export function fixture() { return { schema_version:'market-data-envelope-v1',request_id:'request',deployment_profile:'offline',generated_at:'2026-10-23T15:00:00Z',instrument:{canonical_id:'ETF:US:QQQ',provider_symbol:'QQQ',asset_class:'ETF',currency:'USD'},source:{provider:'Massive',transport:'REST',endpoint_family:'snapshot'},availability:'AVAILABLE',data:{last_trade:null,bid:null,ask:null,bid_size:0,ask_size:null},quality:{freshness:'UNKNOWN',coverage:'PARTIAL',policy_version:'v1',source_age_seconds:null,missing_fields:['bid','ask'],invalid_fields:[],reasons:['MISSING_REQUIRED_QUOTE']},coverage_details:{requested_window:null,returned_window:null,pages_read:1,pagination_complete:true,observations:0,minimum_required:null,missing_intervals:[]},error:null } }
+describe('market-data closed boundary',()=>{
+ it('accepts missing observations and observed zero sizes',()=>expect(validateMarketDataEnvelope(fixture())).toBe(true))
+ it('rejects extra keys, wrong identities, omitted keys, and nonfinite numbers',()=>{for(const change of [e=>e.secret='no',e=>e.instrument.provider_symbol='SPY',e=>delete e.quality.invalid_fields,e=>e.quality.source_age_seconds=Infinity]) {const e=fixture();change(e);expect(validateMarketDataEnvelope(e)).toBe(false)}})
+ it('binds selection, endpoint and profile',()=>{expect(()=>assertMarketDataEnvelope(fixture(),{symbol:'SPY'})).toThrow();expect(()=>assertMarketDataEnvelope(fixture(),{resource:'bars'})).toThrow();expect(()=>assertMarketDataEnvelope(fixture(),{profile:'other'})).toThrow()})
+ it('rejects false current quote claims',()=>{const e=fixture();e.quality.freshness='CURRENT';expect(validateMarketDataEnvelope(e)).toBe(false)})
+ it('ages only downward from server quality',()=>{const e=fixture();e.quality.freshness='CURRENT';e.quality.source_age_seconds=29;expect(displayFreshness(e,2)).toBe('STALE');e.quality.freshness='LAST_CLOSED_SESSION';expect(displayFreshness(e,100)).toBe('LAST_CLOSED_SESSION')})
+})

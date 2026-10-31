@@ -1,8 +1,28 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { isUiPreview } from './lib/uiPreview.js'
+import { useThesisAvailability } from './hooks/useThesisAvailability.js'
+import WorkspaceShell from './components/workspace/WorkspaceShell.jsx'
+import Portfolio from './components/workspace/Portfolio.jsx'
+import Opportunities from './components/workspace/Opportunities.jsx'
+import Overview, { verifiedBundle } from './components/workspace/Overview.jsx'
+import CompanyIntelligence from './components/workspace/CompanyIntelligence.jsx'
+import ServiceStatus from './components/workspace/ServiceStatus.jsx'
+import { activeNavigation } from './components/workspace/navigation.js'
+import { PageHeading, StatusBadge } from './components/workspace/primitives.jsx'
+import { Brand } from './components/Brand.jsx'
+import { BRAND } from './lib/brand.js'
+import { THEME } from './lib/theme.js'
+import UnifiedMarketContext from './components/UnifiedMarketContext.jsx'
+import { useMarketData } from './hooks/useMarketData.js'
+import { lazy, Suspense, useState, useEffect, useMemo, useRef } from 'react'
+import LocalPreviewNotice from './components/LocalPreviewNotice.jsx'
+import { intelligenceFromSearch } from './lib/intelligenceNavigation.js'
+import { useAiCapability } from './hooks/useAiCapability.js'
 import { useLocalStorage } from './hooks/useStore.js'
+import { daysToExpiry } from './lib/optionSnapshot.js'
 import { useLiveData } from './hooks/useLiveData.js'
 import { useLiveDataMulti } from './hooks/useLiveDataMulti.js'
 import { buildLevelMap } from './lib/levels.js'
+import { tradeFreshness, tradeSession } from './lib/quoteQuality.js'
 import { computeMTF, alignmentScore } from './lib/structure.js'
 import Command from './components/Command.jsx'
 import Levels from './components/Levels.jsx'
@@ -44,9 +64,12 @@ import QuickLog from './components/QuickLog.jsx'
 import GlossaryModal from './components/Glossary.jsx'
 import { LIME, RED, YELLOW, BLUE, MONO, SANS, DARK, BORDER, PANEL, todayStr, localDateStr, uid, getSession, f2 } from './constants.js'
 
+const ResearchLedger = lazy(() => import('./components/intelligence/ResearchLedger.jsx'))
+const MarketIntelligence = lazy(() => import('./components/intelligence/MarketIntelligence.jsx'))
+
 const TABS = [
   { id: 'plan', label: 'Plan', desc: 'Pre-market game plan' },
-  { id: 'trade', label: 'Trade', desc: 'Live session workspace', accent: true },
+  { id: 'trade', label: BRAND.trading, desc: 'Live session workspace', accent: true },
   { id: 'review', label: 'Review', desc: 'Post-market log' },
 ]
 
@@ -91,25 +114,58 @@ const defaultSettings = { dailyLossLimit: 500, maxTradesPerDay: 5, orPeriod: '15
 const defaultPrep = { ticker: 'QQQ', orPeriod: '15', orbHigh: '', orbLow: '', sessionOpen: '', sessionClose: '', keyLevel: '', plannedStrike: '', plannedDTE: '1', ivNote: '', gamePlan: '', avoidNotes: '', dayReview: '', marketEvents: '', instrument: 'options' }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState(defaultTabForSession)
+  return isUiPreview() ? <LegacyApp/> : <LiveApp/>
+}
+
+function LiveApp() {
+  const capabilities = useMarketData('capabilities')
+  const [mode, setMode] = useState('legacy')
+  const thesisAvailable = useThesisAvailability()
+  if (import.meta.env.VITE_LOCAL_SERVICE_PREVIEW === 'true') return <LegacyApp />
+  if (mode === 'research' && thesisAvailable && !capabilities.previewOnly) return <ResearchOnlyWorkspace onExit={() => setMode('legacy')}/>
+  if (!capabilities.modeKnown) return <main style={{padding:24}}><Brand /><p role="status">Market mode is unavailable or being verified. Reload to retry.</p>{thesisAvailable && !capabilities.previewOnly && <button className="eq-button" onClick={() => setMode('research')}>Open Company Intelligence</button>}</main>
+  if (capabilities.previewOnly && !capabilities.unifiedEnabled) return <main style={{padding:24}}><Brand /><p role="status">Protected preview is not activated.</p></main>
+  if ((mode === 'unified' || capabilities.previewOnly) && capabilities.unifiedEnabled) return <UnifiedMarketContext capabilities={capabilities.envelope} ready={capabilities.ready} onLegacy={capabilities.previewOnly ? null : () => setMode('legacy')} />
+  return <>{capabilities.unifiedEnabled && <button onClick={() => setMode('unified')}>Switch to Unified ETF context (read-only)</button>}<LegacyApp /></>
+}
+
+function ResearchOnlyWorkspace({onExit}) {
+  const [ticker,setTicker]=useState('AMD'),[view,setView]=useState('company')
+  return <WorkspaceShell active={activeNavigation('company',null,view)} ticker={ticker} onTicker={setTicker}
+    onNavigate={item=>{if(item.tab==='company')setView(item.view||'company');else onExit()}}
+    session="Research only" connected={false} freshness={{fresh:false,label:'Market gateway unavailable'}}
+    status={<span className="eq-muted">Authenticated financial research · trading consumers inactive</span>}>
+    <CompanyIntelligence ticker={ticker} view={view}/>
+  </WorkspaceShell>
+}
+
+function LegacyApp() {
+  const [activeTab, setActiveTab] = useState(() => intelligenceFromSearch(window.location.search) ? 'plan' : 'overview')
   // Sub-tab state per top tab. In-memory only: switching top tabs preserves
   // your last sub-tab within each, but reload resets to defaults (same model
   // as activeTab, which resets via session each load).
-  const [planSubTab, setPlanSubTab] = useState('watchlist')
+  const [planSubTab, setPlanSubTab] = useState(() => intelligenceFromSearch(window.location.search) ? 'intelligence' : 'watchlist')
   const [tradeSubTab, setTradeSubTab] = useState('chart')
+  const [intelligenceView, setIntelligenceView] = useState(null)
+  const [companyView, setCompanyView] = useState('company')
   const [reviewSubTab, setReviewSubTab] = useState('journal')
+  useEffect(() => {
+    const open = () => { setActiveTab('review'); setReviewSubTab('research') }
+    window.addEventListener('tradehub-open-research', open)
+    return () => window.removeEventListener('tradehub-open-research', open)
+  }, [])
   // Increments whenever something external (Layer 2 → Prep, etc.) wants
   // PrepTab to auto-fire Load Market Data after the tab switch settles.
   const [autoLoadPrepTrigger, setAutoLoadPrepTrigger] = useState(0)
   // The Polygon API key is managed server-side via POLYGON_API_KEY in Vercel
   // env vars. src/lib/massive.js routes every REST call through
-  // /api/polygon/proxy and the WebSocket fetches its auth from
-  // /api/polygon/ws-auth on connect. A truthy sentinel is passed down so
+  // /api/polygon/proxy through an authenticated server-side REST relay.
+  // The retired ws-auth route never delivers provider credentials. A truthy sentinel is passed down so
   // existing apiKey-gated UI in child components stays clean without forcing
   // a sweep of every gate in this commit. Child components no longer call
   // any data-fetch function with this value.
   const apiKey = 'server-managed'
-  const [anthropicKey, setAnthropicKey] = useLocalStorage('th-anthropic-key', '')
+  const aiCapability = useAiCapability()
   const [trades, setTrades] = useLocalStorage('th-trades', [])
   const [settings, setSettings] = useLocalStorage('th-settings', defaultSettings)
   const [prep, setPrep] = useLocalStorage('th-prep', defaultPrep)
@@ -500,36 +556,39 @@ export default function App() {
     setTrades(prev => prev.filter(t => t.id !== id))
   }
 
+  const selectedTicker = (prep.ticker || 'QQQ').toUpperCase()
+  const selectedData = verifiedBundle(selectedTicker, liveData)
   const session = getSession()
+  const priceStatus = tradeFreshness(selectedData?.priceTimestamp)
+  const priceTime = selectedData?.priceTimestamp ? new Date(selectedData.priceTimestamp).toLocaleString('en-US', {
+    timeZone: 'America/Chicago', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit',
+  }) + ' CT' : 'timestamp unavailable'
+  function navigateWorkspace(item) {
+    setActiveTab(item.tab)
+    if (item.tab === 'plan' && item.sub) { setPlanSubTab(item.sub); if (item.sub === 'intelligence') setIntelligenceView(item.intelligence || null) }
+    if (item.tab === 'trade' && item.sub) setTradeSubTab(item.sub)
+    if (item.tab === 'review' && item.sub) setReviewSubTab(item.sub)
+    if (item.tab === 'company') setCompanyView(item.view || 'company')
+  }
+  function selectTicker(ticker) {
+    if (ticker === selectedTicker) return
+    setOrbPrefill(null); setCalcPrefill(null); setManualFibs(null); setCustomLevels([])
+    setPrep(p => ({ ...p, ticker, orbHigh: '', orbLow: '', sessionOpen: '', sessionClose: '', keyLevel: '', plannedStrike: '', plannedDTE: '', plannedContract: null, ivNote: '', gamePlan: '', avoidNotes: '', marketEvents: '' }))
+  }
 
   return (
-    <div style={{ minHeight: '100vh', background: DARK, fontFamily: MONO }}>
-      {/* Header */}
-      <div style={{ borderBottom: `1px solid ${BORDER}`, position: 'sticky', top: 0, zIndex: 100, background: '#0a0a0a' }}>
-        <div style={{ maxWidth: 960, margin: '0 auto', padding: '0 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 48 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ fontSize: 15, fontWeight: 900, color: '#e8e8e8', fontFamily: MONO, letterSpacing: '-0.03em' }}>TRADE HUB</div>
-            {liveData.price ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 6, height: 6, borderRadius: '50%', background: liveData.connected ? LIME : YELLOW, boxShadow: liveData.connected ? `0 0 6px ${LIME}` : 'none' }} />
-                <span style={{ fontSize: 13, fontFamily: MONO, fontWeight: 700, color: '#888' }}>{prep.ticker || 'QQQ'}</span>
-                <span style={{ fontSize: 16, fontFamily: MONO, fontWeight: 900, color: LIME }}>${liveData.price?.toFixed(2)}</span>
-              </div>
-            ) : (
-              <span style={{ fontSize: 10, fontFamily: MONO, color: '#444', letterSpacing: '0.08em' }}>
-                {apiKey ? 'connecting...' : 'no live data'}
-              </span>
-            )}
-            <ApiHealthIndicator />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {lockedOut && (
+    <WorkspaceShell active={activeNavigation(activeTab, activeTab === 'plan' ? planSubTab : activeTab === 'trade' ? tradeSubTab : activeTab === 'review' ? reviewSubTab : null, companyView)}
+      onNavigate={navigateWorkspace} ticker={selectedTicker} onTicker={selectTicker}
+      session={session.replaceAll('-', ' ')} connected={liveData.connected}
+      freshness={priceStatus}
+      status={<><ServiceStatus freshness={priceStatus} ticker={selectedTicker} data={selectedData} priceTime={priceTime} events={todayHighImpact} onCalendar={() => {setActiveTab('plan');setPlanSubTab('calendar')}}/>{todayHighImpact.length > 0 && <button className="eq-event-chip" onClick={() => {setActiveTab('plan');setPlanSubTab('calendar')}}>{todayHighImpact.length} high-impact event{todayHighImpact.length > 1 ? 's' : ''} today</button>}</>}
+      actions={<><ApiHealthIndicator />            {lockedOut && (
               <span style={{ fontSize: 9, color: RED, fontFamily: MONO, border: `1px solid ${RED}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.1em' }}>LOCKED</span>
             )}
-            {fullLevelMap.setupQuality === 'ON LEVEL' && (
+            {selectedData && priceStatus.fresh && fullLevelMap.setupQuality === 'ON LEVEL' && (
               <button onClick={() => { setActiveTab('trade'); setTradeSubTab('chart') }} title="Jump to Trade / Chart" style={{ fontSize: 9, color: LIME, fontFamily: MONO, background: 'transparent', border: `1px solid ${LIME}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.1em', animation: 'hdrpulse 1.5s infinite', cursor: 'pointer' }}>ON LEVEL →</button>
             )}
-            {fullLevelMap.setupQuality === 'APPROACHING' && (
+            {selectedData && priceStatus.fresh && fullLevelMap.setupQuality === 'APPROACHING' && (
               <button onClick={() => { setActiveTab('trade'); setTradeSubTab('chart') }} title="Jump to Trade / Chart" style={{ fontSize: 9, color: YELLOW, fontFamily: MONO, background: 'transparent', border: `1px solid ${YELLOW}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.1em', cursor: 'pointer' }}>APPROACHING →</button>
             )}
             {headerOpenSummary && headerOpenAny && (
@@ -551,111 +610,35 @@ export default function App() {
               )
             })()}
             {schwab.isConnected && schwab.dayTrades > 0 && (() => {
-              const c = schwab.dayTrades >= 3 ? RED : schwab.dayTrades >= 2 ? YELLOW : '#888'
+              const c = schwab.dayTrades >= 3 ? RED : schwab.dayTrades >= 2 ? YELLOW : THEME.colors.secondary
               return (
                 <span title="Pattern Day Trader count, round-trip option trades today" style={{ fontSize: 9, color: c, fontFamily: MONO, border: `1px solid ${c}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.1em' }}>
                   PDT: {schwab.dayTrades}/3{schwab.dayTrades >= 3 ? ' NO MORE' : ''}
                 </span>
               )
             })()}
-            {mtfAlignment.score > 0 && (() => {
-              const c = mtfAlignment.score >= 85 ? LIME : mtfAlignment.score >= 70 ? LIME : mtfAlignment.score >= 55 ? YELLOW : mtfAlignment.score >= 40 ? '#F97316' : RED
+            {selectedData && priceStatus.fresh && mtfAlignment.score > 0 && (() => {
+              const c = mtfAlignment.score >= 85 ? LIME : mtfAlignment.score >= 70 ? LIME : mtfAlignment.score >= 55 ? YELLOW : mtfAlignment.score >= 40 ? THEME.colors.orange : RED
               return (
                 <button onClick={() => { setActiveTab('trade'); setTradeSubTab('chart') }} title={`${mtfAlignment.label}, jump to Trade / Chart`} style={{ fontSize: 9, color: c, fontFamily: MONO, background: 'transparent', border: `1px solid ${c}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.1em', cursor: 'pointer' }}>ALIGN: {mtfAlignment.score} →</button>
               )
-            })()}
-          </div>
-        </div>
+            })()}</>}>
 
-        {/* Tabs */}
-        <div style={{ maxWidth: 960, margin: '0 auto', padding: '0 20px', display: 'flex', gap: 0, overflowX: 'auto' }}>
-          {TABS.map(tab => {
-            const isActive = activeTab === tab.id
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  borderBottom: isActive ? `2px solid ${LIME}` : '2px solid transparent',
-                  color: isActive ? (tab.accent ? LIME : '#e8e8e8') : '#484848',
-                  fontFamily: MONO,
-                  fontSize: 10,
-                  fontWeight: isActive ? 700 : 400,
-                  letterSpacing: '0.12em',
-                  textTransform: 'uppercase',
-                  padding: '10px 14px 8px',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  transition: 'color 0.15s',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: 2,
-                }}
-              >
-                <span>{tab.label}
-                  {tab.id === 'trade' && fullLevelMap.setupQuality === 'ON LEVEL' && (
-                    <span style={{ marginLeft: 5, width: 5, height: 5, borderRadius: '50%', background: LIME, display: 'inline-block', boxShadow: `0 0 6px ${LIME}`, verticalAlign: 'middle' }} />
-                  )}
-                </span>
-                <span style={{ fontSize: 8, color: isActive ? '#555' : '#333', letterSpacing: '0.06em', textTransform: 'none', fontWeight: 400 }}>{tab.desc}</span>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* High-impact event banner — visible on every tab */}
-      {todayHighImpact.length > 0 && (
-        <div style={{ background: '#110d04', borderBottom: `1px solid ${YELLOW}33` }}>
-          <div style={{ maxWidth: 960, margin: '0 auto', padding: '7px 20px', display: 'flex', alignItems: 'center', gap: 10, fontFamily: MONO }}>
-            <span style={{ fontSize: 11, color: YELLOW }}>⚠</span>
-            <span style={{ fontSize: 10, color: YELLOW, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>High Impact Today:</span>
-            <span style={{ fontSize: 10, color: '#c8a030', flex: 1 }}>
-              {todayHighImpact.map(e => `${e.name}${e.time ? ` at ${e.time} CT` : ''}`).join(' · ')}
-            </span>
-            <button onClick={() => { setActiveTab('plan'); setPlanSubTab('calendar') }} style={{ background: 'transparent', border: `1px solid ${YELLOW}44`, color: YELLOW, fontFamily: MONO, fontSize: 9, padding: '3px 9px', borderRadius: 3, cursor: 'pointer', letterSpacing: '0.1em', textTransform: 'uppercase' }}>View Calendar →</button>
-          </div>
-        </div>
-      )}
-
-      <style>{`
-        @keyframes hdrpulse { 0%,100%{opacity:1}50%{opacity:0.5} }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
-        input::placeholder, textarea::placeholder { color: #1e1e1e !important; }
-        select option { background: #111; color: #e8e8e8; }
-        ::-webkit-scrollbar { width: 3px; height: 3px; }
-        ::-webkit-scrollbar-thumb { background: #1e1e1e; }
-        button { transition: opacity 0.15s; }
-        button:hover { opacity: 0.85; }
-      `}</style>
 
       {/* Content. TRADE gets a wider container so the chart has room. */}
-      <div style={{ maxWidth: activeTab === 'trade' ? 1200 : 960, margin: '0 auto', padding: '28px 20px 60px' }}>
+      <div className="eq-content-body">
+        {activeTab === 'overview' && <Overview ticker={selectedTicker} liveData={liveData} multiData={liveDataMulti?.data || {}} watchlist={botWatchlist} trades={trades} setups={setups} levelMap={fullLevelMap} onNavigate={navigateWorkspace} onTicker={selectTicker} onLogTrade={() => openQuickLog(null)} connected={liveData.connected} session={session} schwab={schwab} aiCapability={aiCapability} events={calendarEvents}/>}
+        {activeTab === 'portfolio' && <Portfolio schwab={schwab} onConnections={() => {setActiveTab('trade');setTradeSubTab('command')}}/>}
+        {activeTab === 'opportunities' && <Opportunities onNavigate={navigateWorkspace}/>}
+        {activeTab === 'company' && <CompanyIntelligence view={companyView} ticker={selectedTicker}/>}
+        {activeTab === 'trade' && <PageHeading eyebrow="Execution workspace" title="Trading Desk" description={`${selectedTicker} · Chart, levels and execution tools. Decisions grounded in verified observations.`}/>}
+
 
         {activeTab === 'plan' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            <SubNav
-              tabs={[
-                { id: 'watchlist', label: 'Watchlist' },
-                { id: 'focus', label: 'Focus' },
-                { id: 'wheel', label: 'Wheel' },
-                { id: 'prep', label: 'Prep' },
-                { id: 'playbook', label: 'Playbook' },
-                { id: 'calendar', label: 'Calendar' },
-                { id: 'levels', label: 'Levels' },
-                { id: 'movers', label: 'Movers' },
-                { id: 'universe', label: 'Universe' },
-                { id: 'setups', label: 'Setups' },
-                { id: 'glossary', label: 'Glossary' },
-              ]}
-              active={planSubTab}
-              onChange={setPlanSubTab}
-            />
+          <div className="eq-legacy-content" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
 
+
+            {planSubTab === 'intelligence' && <Suspense fallback={<p>Loading intelligence...</p>}><MarketIntelligence key={intelligenceView || 'default'} initialView={intelligenceView || intelligenceFromSearch(window.location.search) || 'map'}/></Suspense>}
             <div style={{ display: planSubTab === 'watchlist' ? 'flex' : 'none', flexDirection: 'column', gap: 24 }}>
               <PreMarketSummarySection liveData={liveData} ticker={prep.ticker || 'QQQ'} />
               <WatchlistTab
@@ -723,7 +706,7 @@ export default function App() {
                 onSendToORB={fill => { setOrbPrefill(fill); setActiveTab('trade'); setTradeSubTab('orb') }}
                 settings={settings}
                 liveData={liveData}
-                anthropicKey={anthropicKey}
+                aiCapability={aiCapability}
                 savedPreps={savedPreps}
                 onSavedPrepsChange={setSavedPreps}
                 levelMap={fullLevelMap}
@@ -840,23 +823,19 @@ export default function App() {
             { id: 'chart', label: 'Chart' },
             { id: 'bot', label: 'Bot' },
             { id: 'orb', label: 'ORB' },
-            { id: 'iv', label: 'IV' },
+            { id: 'iv', label: 'Options / IV' },
             { id: 'calc', label: 'Calculator' },
             { id: 'command', label: 'Command' },
           ]
           const tradeSubTabs = TRADE_SUBTAB_CATALOG.filter(t => !HIDDEN_TRADE_SUBTABS.includes(t.id))
           return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            <SubNav
-              tabs={tradeSubTabs}
-              active={tradeSubTab}
-              onChange={setTradeSubTab}
-            />
+          <div className="eq-legacy-content" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+
 
             <div style={{ display: tradeSubTab === 'chart' ? 'block' : 'none' }}>
               <ErrorBoundary label="Chart">
                 <ChartTab
-                  liveData={liveData}
+                  liveData={selectedData || {price:null,intradayBars:[],dataTicker:null}}
                   levelMap={fullLevelMap}
                   trades={trades}
                   ticker={prep.ticker || 'QQQ'}
@@ -908,7 +887,22 @@ export default function App() {
             </div>
 
             <div style={{ display: tradeSubTab === 'iv' ? 'block' : 'none' }}>
-              <IVAnalyzerTab apiKey={apiKey} instrument={prep.instrument || 'options'} />
+              <IVAnalyzerTab
+                ticker={prep.ticker || 'QQQ'}
+                onSendToPrep={contract => {
+                  setPrep(p => ({ ...p,
+                    ...(p.ticker !== contract.underlying ? { orbHigh: '', orbLow: '', sessionOpen: '', sessionClose: '', keyLevel: '', gamePlan: '', avoidNotes: '' } : {}),
+                    ticker: contract.underlying, instrument: 'options', plannedStrike: String(contract.strike),
+                    plannedDTE: String(daysToExpiry(contract.expiry)), plannedContract: contract,
+                    ivNote: contract.iv == null ? '' : `${(contract.iv * 100).toFixed(2)}% · Massive ${contract.symbol}`,
+                  }))
+                }}
+                onSendToCalc={contract => {
+                  setPrep(p => ({ ...p, instrument: 'options' }))
+                  setCalcPrefill({ ticker: contract.underlying, optType: contract.type, strike: contract.strike, expiry: contract.expiry, dte: daysToExpiry(contract.expiry), source: 'MASSIVE_OPTIONS' })
+                  setTradeSubTab('calc')
+                }}
+              />
             </div>
 
             <div style={{ display: tradeSubTab === 'calc' ? 'block' : 'none' }}>
@@ -933,8 +927,7 @@ export default function App() {
                 onSettingsChange={setSettings}
                 lockedOut={lockedOut}
                 onUnlock={() => setSettings(s => ({ ...s, dailyLossLimit: 0 }))}
-                anthropicKey={anthropicKey}
-                onAnthropicKeyChange={setAnthropicKey}
+                aiCapability={aiCapability}
                 liveData={liveData}
                 marketEvents={prep.marketEvents}
                 instrument={prep.instrument || 'options'}
@@ -949,17 +942,10 @@ export default function App() {
         })()}
 
         {activeTab === 'review' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            <SubNav
-              tabs={[
-                { id: 'journal', label: 'Journal' },
-                { id: 'outcomes', label: 'Outcomes' },
-                { id: 'stats', label: 'Stats' },
-              ]}
-              active={reviewSubTab}
-              onChange={setReviewSubTab}
-            />
+          <div className="eq-legacy-content" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
 
+
+            {reviewSubTab === 'research' && <Suspense fallback={<p>Loading research history...</p>}><ResearchLedger/></Suspense>}
             <div style={{ display: reviewSubTab === 'journal' ? 'block' : 'none' }}>
               <ErrorBoundary label="Journal">
                 <Journal
@@ -993,27 +979,12 @@ export default function App() {
         )}
       </div>
 
-      {/* Footer */}
-      <div style={{ borderTop: `1px solid #111`, padding: '16px 20px', textAlign: 'center' }}>
-        <button
-          onClick={() => setShowGlossary(true)}
-          style={{ background: 'none', border: 'none', color: '#2a2a2a', fontFamily: MONO, fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer', textDecoration: 'underline', textDecorationColor: '#222' }}
-        >
-          Glossary
-        </button>
-        <span style={{ color: '#1a1a1a', fontSize: 9, fontFamily: MONO, margin: '0 10px' }}>·</span>
-        <span style={{ color: '#1a1a1a', fontSize: 9, fontFamily: MONO, letterSpacing: '0.1em' }}>Trade Hub — personal use only</span>
-      </div>
+      <div className="eq-workspace-help"><button onClick={() => setShowGlossary(true)}>Glossary & terminology</button><span>Personal research workspace</span></div>
 
       {showGlossary && <GlossaryModal onClose={() => setShowGlossary(false)} />}
 
       {/* Floating action button — visible on every tab */}
-      <button onClick={() => openQuickLog(null)} title="Log a trade" style={{
-        position: 'fixed', bottom: 22, right: 22, width: 56, height: 56, borderRadius: '50%',
-        background: LIME, color: '#000', border: 'none', fontSize: 26, fontWeight: 900,
-        cursor: 'pointer', boxShadow: '0 6px 20px rgba(209,255,121,0.35), 0 2px 6px rgba(0,0,0,0.5)',
-        zIndex: 150, fontFamily: MONO,
-      }}>+</button>
+      <button className="eq-quick-log" onClick={() => openQuickLog(null)} title="Log a trade" aria-label="Log a trade">+</button>
 
       <QuickLog
         open={quickLogOpen}
@@ -1024,13 +995,13 @@ export default function App() {
       />
 
       {schwabToast && (
-        <div style={{ position: 'fixed', bottom: 90, right: 22, background: SCHWAB_BLUE, color: '#fff', fontFamily: MONO, fontSize: 12, fontWeight: 700, padding: '12px 18px', borderRadius: 6, boxShadow: '0 6px 24px rgba(59,130,246,0.4)', zIndex: 200, letterSpacing: '0.04em' }}>
+        <div style={{ position: 'fixed', bottom: 90, right: 22, background: SCHWAB_BLUE, color: THEME.colors.text, fontFamily: MONO, fontSize: 12, fontWeight: 700, padding: '12px 18px', borderRadius: 6, boxShadow: '0 6px 24px rgba(59,130,246,0.4)', zIndex: 200, letterSpacing: '0.04em' }}>
           {schwabToast}
         </div>
       )}
 
       <NotificationOverlay />
-    </div>
+    </WorkspaceShell>
   )
 }
 
@@ -1049,6 +1020,7 @@ function ApiHealthIndicator() {
       <button
         onClick={() => setOpen(true)}
         title={tip}
+        aria-label={tip}
         style={{
           background: 'transparent', border: 'none', padding: '4px',
           cursor: 'pointer', display: 'inline-flex', alignItems: 'center',
@@ -1067,26 +1039,26 @@ function ApiHealthIndicator() {
           padding: 28, zIndex: 260,
         }}>
           <div onClick={e => e.stopPropagation()} style={{
-            background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 6,
+            background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 6,
             width: '100%', maxWidth: 420, padding: 16, fontFamily: MONO,
             display: 'flex', flexDirection: 'column', gap: 10,
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <div style={{ fontSize: 10, color: '#666', letterSpacing: '0.14em', textTransform: 'uppercase' }}>API health</div>
-                <div style={{ fontSize: 14, color: '#e8e8e8', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ fontSize: 10, color: THEME.colors.secondary, letterSpacing: '0.14em', textTransform: 'uppercase' }}>API health</div>
+                <div style={{ fontSize: 14, color: THEME.colors.text, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ width: 10, height: 10, borderRadius: 5, background: color }} />
                   {snap.status === 'red' ? 'Degraded' : snap.status === 'yellow' ? 'Wobbly' : 'All good'}
                 </div>
               </div>
-              <button onClick={() => setOpen(false)} style={{ background: 'transparent', border: 'none', color: '#aaa', fontSize: 16, cursor: 'pointer' }}>✕</button>
+              <button onClick={() => setOpen(false)} style={{ background: 'transparent', border: 'none', color: THEME.colors.secondary, fontSize: 16, cursor: 'pointer' }}>✕</button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
               <Stat label="OK" value={snap.successes} color={LIME} />
-              <Stat label="Errors" value={snap.failures} color={snap.failures > 0 ? RED : '#aaa'} />
-              <Stat label="Rate-limit" value={snap.rateLimits} color={snap.rateLimits > 0 ? YELLOW : '#aaa'} />
+              <Stat label="Errors" value={snap.failures} color={snap.failures > 0 ? RED : THEME.colors.secondary} />
+              <Stat label="Rate-limit" value={snap.rateLimits} color={snap.rateLimits > 0 ? YELLOW : THEME.colors.secondary} />
             </div>
-            <div style={{ fontSize: 10, color: '#666', fontFamily: MONO, letterSpacing: '0.06em' }}>
+            <div style={{ fontSize: 10, color: THEME.colors.secondary, fontFamily: MONO, letterSpacing: '0.06em' }}>
               Rolling 5-minute window. Polygon requests served from in-memory cache don't count.
             </div>
 
@@ -1096,17 +1068,17 @@ function ApiHealthIndicator() {
                 user's plan tier. */}
             {snap.unavailableEndpoints?.length > 0 && (
               <div>
-                <div style={{ fontSize: 10, color: '#666', fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 6 }}>
+                <div style={{ fontSize: 10, color: THEME.colors.secondary, fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 6 }}>
                   Polygon plan limits
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {snap.unavailableEndpoints.map((u, i) => (
                     <div key={i} style={{
-                      background: '#161005', border: `1px solid ${YELLOW}33`, borderRadius: 3,
-                      padding: '6px 8px', fontSize: 10, fontFamily: MONO, color: '#caa860', lineHeight: 1.5,
+                      background: THEME.colors.cautionSurface, border: `1px solid ${YELLOW}33`, borderRadius: 3,
+                      padding: '6px 8px', fontSize: 10, fontFamily: MONO, color: THEME.colors.caution, lineHeight: 1.5,
                     }}>
                       <div style={{ wordBreak: 'break-all', color: YELLOW, fontWeight: 700 }}>{u.pattern}</div>
-                      {u.hint && <div style={{ color: '#9a8b54', marginTop: 2 }}>{u.hint}</div>}
+                      {u.hint && <div style={{ color: THEME.colors.caution, marginTop: 2 }}>{u.hint}</div>}
                     </div>
                   ))}
                 </div>
@@ -1116,9 +1088,9 @@ function ApiHealthIndicator() {
               </div>
             )}
             <div>
-              <div style={{ fontSize: 10, color: '#666', fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 6 }}>Recent errors</div>
+              <div style={{ fontSize: 10, color: THEME.colors.secondary, fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 6 }}>Recent errors</div>
               {(!snap.recentErrors || snap.recentErrors.length === 0) ? (
-                <div style={{ fontSize: 11, color: '#666' }}>No errors recorded.</div>
+                <div style={{ fontSize: 11, color: THEME.colors.secondary }}>No errors recorded.</div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {snap.recentErrors.map((e, i) => {
@@ -1128,12 +1100,12 @@ function ApiHealthIndicator() {
                     const tag = isRate ? 'RATE-LIMIT' : isUnavail ? 'PLAN LIMIT' : 'ERROR'
                     return (
                       <div key={i} style={{
-                        background: '#0a0606', border: `1px solid ${BORDER}`, borderRadius: 3,
-                        padding: '5px 8px', fontSize: 10, fontFamily: MONO, color: '#aaa', lineHeight: 1.5,
+                        background: THEME.colors.negativeSurface, border: `1px solid ${BORDER}`, borderRadius: 3,
+                        padding: '5px 8px', fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary, lineHeight: 1.5,
                       }}>
                         <span style={{ color: tagColor, fontWeight: 700 }}>{tag}</span>
-                        <span style={{ color: '#666', marginLeft: 8 }}>{new Date(e.ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
-                        <div style={{ color: '#888', fontSize: 10, marginTop: 2, wordBreak: 'break-all' }}>
+                        <span style={{ color: THEME.colors.secondary, marginLeft: 8 }}>{new Date(e.ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                        <div style={{ color: THEME.colors.secondary, fontSize: 10, marginTop: 2, wordBreak: 'break-all' }}>
                           {e.detail?.url || e.detail?.message || '—'}
                           {e.detail?.status ? ` · status ${e.detail.status}` : ''}
                           {e.detail?.hint ? ` · ${e.detail.hint}` : ''}
@@ -1151,10 +1123,10 @@ function ApiHealthIndicator() {
   )
 }
 
-function Stat({ label, value, color = '#e8e8e8' }) {
+function Stat({ label, value, color = THEME.colors.text }) {
   return (
-    <div style={{ padding: 8, background: '#0a0606', borderRadius: 3 }}>
-      <div style={{ fontSize: 9, color: '#666', fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
+    <div style={{ padding: 8, background: THEME.colors.negativeSurface, borderRadius: 3 }}>
+      <div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
       <div style={{ fontSize: 14, color, fontFamily: MONO, fontWeight: 700 }}>{value}</div>
     </div>
   )
@@ -1176,20 +1148,20 @@ function NotificationOverlay() {
         const accent = t.kind === 'trigger' ? RED : t.kind === 'warn' ? YELLOW : LIME
         return (
           <div key={t.id} style={{
-            background: '#0a0a0a', border: `1px solid ${accent}55`, borderLeft: `3px solid ${accent}`,
+            background: THEME.colors.background, border: `1px solid ${accent}55`, borderLeft: `3px solid ${accent}`,
             borderRadius: 5, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6,
             boxShadow: '0 6px 24px rgba(0,0,0,0.5)',
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-              <div style={{ fontSize: 12, fontFamily: MONO, fontWeight: 800, color: '#e8e8e8', lineHeight: 1.3 }}>{t.title}</div>
-              <button onClick={() => dismiss(t.id)} style={{ background: 'transparent', border: 'none', color: '#666', fontFamily: MONO, fontSize: 12, cursor: 'pointer' }}>✕</button>
+              <div style={{ fontSize: 12, fontFamily: MONO, fontWeight: 800, color: THEME.colors.text, lineHeight: 1.3 }}>{t.title}</div>
+              <button onClick={() => dismiss(t.id)} style={{ background: 'transparent', border: 'none', color: THEME.colors.secondary, fontFamily: MONO, fontSize: 12, cursor: 'pointer' }}>✕</button>
             </div>
             {t.body && (
-              <div style={{ fontSize: 11, fontFamily: MONO, color: '#aaa', lineHeight: 1.5 }}>{t.body}</div>
+              <div style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary, lineHeight: 1.5 }}>{t.body}</div>
             )}
             {t.action && (
               <button onClick={() => { try { t.action.onClick?.() } catch {}; dismiss(t.id) }} style={{
-                alignSelf: 'flex-start', background: accent, color: '#000', border: 'none',
+                alignSelf: 'flex-start', background: accent, color: THEME.colors.background, border: 'none',
                 padding: '5px 10px', borderRadius: 3, fontFamily: MONO, fontSize: 10,
                 letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 800, cursor: 'pointer',
               }}>{t.action.label}</button>
@@ -1208,25 +1180,25 @@ function PreMarketSummarySection({ liveData, ticker }) {
   const pm = liveData?.preMarket
   const prevDay = liveData?.prevDay
   const cardStyle = { background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 6, padding: '16px 20px' }
-  const labelStyle = { fontSize: 10, fontFamily: MONO, color: '#666', letterSpacing: '0.14em', textTransform: 'uppercase' }
+  const labelStyle = { fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary, letterSpacing: '0.14em', textTransform: 'uppercase' }
 
   if (!pm?.active) {
     return (
       <div style={cardStyle}>
         <div style={{ ...labelStyle, marginBottom: 8 }}>Overnight & Pre-Market</div>
-        <div style={{ fontSize: 11, fontFamily: MONO, color: '#555' }}>
+        <div style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary }}>
           No pre-market data yet for {ticker}. Live data activates after the 4:00 ET pre-market open with your Massive API key connected.
         </div>
       </div>
     )
   }
 
-  const gapColor = pm.gapPct == null ? '#888' : pm.gapPct > 0 ? LIME : pm.gapPct < 0 ? RED : '#888'
+  const gapColor = pm.gapPct == null ? THEME.colors.secondary : pm.gapPct > 0 ? LIME : pm.gapPct < 0 ? RED : THEME.colors.secondary
   const gapLabel = pm.gap == null ? '—'
     : `${pm.gap >= 0 ? '+' : '-'}$${Math.abs(pm.gap).toFixed(2)} (${pm.gapPct >= 0 ? '+' : ''}${pm.gapPct.toFixed(2)}%)`
   const trendColor = pm.trend === 'trending up' ? LIME : pm.trend === 'trending down' ? RED : YELLOW
 
-  const Stat = ({ label, value, color = '#e8e8e8' }) => (
+  const Stat = ({ label, value, color = THEME.colors.text }) => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
       <span style={labelStyle}>{label}</span>
       <span style={{ fontSize: 15, fontFamily: MONO, color, fontWeight: 800 }}>{value}</span>
@@ -1268,7 +1240,7 @@ function SubNav({ tabs, active, onChange }) {
               background: 'transparent',
               border: 'none',
               borderBottom: isActive ? `2px solid ${LIME}` : '2px solid transparent',
-              color: isActive ? LIME : '#666',
+              color: isActive ? LIME : THEME.colors.secondary,
               fontFamily: MONO,
               fontSize: 10,
               fontWeight: isActive ? 700 : 500,

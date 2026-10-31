@@ -1,3 +1,4 @@
+import { THEME } from '../lib/theme.js'
 // ─────────────────────────────────────────────────────────────────────────────
 // CorePlaybook.jsx — Plan / Setups tab.
 //
@@ -19,12 +20,12 @@
 import { useState } from 'react'
 import { LIME, RED, YELLOW, MONO, BORDER, PANEL } from '../constants.js'
 
-const FG = '#e8e8e8'
-const MUTED = '#666'
-const DIM = '#888'
-const BULL = '#22c55e'
-const BEAR = '#ef4444'
-const LEVEL = '#666'
+const FG = THEME.colors.text
+const MUTED = THEME.colors.secondary
+const DIM = THEME.colors.secondary
+const BULL = THEME.colors.positive
+const BEAR = THEME.colors.negative
+const LEVEL = THEME.colors.secondary
 
 // ── Mini-chart primitives. Tiny SVG candles + level lines for the EXAMPLE
 // section. Coordinates assume a 200x80 viewBox with y growing downward
@@ -54,10 +55,10 @@ function Note({ x, y, text, color }) {
 function Mini({ caption, children }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <svg viewBox="0 0 200 80" style={{ width: '100%', height: 80, background: '#0a0a0a', borderRadius: 3, border: `1px solid ${BORDER}` }}>
+      <svg viewBox="0 0 200 80" style={{ width: '100%', height: 80, background: THEME.colors.background, borderRadius: 3, border: `1px solid ${BORDER}` }}>
         {children}
       </svg>
-      <div style={{ fontSize: 9, color: '#666', textAlign: 'center', fontFamily: MONO, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+      <div style={{ fontSize: 9, color: THEME.colors.secondary, textAlign: 'center', fontFamily: MONO, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
         {caption}
       </div>
     </div>
@@ -305,7 +306,7 @@ function Section({ label, body, accent }) {
   return (
     <div>
       <div style={{ fontSize: 9, color: accent || MUTED, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 11, color: '#aaa', lineHeight: 1.6 }}>{body}</div>
+      <div style={{ fontSize: 11, color: THEME.colors.secondary, lineHeight: 1.6 }}>{body}</div>
     </div>
   )
 }
@@ -316,7 +317,7 @@ function ListSection({ label, items }) {
       <div style={{ fontSize: 9, color: MUTED, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
       <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 4 }}>
         {items.map((it, i) => (
-          <li key={i} style={{ fontSize: 11, color: '#aaa', lineHeight: 1.6 }}>{it}</li>
+          <li key={i} style={{ fontSize: 11, color: THEME.colors.secondary, lineHeight: 1.6 }}>{it}</li>
         ))}
       </ul>
     </div>
@@ -355,7 +356,7 @@ function SetupPlaybookCard({ setup, onOpenChart }) {
           <span style={{ fontSize: 18, fontWeight: 900, color: FG, letterSpacing: '0.02em' }}>{setup.title}</span>
           <span style={{ fontSize: 10, color: DIM, letterSpacing: '0.08em' }}>{setup.fullTitle}</span>
         </div>
-        <div style={{ fontSize: 11, color: '#aaa', lineHeight: 1.7 }}>{setup.summary}</div>
+        <div style={{ fontSize: 11, color: THEME.colors.secondary, lineHeight: 1.7 }}>{setup.summary}</div>
       </div>
 
       {expanded && (
@@ -374,7 +375,7 @@ function SetupPlaybookCard({ setup, onOpenChart }) {
           flex: 1,
           background: 'transparent',
           border: `1px solid ${BORDER}`,
-          color: expanded ? LIME : '#aaa',
+          color: expanded ? LIME : THEME.colors.secondary,
           fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: '0.12em',
           padding: '9px 14px', borderRadius: 4,
           cursor: 'pointer', textTransform: 'uppercase',
@@ -384,7 +385,7 @@ function SetupPlaybookCard({ setup, onOpenChart }) {
             flex: 1,
             background: 'transparent',
             border: `1px solid ${BORDER}`,
-            color: '#aaa',
+            color: THEME.colors.secondary,
             fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: '0.12em',
             padding: '9px 14px', borderRadius: 4,
             cursor: 'pointer', textTransform: 'uppercase',

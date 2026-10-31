@@ -1,3 +1,4 @@
+import { THEME } from './theme.js'
 // Calendar data: OPEX (computed), FOMC (hardcoded 2026), recurring economic
 // releases (algorithmic), and a small hardcoded one-off list for the next 30
 // days. Earnings come ONLY from the live Nasdaq fetch (via /api/calendar-earnings
@@ -178,9 +179,11 @@ function expandOneOffs(start, end) {
 // callers can distinguish "no earnings that day" from "fetch failed".
 
 export async function fetchNasdaqEarnings(dateStr) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 12000)
   try {
     const res = await fetch(`/api/calendar-earnings?date=${encodeURIComponent(dateStr)}`, {
-      headers: { 'Accept': 'application/json' },
+      headers: { 'Accept': 'application/json' }, signal: controller.signal,
     })
     if (!res.ok) {
       return { rows: [], error: `proxy returned ${res.status}` }
@@ -189,7 +192,8 @@ export async function fetchNasdaqEarnings(dateStr) {
     if (data?.error) {
       return { rows: [], error: data.error }
     }
-    const rows = data?.data?.rows || []
+    if (!data?.data || !Object.hasOwn(data.data, 'rows') || (data.data.rows !== null && !Array.isArray(data.data.rows))) return { rows: [], error: 'Invalid earnings response; coverage is unknown.' }
+    const rows = data.data.rows || []
     const mapped = rows
       .map(r => ({ ...r, _cap: parseMarketCap(r.marketCap) }))
       .filter(r => MAJOR_TICKERS.includes((r.symbol || '').toUpperCase()) || r._cap >= MIN_EARNINGS_MARKET_CAP)
@@ -206,8 +210,8 @@ export async function fetchNasdaqEarnings(dateStr) {
       }))
     return { rows: mapped, error: null }
   } catch (err) {
-    return { rows: [], error: err?.message || 'fetch failed' }
-  }
+    return { rows: [], error: controller.signal.aborted ? 'Earnings request timed out.' : 'Earnings feed could not be reached.' }
+  } finally { clearTimeout(timer) }
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -255,11 +259,11 @@ export function startOfWeek(date) {
 }
 
 export function colorForEvent(e) {
-  if (e.type === 'fomc') return '#F97316' // orange
-  if (e.type === 'opex' && e.tripleWitching) return '#F97316'
-  if (e.type === 'opex') return '#D1FF79' // lime
-  if (e.type === 'earnings') return '#60A5FA' // blue
-  if (e.impact === 'high') return '#FF4D4D' // red
-  if (e.impact === 'medium') return '#FFD166' // yellow
-  return '#888'
+  if (e.type === 'fomc') return THEME.colors.orange // orange
+  if (e.type === 'opex' && e.tripleWitching) return THEME.colors.orange
+  if (e.type === 'opex') return THEME.colors.accent // lime
+  if (e.type === 'earnings') return THEME.colors.blue // blue
+  if (e.impact === 'high') return THEME.colors.negative // red
+  if (e.impact === 'medium') return THEME.colors.caution // yellow
+  return THEME.colors.secondary
 }

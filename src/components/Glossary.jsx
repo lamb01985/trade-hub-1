@@ -1,3 +1,5 @@
+import { useModalFocus } from './workspace/useModalFocus.js'
+import { THEME } from '../lib/theme.js'
 import { LIME, MONO, BORDER } from '../constants.js'
 
 const TERMS = [
@@ -23,32 +25,33 @@ const TERMS = [
 ]
 
 export default function GlossaryModal({ onClose }) {
+  const dialogRef = useModalFocus(true, onClose)
   return (
     <div
-      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+      className="eq-modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose() }}
       style={{
         position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 10000,
         display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
         padding: '40px 20px', overflowY: 'auto',
       }}
     >
-      <div style={{ background: '#111', border: `1px solid ${BORDER}`, borderRadius: 8, maxWidth: 680, width: '100%', padding: '28px 32px' }}>
+      <div ref={dialogRef} className="eq-modal-panel" role="dialog" aria-modal="true" aria-label="Trading glossary" tabIndex={-1} style={{ background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 8, maxWidth: 680, width: '100%', padding: '28px 32px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
           <div>
-            <div style={{ fontSize: 9, fontFamily: MONO, color: '#444', letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 4 }}>Reference</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: '#e8e8e8', fontFamily: MONO, letterSpacing: '-0.02em' }}>Trading Glossary</div>
+            <div style={{ fontSize: 9, fontFamily: MONO, color: THEME.colors.secondary, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 4 }}>Reference</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: THEME.colors.text, fontFamily: MONO, letterSpacing: '-0.02em' }}>Trading Glossary</div>
           </div>
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#444', fontSize: 20, cursor: 'pointer', fontFamily: MONO, lineHeight: 1, padding: '4px 8px' }}>✕</button>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: THEME.colors.secondary, fontSize: 20, cursor: 'pointer', fontFamily: MONO, lineHeight: 1, padding: '4px 8px' }}>✕</button>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
           {TERMS.map(({ term, def }, i) => (
-            <div key={term} style={{ padding: '14px 0', borderBottom: i < TERMS.length - 1 ? `1px solid #1a1a1a` : 'none' }}>
+            <div key={term} style={{ padding: '14px 0', borderBottom: i < TERMS.length - 1 ? `1px solid ${THEME.colors.surface}` : 'none' }}>
               <div style={{ fontSize: 11, fontWeight: 700, fontFamily: MONO, color: LIME, marginBottom: 5, letterSpacing: '0.04em' }}>{term}</div>
-              <div style={{ fontSize: 12, fontFamily: MONO, color: '#666', lineHeight: 1.75 }}>{def}</div>
+              <div style={{ fontSize: 12, fontFamily: MONO, color: THEME.colors.secondary, lineHeight: 1.75 }}>{def}</div>
             </div>
           ))}
         </div>
-        <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid #1a1a1a`, fontSize: 9, color: '#2a2a2a', fontFamily: MONO, textAlign: 'center', letterSpacing: '0.08em' }}>
+        <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${THEME.colors.surface}`, fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, textAlign: 'center', letterSpacing: '0.08em' }}>
           Three sentences max — what it is, why it matters, what to do with it.
         </div>
       </div>

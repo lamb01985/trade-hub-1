@@ -1,0 +1,151 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "analyst-brief-v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "symbol",
+    "report_id",
+    "report_date",
+    "session_open",
+    "source_cutoff",
+    "headline",
+    "observation_confidence",
+    "historical_validation",
+    "sections",
+    "scenarios"
+  ],
+  "properties": {
+    "symbol": {
+      "type": "string"
+    },
+    "report_id": {
+      "type": "string"
+    },
+    "headline": {
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "analyst-brief-v1"
+    },
+    "report_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "session_open": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source_cutoff": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "observation_confidence": {
+      "const": "LIMITED_HISTORICAL_COVERAGE"
+    },
+    "historical_validation": {
+      "const": "NOT_VALIDATED"
+    },
+    "sections": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "paragraphs"
+        ],
+        "properties": {
+          "id": {
+            "enum": [
+              "facts",
+              "positioning",
+              "unusual",
+              "volatility",
+              "confirmation",
+              "limitations"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "paragraphs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "scenarios": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "direction",
+          "validation",
+          "trigger",
+          "reference_targets",
+          "level_source",
+          "confirmation",
+          "invalidation",
+          "interpretation"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "level_source": {
+            "type": "string"
+          },
+          "confirmation": {
+            "type": "string"
+          },
+          "invalidation": {
+            "type": "string"
+          },
+          "interpretation": {
+            "type": "string"
+          },
+          "direction": {
+            "enum": [
+              "bullish",
+              "bearish"
+            ]
+          },
+          "validation": {
+            "const": "RESEARCH_HYPOTHESIS_NOT_VALIDATED"
+          },
+          "trigger": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "reference_targets": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "desk": {
+      "$ref": "analyst-desk-v1"
+    }
+  },
+  "additionalProperties": false
+}

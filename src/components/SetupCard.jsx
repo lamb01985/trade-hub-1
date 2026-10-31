@@ -1,3 +1,4 @@
+import { THEME } from '../lib/theme.js'
 // ─────────────────────────────────────────────────────────────────────────────
 // SetupCard.jsx — single-setup card. One row in Setups.jsx's list.
 //
@@ -19,13 +20,13 @@ import { backtestSetup } from '../lib/setupBacktest.js'
 import { occSymbol, SCHWAB_TRADE_URL, SCHWAB_BLUE } from '../lib/schwabClient.js'
 import BacktestResults from './BacktestResults.jsx'
 
-const FG = '#e8e8e8'
-const DIM = '#888'
-const MUTED = '#666'
+const FG = THEME.colors.text
+const DIM = THEME.colors.secondary
+const MUTED = THEME.colors.secondary
 
 function statusBadgeFor(setup, evaluation) {
   if (setup.status === 'archived') return { color: MUTED, label: 'archived' }
-  if (setup.status === 'paused') return { color: '#94a3b8', label: 'paused' }
+  if (setup.status === 'paused') return { color: THEME.colors.blue, label: 'paused' }
   const r = evaluation?.bySetup?.[setup.id]
   if (r?.triggered?.length) return { color: RED, label: 'triggered', pulse: true }
   if (r?.approaching?.length) return { color: YELLOW, label: 'approaching' }
@@ -39,13 +40,13 @@ function ConditionPill({ result }) {
   return (
     <div style={{
       display: 'inline-flex', alignItems: 'center', gap: 6,
-      background: result?.met ? '#0a1408' : '#0a0a0a',
+      background: result?.met ? THEME.colors.positiveSurface : THEME.colors.background,
       border: `1px solid ${color}44`,
       borderRadius: 3, padding: '3px 8px', fontSize: 10, fontFamily: MONO,
-      color: result?.met ? LIME : '#aaa',
+      color: result?.met ? LIME : THEME.colors.secondary,
     }}>
       <span>{result?.met ? '✓' : '·'}</span>
-      <span style={{ color: '#bbb' }}>{label}</span>
+      <span style={{ color: THEME.colors.secondary }}>{label}</span>
       {result?.label && <span style={{ color: MUTED, marginLeft: 4 }}>{result.label}</span>}
     </div>
   )
@@ -79,13 +80,13 @@ function StagedTradeBanner({ trigger, setup, accountValue }) {
   }
   return (
     <div style={{
-      background: '#150505', border: `1px solid ${RED}55`, borderRadius: 5,
+      background: THEME.colors.negativeSurface, border: `1px solid ${RED}55`, borderRadius: 5,
       padding: 12, marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8,
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{
-            background: RED, color: '#fff', fontSize: 10, fontWeight: 800,
+            background: RED, color: THEME.colors.background, fontSize: 10, fontWeight: 800,
             padding: '3px 8px', borderRadius: 3, letterSpacing: '0.14em',
             fontFamily: MONO,
           }}>TRIGGERED · {trigger.ticker}</span>
@@ -95,18 +96,18 @@ function StagedTradeBanner({ trigger, setup, accountValue }) {
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
           <button onClick={copyPlan} style={{
-            background: 'transparent', border: `1px solid ${BORDER}`, color: '#aaa',
+            background: 'transparent', border: `1px solid ${BORDER}`, color: THEME.colors.secondary,
             padding: '6px 12px', borderRadius: 3, fontFamily: MONO, fontSize: 10,
             cursor: 'pointer', letterSpacing: '0.12em', textTransform: 'uppercase',
           }}>Copy plan</button>
           <button onClick={executeInSchwab} title={plan.optionType ? 'Copies the OCC symbol and opens the Schwab trade page' : 'Opens the Schwab trade page'} style={{
-            background: SCHWAB_BLUE, color: '#fff', border: 'none', padding: '6px 12px',
+            background: SCHWAB_BLUE, color: THEME.colors.text, border: 'none', padding: '6px 12px',
             borderRadius: 3, fontFamily: MONO, fontSize: 10, fontWeight: 800,
             letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer',
           }}>Execute in Schwab →</button>
         </div>
       </div>
-      <div style={{ fontSize: 10, color: '#cbd5e1', fontFamily: MONO, lineHeight: 1.6 }}>
+      <div style={{ fontSize: 10, color: THEME.colors.text, fontFamily: MONO, lineHeight: 1.6 }}>
         Price ${f2(price)}  •  HV {hv != null ? `${(hv * 100).toFixed(0)}%` : '—'}
         {plan.optionType && (
           <>  •  {plan.contracts} contract{plan.contracts === 1 ? '' : 's'}  •  est premium ${plan.estPremium != null ? plan.estPremium.toFixed(2) : '—'}  •  sizing {(plan.sizing * 100).toFixed(2)}% of ${plan.accountValue?.toLocaleString?.() || plan.accountValue}</>
@@ -144,13 +145,13 @@ function BacktestRunner({ setup, apiKey, backtestCache, onResult }) {
         <div style={{ fontSize: 10, color: MUTED, fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Backtest</div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           {running && (
-            <span style={{ fontSize: 10, color: '#aaa', fontFamily: MONO }}>
+            <span style={{ fontSize: 10, color: THEME.colors.secondary, fontFamily: MONO }}>
               {progress.stage} {progress.ticker || ''} ({progress.pct}%)
             </span>
           )}
           <button onClick={run} disabled={running || !apiKey} title={!apiKey ? 'Add Massive API key in Command' : ''} style={{
-            background: running || !apiKey ? '#1a1a1a' : LIME,
-            color: running || !apiKey ? '#666' : '#000', border: 'none',
+            background: running || !apiKey ? THEME.colors.surface : LIME,
+            color: running || !apiKey ? THEME.colors.secondary : THEME.colors.background, border: 'none',
             padding: '6px 12px', borderRadius: 3, fontFamily: MONO, fontSize: 10,
             cursor: running || !apiKey ? 'not-allowed' : 'pointer', fontWeight: 700,
             letterSpacing: '0.12em', textTransform: 'uppercase',
@@ -158,7 +159,7 @@ function BacktestRunner({ setup, apiKey, backtestCache, onResult }) {
         </div>
       </div>
       {running && (
-        <div style={{ height: 3, background: '#1a1a1a', borderRadius: 2, overflow: 'hidden' }}>
+        <div style={{ height: 3, background: THEME.colors.surface, borderRadius: 2, overflow: 'hidden' }}>
           <div style={{ height: '100%', width: `${progress.pct}%`, background: LIME, transition: 'width 0.3s ease' }} />
         </div>
       )}
@@ -174,7 +175,7 @@ function BacktestRunner({ setup, apiKey, backtestCache, onResult }) {
 }
 
 const actionBtnStyle = {
-  background: 'transparent', border: `1px solid ${BORDER}`, color: '#aaa',
+  background: 'transparent', border: `1px solid ${BORDER}`, color: THEME.colors.secondary,
   padding: '5px 10px', borderRadius: 3, cursor: 'pointer', fontFamily: MONO,
   fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase',
 }
@@ -250,13 +251,13 @@ export default function SetupCard({
         )}
         <div style={{ flex: 1 }} />
         <button onClick={() => setExpanded(e => !e)} style={{
-          background: 'transparent', border: `1px solid ${BORDER}`, color: '#aaa',
+          background: 'transparent', border: `1px solid ${BORDER}`, color: THEME.colors.secondary,
           padding: '4px 9px', borderRadius: 3, cursor: 'pointer', fontFamily: MONO,
           fontSize: 10, letterSpacing: '0.12em',
         }}>{expanded ? 'COLLAPSE' : 'EXPAND'}</button>
       </div>
       {setup.description && (
-        <div style={{ fontSize: 11, color: '#aaa', fontFamily: MONO, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 11, color: THEME.colors.secondary, fontFamily: MONO, lineHeight: 1.5 }}>
           {setup.description}
         </div>
       )}
@@ -278,15 +279,15 @@ export default function SetupCard({
             <div key={row.ticker} style={{ background: DARK, border: `1px solid ${BORDER}`, borderRadius: 4, padding: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                 <span style={{ fontSize: 12, fontWeight: 800, color: FG, fontFamily: MONO, letterSpacing: '0.04em' }}>{row.ticker}</span>
-                <span style={{ fontSize: 10, color: '#aaa', fontFamily: MONO }}>${f2(row.snapshot?.price)}</span>
+                <span style={{ fontSize: 10, color: THEME.colors.secondary, fontFamily: MONO }}>${f2(row.snapshot?.price)}</span>
                 <span style={{
                   fontSize: 9, fontWeight: 700, letterSpacing: '0.14em',
-                  color: row.status === 'triggered' ? RED : row.status === 'approaching' ? YELLOW : '#94a3b8',
-                  border: `1px solid ${(row.status === 'triggered' ? RED : row.status === 'approaching' ? YELLOW : '#94a3b8')}44`,
+                  color: row.status === 'triggered' ? RED : row.status === 'approaching' ? YELLOW : THEME.colors.blue,
+                  border: `1px solid ${(row.status === 'triggered' ? RED : row.status === 'approaching' ? YELLOW : THEME.colors.blue)}44`,
                   padding: '2px 6px', borderRadius: 3, textTransform: 'uppercase',
                 }}>{row.status}</span>
                 {row.inCooldown && (
-                  <span style={{ fontSize: 9, color: '#94a3b8', fontFamily: MONO }}>cooldown</span>
+                  <span style={{ fontSize: 9, color: THEME.colors.blue, fontFamily: MONO }}>cooldown</span>
                 )}
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -310,7 +311,7 @@ export default function SetupCard({
           />
 
           <div style={{ fontSize: 10, color: MUTED, fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Trade plan</div>
-          <div style={{ background: DARK, border: `1px solid ${BORDER}`, borderRadius: 4, padding: 10, fontSize: 11, fontFamily: MONO, color: '#aaa', lineHeight: 1.7 }}>
+          <div style={{ background: DARK, border: `1px solid ${BORDER}`, borderRadius: 4, padding: 10, fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary, lineHeight: 1.7 }}>
             {setup.tradePlan.instrumentType === 'stock'
               ? `${setup.direction === 'short' ? 'Short' : 'Long'} stock · sizing ${(setup.tradePlan.sizingValue * 100).toFixed(2)}% of account`
               : `${setup.tradePlan.optionType?.toUpperCase()} · DTE ${setup.tradePlan.dte} · strike offset ${(setup.tradePlan.strikeOffset * 100).toFixed(1)}% · sizing ${(setup.tradePlan.sizingValue * 100).toFixed(2)}% of account`}
@@ -325,7 +326,7 @@ export default function SetupCard({
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 160, overflowY: 'auto' }}>
                 {(setup.triggeredEvents || []).slice(0, 20).map((ev, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 10, fontSize: 10, color: '#aaa', fontFamily: MONO, padding: '4px 8px', background: '#0a0a0a', borderRadius: 3 }}>
+                  <div key={i} style={{ display: 'flex', gap: 10, fontSize: 10, color: THEME.colors.secondary, fontFamily: MONO, padding: '4px 8px', background: THEME.colors.background, borderRadius: 3 }}>
                     <span style={{ color: FG, fontWeight: 700 }}>{ev.ticker}</span>
                     <span>${f2(ev.price)}</span>
                     <span style={{ color: MUTED }}>{fmtAgo(ev.triggeredAt)}</span>

@@ -1,5 +1,5 @@
 // Massive.com (formerly Polygon.io) API client
-// REST + WebSocket for real-time data
+// Authenticated server REST; no provider credentials in browsers
 //
 // The HTTP layer adds three things on top of the raw API:
 //   - Token-bucket throttle so we don't outrun the per-second cap on
@@ -11,17 +11,15 @@
 // Every outcome (success / failure / rate-limit retry) is recorded into
 // apiHealth so the header indicator reflects current API quality.
 
+import { marketDate, normalizeOption } from './optionSnapshot.js'
 import { recordSuccess, recordFailure, recordRateLimit, recordUnavailable } from './apiHealth.js'
 import { MARKET_HOLIDAYS_2026 as HOLIDAY_MAP_2026 } from '../constants.js'
+import { normalizeTradeTimestamp } from './quoteQuality.js'
 
-// Polygon REST calls are proxied through /api/polygon/proxy so the
-// POLYGON_API_KEY never reaches the browser. The proxy takes the original
-// Polygon path as a `path` query param and forwards everything else, then
-// injects the key from env on the server side. WebSocket auth still needs the
-// key client-side (Polygon has no token alternative); MassiveStream fetches it
-// from /api/polygon/ws-auth on connect rather than keeping it in localStorage.
+// Provider credentials exist only on the server. Legacy observations use
+// authenticated same-origin REST polling; Unified quality belongs to Python.
+import { ProviderPolling } from './providerPolling.js'
 const PROXY_PATH = '/api/polygon/proxy'
-const WS_AUTH_PATH = '/api/polygon/ws-auth'
 
 // ── Plan-tier 403 tracking ─────────────────────────────────────────────────
 // Polygon returns 403 for endpoints not included in the user's plan tier.
@@ -33,14 +31,31 @@ const WS_AUTH_PATH = '/api/polygon/ws-auth'
 // missing in the UI without having to read Polygon's pricing page.
 
 const unavailableEndpoints = new Set()
+let sessionGeneration = 0
+function assertSession(generation) {
+  if (generation !== sessionGeneration) {
+    const error = new Error('Operator session changed')
+    error.sessionChanged = true
+    throw error
+  }
+}
+function requireAuthentication(response, generation) {
+  assertSession(generation)
+  if (response.headers?.get('X-TradeHub-Auth-Required') !== 'true') return
+  window.dispatchEvent(new Event('tradehub-operator-expired'))
+  const error = new Error('Operator authentication required')
+  error.authRequired = true
+  error.status = response.status
+  throw error
+}
 
 function endpointPattern(urlStr) {
   try {
     const u = new URL(urlStr)
-    let p = u.pathname
+    let p = u.searchParams.get('path') || u.pathname
     // /v2/aggs/ticker/NVDA/range/1/day/2026-01-01/2026-05-01 →
     // /v2/aggs/ticker/{TICKER}/range/1/day/{DATE}/{DATE}
-    p = p.replace(/\/[A-Z][A-Z0-9.\-]{0,9}(?=\/|$)/g, '/{TICKER}')
+    p = p.replace(/(\/(?:ticker|tickers|trade|options)\/)[^/]+/g, '$1{TICKER}')
     p = p.replace(/\d{4}-\d{2}-\d{2}/g, '{DATE}')
     return p
   } catch {
@@ -111,7 +126,8 @@ async function fetchWithTimeout(url, options) {
   }
 }
 
-async function throttledFetch(url, rawOptions = {}) {
+async function throttledFetch(url, rawOptions = {}, generation = sessionGeneration) {
+  assertSession(generation)
   const { priority = false, ...options } = rawOptions
   // Short-circuit: this endpoint pattern has already 403'd on this session,
   // so don't waste a request slot. We synthesize a Response-shape object the
@@ -130,8 +146,12 @@ async function throttledFetch(url, rawOptions = {}) {
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     if (!priority) await waitForNextSlot()
+    assertSession(generation)
     try {
       const r = await fetchWithTimeout(url, options)
+      assertSession(generation)
+      requireAuthentication(r, generation)
+      if (r.headers?.get('X-TradeHub-Service-Disabled') === 'true') return r
       if (r.status === 403) {
         // Permanent for the session — don't retry, don't poll. Remember the
         // pattern so future callers for the same endpoint short-circuit too.
@@ -162,6 +182,8 @@ async function throttledFetch(url, rawOptions = {}) {
       }
       return r
     } catch (err) {
+      if (err.authRequired || err.sessionChanged) throw err
+      assertSession(generation)
       if (attempt === MAX_RETRIES - 1) {
         recordFailure({ url: shortUrl(url), message: err?.message || 'fetch failed' })
         throw err
@@ -237,10 +259,13 @@ function buildUrl(path, params = {}) {
 }
 
 async function get(path, params = {}, options = {}) {
+  const generation = sessionGeneration
   const urlStr = buildUrl(path, params)
-  const res = await throttledFetch(urlStr, options)
+  const res = await throttledFetch(urlStr, options, generation)
+  assertSession(generation)
   if (!res.ok) {
     const text = await res.text().catch(() => '')
+    assertSession(generation)
     // 403 is already recorded as 'unavailable' by throttledFetch; don't
     // double-record it as a generic failure (which would inflate the error
     // rate and turn the header indicator red over a permanent plan limit).
@@ -252,12 +277,15 @@ async function get(path, params = {}, options = {}) {
     err.unavailable = res.status === 403
     throw err
   }
+  const data = await res.json()
+  assertSession(generation)
   recordSuccess({ url: shortUrl(urlStr) })
-  return res.json()
+  return data
 }
 
 // Cache wrapper: pass an endpoint key so the right TTL applies.
 async function getCachedJson(path, params, endpoint) {
+  const generation = sessionGeneration
   const urlStr = buildUrl(path, params)
   const ttl = CACHE_TTL_MS[endpoint]
   if (ttl) {
@@ -265,15 +293,38 @@ async function getCachedJson(path, params, endpoint) {
     if (cached) return cached
   }
   const data = await get(path, params)
+  assertSession(generation)
   if (ttl) setCache(urlStr, data)
   return data
 }
 
 // ── Market data ───────────────────────────────────────────────────────────────
 
-export async function getLastTrade(ticker) {
-  const d = await get(`/v2/last/trade/${ticker}`)
-  return d.results?.p ?? null
+// One bounded snapshot page. Callers must display truncation rather than claim
+// a complete chain. Expiry/strike filters let the user narrow large chains.
+export async function getOptionChain(ticker, { expiry, type, strike, limit = 250 } = {}) {
+  const symbol = String(ticker || '').trim().toUpperCase()
+  if (!/^[A-Z][A-Z0-9.-]{0,9}$/.test(symbol)) throw new Error('Enter a valid stock or ETF ticker.')
+  const data = await get(`/v3/snapshot/options/${symbol}`, {
+    ...(expiry ? { expiration_date: expiry } : { 'expiration_date.gte': marketDate() }),
+    contract_type: type === 'call' || type === 'put' ? type : undefined,
+    strike_price: strike === '' || strike == null ? undefined : strike,
+    sort: 'expiration_date', order: 'asc', limit: Math.min(250, Math.max(1, limit)),
+  }, { priority: true })
+  if (data.status === 'ERROR' || data.status === 'NOT_AUTHORIZED') throw new Error(data.message || data.error || 'Options access was denied by Massive.')
+  if (data.results != null && !Array.isArray(data.results)) throw new Error('Massive returned an invalid options snapshot.')
+  return { contracts: (data.results || []).map(raw => normalizeOption(raw, symbol)), hasMore: !!data.next_url, fetchedAt: new Date().toISOString() }
+}
+
+export async function getLastTrade(ticker, options = {}) {
+  return (await getLastTradeDetails(ticker, options))?.price ?? null
+}
+
+export async function getLastTradeDetails(ticker, { priority = false } = {}) {
+  const d = await get(`/v2/last/trade/${ticker}`, {}, { priority })
+  if (d.results?.p == null) return null
+  if (d.results.T && d.results.T !== ticker) throw new Error('Trade instrument mismatch')
+  return { price: d.results.p, timestamp: normalizeTradeTimestamp(d.results.t), source: 'Massive REST' }
 }
 
 export async function getDayBars(ticker, from, to, { priority = false, fresh = false } = {}) {
@@ -557,115 +608,36 @@ export async function getTopMovers({ signal } = {}) {
   return all.filter(s => { if (seen.has(s.ticker)) return false; seen.add(s.ticker); return true })
 }
 
-// ── WebSocket ────────────────────────────────────────────────────────────────
-
-const RECONNECT_BASE_MS = 3_000
-const RECONNECT_MAX_MS = 60_000
-
-export class MassiveStream {
-  constructor({ onTrade, onQuote, onConnected, onDisconnected, onError } = {}) {
-    this.apiKey = null
-    this.handlers = { onTrade, onQuote, onConnected, onDisconnected, onError }
-    this.ws = null
-    this.subscriptions = new Set()
-    this.reconnectTimer = null
-    this.intentionalClose = false
-  }
-
-  async connect() {
-    if (this.ws?.readyState === WebSocket.OPEN) return
-    this.intentionalClose = false
-    // Fetch the Polygon key from our server-side endpoint. The key is held in
-    // memory for the WebSocket auth frame and never persisted to storage.
-    if (!this.apiKey) {
-      try {
-        const res = await fetch(WS_AUTH_PATH)
-        if (!res.ok) throw new Error(`ws-auth ${res.status}`)
-        const data = await res.json()
-        this.apiKey = data.apiKey
-      } catch (err) {
-        this.handlers.onError?.(`WebSocket auth failed: ${err?.message || 'unknown'}`)
-        return
+// ── Authenticated REST compatibility transport ────────────────────────────
+export class MassiveStream extends ProviderPolling {
+  constructor(handlers = {}) {
+    const generation = sessionGeneration
+    super(handlers, async (path, signal) => {
+      assertSession(generation)
+      const query = new URLSearchParams({ path })
+      const url = `${PROXY_PATH}?${query}`
+      const pattern = endpointPattern(new URL(url, 'http://same-origin.invalid').href)
+      if (unavailableEndpoints.has(pattern)) { const error = new Error('Provider endpoint unavailable'); error.status = 403; throw error }
+      const response = await fetch(url, { signal, credentials: 'same-origin', cache: 'no-store' })
+      assertSession(generation)
+      requireAuthentication(response, generation)
+      if (!response.ok) {
+        if (response.status === 403) { unavailableEndpoints.add(pattern); recordUnavailable(pattern, ENDPOINT_HINTS[pattern] || null) }
+        const error = new Error('REST market data unavailable')
+        error.status = response.status
+        const hint = response.headers?.get('Retry-After')
+        if (hint !== null && hint !== undefined) error.retryAfter = /^\d+$/.test(hint) ? Number(hint) : 86401
+        throw error
       }
-    }
-    this.ws = new WebSocket('wss://socket.polygon.io/stocks')
-
-    this.ws.onopen = () => {
-      this.ws.send(JSON.stringify({ action: 'auth', params: this.apiKey }))
-    }
-
-    this.ws.onmessage = (evt) => {
-      let msgs
-      try { msgs = JSON.parse(evt.data) } catch { return }
-      for (const msg of msgs) {
-        if (msg.ev === 'status') {
-          if (msg.status === 'auth_success') {
-            this.reconnectDelayMs = RECONNECT_BASE_MS
-            this.handlers.onConnected?.()
-            // Resubscribe to any existing subscriptions
-            if (this.subscriptions.size > 0) {
-              this.ws.send(JSON.stringify({ action: 'subscribe', params: [...this.subscriptions].join(',') }))
-            }
-          } else if (msg.status === 'auth_failed') {
-            this.handlers.onError?.('API key invalid or plan does not include WebSocket access')
-          } else if (msg.status === 'max_connections') {
-            // Massive allows one stocks socket per key. Another tab or device
-            // holds it; back off hard instead of fighting for the slot.
-            this.reconnectDelayMs = RECONNECT_MAX_MS
-            this.handlers.onError?.('Live feed is open in another tab or device (Massive allows one connection). Using backup polling.')
-          }
-        } else if (msg.ev === 'T') {
-          this.handlers.onTrade?.({ ticker: msg.sym, price: msg.p, size: msg.s, timestamp: msg.t })
-        } else if (msg.ev === 'Q') {
-          this.handlers.onQuote?.({ ticker: msg.sym, bid: msg.bp, ask: msg.ap, bidSize: msg.bs, askSize: msg.as, timestamp: msg.t })
-        }
-      }
-    }
-
-    this.ws.onclose = () => {
-      this.handlers.onDisconnected?.()
-      if (!this.intentionalClose) {
-        const delay = this.reconnectDelayMs || RECONNECT_BASE_MS
-        this.reconnectDelayMs = Math.min(delay * 2, RECONNECT_MAX_MS)
-        this.reconnectTimer = setTimeout(() => this.connect(), delay)
-      }
-    }
-
-    this.ws.onerror = () => {
-      this.handlers.onError?.('WebSocket connection error')
-    }
-  }
-
-  subscribe(ticker) {
-    const tradeKey = `T.${ticker}`
-    const quoteKey = `Q.${ticker}`
-    this.subscriptions.add(tradeKey)
-    this.subscriptions.add(quoteKey)
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ action: 'subscribe', params: `${tradeKey},${quoteKey}` }))
-    }
-  }
-
-  unsubscribe(ticker) {
-    const tradeKey = `T.${ticker}`
-    const quoteKey = `Q.${ticker}`
-    this.subscriptions.delete(tradeKey)
-    this.subscriptions.delete(quoteKey)
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ action: 'unsubscribe', params: `${tradeKey},${quoteKey}` }))
-    }
-  }
-
-  disconnect() {
-    this.intentionalClose = true
-    clearTimeout(this.reconnectTimer)
-    this.ws?.close()
-    this.ws = null
+      const data = await response.json()
+      assertSession(generation)
+      return data
+    })
   }
 }
 
 // ── Shared stream ────────────────────────────────────────────────────────────
-// Massive allows ONE concurrent stocks WebSocket per key. Each live-data hook
+// All legacy live-data hooks share a credential-free polling adapter. Each hook
 // used to open its own, so four sockets evicted each other in a reconnect
 // loop, and every drop pushed all hooks into 10s REST polling that clogged the
 // request queue. All hooks now share one socket through MassiveStreamClient,
@@ -698,6 +670,9 @@ function hubSocket() {
     },
     onQuote: (evt) => {
       for (const c of hub.clients) if (c.tickers.has(evt.ticker)) c.handlers.onQuote?.(evt)
+    },
+    onStatus: (evt) => {
+      for (const c of hub.clients) if (c.tickers.has(evt.ticker)) c.handlers.onStatus?.(evt)
     },
   })
   hub.socket.connect()
@@ -749,4 +724,17 @@ export class MassiveStreamClient {
       hub.connected = false
     }
   }
+}
+
+// Session boundaries invalidate pending work as well as already cached data.
+function invalidateOperatorSession() {
+  sessionGeneration++
+  responseCache.clear()
+  unavailableEndpoints.clear()
+  for (const client of [...hub.clients]) client.disconnect()
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('tradehub-operator-logout', invalidateOperatorSession)
+  window.addEventListener('tradehub-operator-expired', invalidateOperatorSession)
+  window.addEventListener('tradehub-market-session-reset', invalidateOperatorSession)
 }

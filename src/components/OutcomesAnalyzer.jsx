@@ -1,3 +1,4 @@
+import { THEME } from '../lib/theme.js'
 // ─────────────────────────────────────────────────────────────────────────────
 // OutcomesAnalyzer.jsx — retroactive analysis of active + archived setups.
 //
@@ -20,9 +21,9 @@ import { useMemo, useRef, useState } from 'react'
 import { LIME, RED, YELLOW, MONO, BORDER, PANEL, DARK } from '../constants.js'
 import { backtestSetup } from '../lib/setupBacktest.js'
 
-const FG = '#e8e8e8'
-const DIM = '#888'
-const MUTED = '#666'
+const FG = THEME.colors.text
+const DIM = THEME.colors.secondary
+const MUTED = THEME.colors.secondary
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000
 
@@ -53,7 +54,7 @@ function HistogramBar({ values, width = 220, height = 28 }) {
             y={height - h}
             width={Math.max(1, barW - gap)}
             height={h}
-            fill={v > 0 ? LIME : '#333'}
+            fill={v > 0 ? LIME : THEME.colors.border}
           />
         )
       })}
@@ -83,7 +84,7 @@ function classifyCadence(setup) {
 }
 
 function StatusBadge({ status }) {
-  const color = status === 'hot' ? YELLOW : status === 'cold' ? RED : status === 'inline' ? LIME : '#94a3b8'
+  const color = status === 'hot' ? YELLOW : status === 'cold' ? RED : status === 'inline' ? LIME : THEME.colors.blue
   const label = status === 'hot' ? 'OVERFIRING' : status === 'cold' ? 'UNDERFIRING' : status === 'inline' ? 'IN LINE' : 'UNKNOWN'
   return (
     <span style={{
@@ -113,15 +114,15 @@ function SetupRow({ setup, onJump }) {
           fontFamily: MONO, textTransform: 'uppercase',
         }}>{setup.direction}</span>
         <span style={{
-          fontSize: 9, color: setup.status === 'active' ? LIME : setup.status === 'paused' ? '#94a3b8' : MUTED,
-          border: `1px solid ${setup.status === 'active' ? LIME : setup.status === 'paused' ? '#94a3b8' : MUTED}44`,
+          fontSize: 9, color: setup.status === 'active' ? LIME : setup.status === 'paused' ? THEME.colors.blue : MUTED,
+          border: `1px solid ${setup.status === 'active' ? LIME : setup.status === 'paused' ? THEME.colors.blue : MUTED}44`,
           padding: '2px 6px', borderRadius: 3, letterSpacing: '0.14em',
           fontFamily: MONO, textTransform: 'uppercase',
         }}>{setup.status || 'active'}</span>
         <StatusBadge status={cad.status} />
         <div style={{ flex: 1 }} />
         <button onClick={() => onJump(setup)} style={{
-          background: 'transparent', border: `1px solid ${BORDER}`, color: '#aaa',
+          background: 'transparent', border: `1px solid ${BORDER}`, color: THEME.colors.secondary,
           padding: '4px 10px', borderRadius: 3, fontFamily: MONO, fontSize: 10,
           letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer',
         }}>Open in Setups →</button>
@@ -133,7 +134,7 @@ function SetupRow({ setup, onJump }) {
         <div style={{ background: DARK, border: `1px solid ${BORDER}`, borderRadius: 4, padding: 10 }}>
           <div style={{ fontSize: 9, color: MUTED, fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 6 }}>Backtest summary</div>
           {bt ? (
-            <div style={{ fontSize: 11, color: '#aaa', fontFamily: MONO, lineHeight: 1.7 }}>
+            <div style={{ fontSize: 11, color: THEME.colors.secondary, fontFamily: MONO, lineHeight: 1.7 }}>
               {bt.triggers} triggers · Win rate {((bt.winRate || 0) * 100).toFixed(0)}% · EV {(bt.expectedValue || 0) >= 0 ? '+' : ''}{(bt.expectedValue || 0).toFixed(2)}%<br />
               Avg win +{(bt.avgWin || 0).toFixed(1)}% / loss {(bt.avgLoss || 0).toFixed(1)}% · Sharpe {(bt.sharpe || 0).toFixed(2)}<br />
               <span style={{ color: MUTED, fontSize: 10 }}>Last run {bt.lastRunAt ? new Date(bt.lastRunAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}</span>
@@ -211,13 +212,13 @@ export default function OutcomesAnalyzer({ setups = [], onSetupsChange = null, a
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {refreshing && (
-            <span style={{ fontSize: 10, color: '#aaa', fontFamily: MONO }}>
+            <span style={{ fontSize: 10, color: THEME.colors.secondary, fontFamily: MONO }}>
               {progress.current ? `Backtesting ${progress.current}` : 'Starting'} ({progress.done}/{progress.total})
             </span>
           )}
           <button onClick={refreshAll} disabled={refreshing || !apiKey} title={!apiKey ? 'Add Massive API key' : ''} style={{
-            background: refreshing || !apiKey ? '#1a1a1a' : LIME,
-            color: refreshing || !apiKey ? '#666' : '#000',
+            background: refreshing || !apiKey ? THEME.colors.surface : LIME,
+            color: refreshing || !apiKey ? THEME.colors.secondary : THEME.colors.background,
             border: 'none', padding: '8px 14px', borderRadius: 3,
             fontFamily: MONO, fontSize: 11, fontWeight: 800,
             letterSpacing: '0.14em', textTransform: 'uppercase',
@@ -226,7 +227,7 @@ export default function OutcomesAnalyzer({ setups = [], onSetupsChange = null, a
         </div>
       </div>
 
-      {error && <div style={{ background: '#150505', border: `1px solid ${RED}55`, color: RED, padding: '8px 12px', borderRadius: 4, fontSize: 11, fontFamily: MONO }}>{error}</div>}
+      {error && <div style={{ background: THEME.colors.negativeSurface, border: `1px solid ${RED}55`, color: RED, padding: '8px 12px', borderRadius: 4, fontSize: 11, fontFamily: MONO }}>{error}</div>}
 
       {/* Degradation summary */}
       <div style={{ background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 5, padding: 12 }}>
@@ -245,14 +246,14 @@ export default function OutcomesAnalyzer({ setups = [], onSetupsChange = null, a
             {degraded.map(({ setup, cad }) => (
               <div key={setup.id} style={{
                 display: 'flex', alignItems: 'center', gap: 10,
-                background: '#0a0a0a', border: `1px solid ${cad.status === 'cold' ? RED : YELLOW}44`,
+                background: THEME.colors.background, border: `1px solid ${cad.status === 'cold' ? RED : YELLOW}44`,
                 borderRadius: 3, padding: '6px 10px', fontFamily: MONO,
               }}>
                 <span style={{ fontSize: 11, color: FG, fontWeight: 700 }}>{setup.name}</span>
                 <StatusBadge status={cad.status} />
                 <span style={{ fontSize: 10, color: MUTED, flex: 1 }}>{cad.reason}</span>
                 <button onClick={() => handleJump(setup)} style={{
-                  background: 'transparent', border: `1px solid ${BORDER}`, color: '#aaa',
+                  background: 'transparent', border: `1px solid ${BORDER}`, color: THEME.colors.secondary,
                   padding: '3px 8px', borderRadius: 3, fontFamily: MONO, fontSize: 9,
                   letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer',
                 }}>Review</button>

@@ -1,3 +1,4 @@
+import { THEME } from '../lib/theme.js'
 // ─────────────────────────────────────────────────────────────────────────────
 // InlineCheckGate.jsx — collapsible Pre-flight Check gate for the TRADE tab.
 //
@@ -32,7 +33,7 @@ export default function InlineCheckGate({ liveData, levelMap, mtfAlignment, tick
     }
   }, [logRaw])
 
-  const pillColor = !todayStatus ? '#666'
+  const pillColor = !todayStatus ? THEME.colors.secondary
     : todayStatus.verdict === 'TRADE' ? LIME
     : todayStatus.verdict === 'TRADE_FORCED' ? YELLOW
     : RED
@@ -48,11 +49,11 @@ export default function InlineCheckGate({ liveData, levelMap, mtfAlignment, tick
         style={{
           width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '12px 18px', background: 'transparent', border: 'none', cursor: 'pointer',
-          fontFamily: MONO, color: '#e8e8e8',
+          fontFamily: MONO, color: THEME.colors.text,
         }}
       >
         <span style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 10, color: '#666', letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+          <span style={{ fontSize: 10, color: THEME.colors.secondary, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
             Pre-flight Check
           </span>
           <span style={{
@@ -62,10 +63,10 @@ export default function InlineCheckGate({ liveData, levelMap, mtfAlignment, tick
             {pillLabel}
           </span>
           {todayStatus && (
-            <span style={{ fontSize: 9, color: '#555', fontFamily: MONO }}>{todayStatus.time}</span>
+            <span style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO }}>{todayStatus.time}</span>
           )}
         </span>
-        <span style={{ fontSize: 11, color: '#888' }}>{expanded ? '▼' : '▶'}</span>
+        <span style={{ fontSize: 11, color: THEME.colors.secondary }}>{expanded ? '▼' : '▶'}</span>
       </button>
 
       <div style={{ display: expanded ? 'block' : 'none', padding: '0 18px 18px' }}>

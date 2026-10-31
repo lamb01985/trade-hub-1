@@ -21,7 +21,7 @@ import { resolveUniverseTickers } from './universeResolver.js'
 // snapshot is the buildSnapshot-shape object the caller produces from the
 // ticker's bundle + 252-day daily bars.
 export function evaluateSetupForTicker(setup, ticker, snapshot) {
-  if (!setup || !setup.conditions?.length || !snapshot) {
+  if (!setup || !setup.conditions?.length || !snapshot || snapshot.mode === 'unified' || snapshot.schema_version === 'market-data-envelope-v1') {
     return { conditionResults: [], allMet: false, anyMet: false, percentMet: 0, status: 'monitoring' }
   }
   const conditionResults = evaluateAll(setup.conditions, snapshot)
@@ -77,7 +77,7 @@ function inCooldown(setup, ticker) {
 }
 
 export function evaluateSetup(setup, snapshotsByTicker, opts = {}) {
-  if (!setup || !setup.conditions?.length) {
+  if (!setup || !setup.conditions?.length || opts.mode === 'unified') {
     return { triggered: [], approaching: [], monitoring: [], missing: [] }
   }
   const savedUniverses = opts.savedUniverses || []

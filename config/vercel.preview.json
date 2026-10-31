@@ -1,0 +1,41 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "buildCommand": "node scripts/preview-preflight.mjs && npm run build",
+  "outputDirectory": "dist",
+  "functions": {
+    "api/**/*.js": {
+      "maxDuration": 60,
+      "includeFiles": "{contracts/market-data-envelope-v1.schema.json,api/_lib/marketDataAdmission.lua}"
+    }
+  },
+  "routes": [
+    {
+      "src": "/api/.*\\.js(?:/.*)?",
+      "dest": "/api/preview-denied"
+    },
+    {
+      "src": "/api/intelligence/(login|logout|session)",
+      "dest": "/api/intelligence/[action]?action=$1"
+    },
+    {
+      "src": "/api/market/(capabilities|snapshot|bars|options|intelligence)",
+      "dest": "/api/market/[resource]?resource=$1"
+    },
+    {
+      "src": "/api/polygon/(proxy|ws-auth)",
+      "dest": "/api/polygon/$1"
+    },
+    {
+      "src": "/api(?:/.*)?",
+      "dest": "/api/preview-denied"
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/.*",
+      "dest": "/index.html"
+    }
+  ]
+}

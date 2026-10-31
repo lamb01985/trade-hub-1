@@ -1,9 +1,11 @@
+import { THEME } from '../lib/theme.js'
+import OperatorAccess from './intelligence/OperatorAccess.jsx'
 import { useState, useEffect } from 'react'
 import { Card, SLabel, Heading, Tile, Fld, Sel, Btn, Tip } from './ui.jsx'
 import { LIME, RED, YELLOW, MONO, BORDER, SESSION_LABELS, SESSION_COLORS, SESSION_TIPS, getSession, getMarketHolidayName, todayStr, f2, fmtD, fmtU } from '../constants.js'
 import { rotationContextForTicker } from '../lib/sectors.js'
 
-export default function Command({ trades, settings, onSettingsChange, lockedOut, onUnlock, anthropicKey, onAnthropicKeyChange, liveData, marketEvents, instrument, ticker = 'QQQ', levelMap, todayEvents = [], schwab }) {
+export default function Command({ trades, settings, onSettingsChange, lockedOut, onUnlock, aiCapability, liveData, marketEvents, instrument, ticker = 'QQQ', levelMap, todayEvents = [], schwab }) {
   const [time, setTime] = useState(new Date())
   useEffect(() => { const t = setInterval(() => setTime(new Date()), 1000); return () => clearInterval(t) }, [])
 
@@ -42,34 +44,34 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       {lockedOut && (
-        <div style={{ background: '#1a0000', border: `1px solid ${RED}44`, borderRadius: 5, padding: '18px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ background: THEME.colors.negativeSurface, border: `1px solid ${RED}44`, borderRadius: 5, padding: '18px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
             <div style={{ fontSize: 14, fontWeight: 700, color: RED, fontFamily: MONO }}>TRADING LOCKED</div>
-            <div style={{ fontSize: 11, color: '#aa5555', fontFamily: MONO, marginTop: 4 }}>Daily loss limit reached. Step away and review.</div>
+            <div style={{ fontSize: 11, color: THEME.colors.negative, fontFamily: MONO, marginTop: 4 }}>Daily loss limit reached. Step away and review.</div>
           </div>
           <Btn variant="danger" small onClick={onUnlock}>Override?</Btn>
         </div>
       )}
 
       {marketEvents && (
-        <div style={{ background: '#110e00', border: `1px solid ${YELLOW}44`, borderRadius: 5, padding: '14px 18px', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+        <div style={{ background: THEME.colors.surface, border: `1px solid ${YELLOW}44`, borderRadius: 5, padding: '14px 18px', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
           <span style={{ color: YELLOW, fontSize: 16, flexShrink: 0, lineHeight: 1.2 }}>⚠</span>
           <div>
             <div style={{ fontSize: 9, fontWeight: 700, color: YELLOW, fontFamily: MONO, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 4 }}>Market Event</div>
-            <div style={{ fontSize: 12, color: '#c8a030', fontFamily: MONO, lineHeight: 1.5 }}>{marketEvents} — reassess size and setup before trading</div>
+            <div style={{ fontSize: 12, color: THEME.colors.caution, fontFamily: MONO, lineHeight: 1.5 }}>{marketEvents} — reassess size and setup before trading</div>
           </div>
         </div>
       )}
 
       {/* Polygon API status. The key is configured server-side via Vercel env
           var POLYGON_API_KEY and never reaches the browser. */}
-      <Card style={{ border: polygonStatus === 'configured' ? `1px solid ${LIME}33` : polygonStatus === 'env_missing' ? `1px solid ${YELLOW}33` : '1px solid #222' }}>
+      <Card style={{ border: polygonStatus === 'configured' ? `1px solid ${LIME}33` : polygonStatus === 'env_missing' ? `1px solid ${YELLOW}33` : `1px solid ${THEME.colors.surface}` }}>
         <SLabel>Polygon API Connection</SLabel>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
           {polygonStatus === 'checking' && (
             <>
-              <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#666' }} />
-              <span style={{ fontSize: 12, fontFamily: MONO, color: '#aaa' }}>Checking server configuration...</span>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: THEME.colors.secondary }} />
+              <span style={{ fontSize: 12, fontFamily: MONO, color: THEME.colors.secondary }}>Checking server configuration...</span>
             </>
           )}
           {polygonStatus === 'configured' && (
@@ -91,32 +93,32 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
             </>
           )}
         </div>
-        <div style={{ fontSize: 10, color: '#666', fontFamily: MONO, marginTop: 10, lineHeight: 1.6 }}>
+        <div style={{ fontSize: 10, color: THEME.colors.secondary, fontFamily: MONO, marginTop: 10, lineHeight: 1.6 }}>
           {polygonStatus === 'env_missing'
             ? 'Set POLYGON_API_KEY as a Sensitive env var in the Vercel project (Production + Preview), then redeploy. The key is read server-side only and never reaches the browser.'
-            : 'API key is managed server-side via POLYGON_API_KEY in Vercel env. REST calls are proxied through /api/polygon/proxy. The WebSocket fetches its auth from /api/polygon/ws-auth on connect, so no Polygon key is persisted in browser storage.'}
+            : 'API key is managed server-side via POLYGON_API_KEY in Vercel env. REST calls are proxied through /api/polygon/proxy. Observations use authenticated REST polling; no provider key is delivered to this browser.'}
         </div>
       </Card>
 
       {/* Live price + VWAP */}
       {liveData?.price && (
-        <div style={{ background: '#0a1206', border: `1px solid ${LIME}28`, borderRadius: 5, padding: '18px 22px' }}>
+        <div style={{ background: THEME.colors.positiveSurface, border: `1px solid ${LIME}28`, borderRadius: 5, padding: '18px 22px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
-              <SLabel color="#5a7a5a">LIVE {ticker} — {liveData.connected ? 'WebSocket' : 'Polling'}</SLabel>
-              <div style={{ fontSize: 48, fontWeight: 900, fontFamily: MONO, color: '#e8e8e8', letterSpacing: '-0.03em', lineHeight: 1 }}>${f2(liveData.price)}</div>
+              <SLabel color={THEME.colors.positive}>{ticker} — authenticated REST polling</SLabel>
+              <div style={{ fontSize: 48, fontWeight: 900, fontFamily: MONO, color: THEME.colors.text, letterSpacing: '-0.03em', lineHeight: 1 }}>${f2(liveData.price)}</div>
               {liveData.bid && liveData.ask && (
-                <div style={{ fontSize: 11, fontFamily: MONO, color: '#777', marginTop: 6 }}>Bid ${f2(liveData.bid)} / Ask ${f2(liveData.ask)}</div>
+                <div style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary, marginTop: 6 }}>Bid ${f2(liveData.bid)} / Ask ${f2(liveData.ask)}</div>
               )}
               {(() => {
                 const ctx = rotationContextForTicker(ticker)
                 if (!ctx) return null
-                const c = ctx.tier === 'strong-in' ? LIME : ctx.tier === 'mod-in' ? '#86A45A' : ctx.tier === 'strong-out' ? RED : ctx.tier === 'mod-out' ? '#8A4040' : '#888'
+                const c = ctx.tier === 'strong-in' ? LIME : ctx.tier === 'mod-in' ? THEME.colors.positive : ctx.tier === 'strong-out' ? RED : ctx.tier === 'mod-out' ? THEME.colors.negative : THEME.colors.secondary
                 return (
-                  <div style={{ fontSize: 11, fontFamily: MONO, color: '#888', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    Sector: <strong style={{ color: '#aaa' }}>{ctx.name}</strong>
+                  <div style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary, marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    Sector: <strong style={{ color: THEME.colors.secondary }}>{ctx.name}</strong>
                     <span style={{ color: c, fontWeight: 700 }}>{ctx.arrow} {ctx.score >= 0 ? '+' : ''}{ctx.score}</span>
-                    {ctx.stale && <span style={{ color: '#444', fontSize: 9 }}>(stale)</span>}
+                    {ctx.stale && <span style={{ color: THEME.colors.secondary, fontSize: 9 }}>(stale)</span>}
                   </div>
                 )
               })()}
@@ -126,8 +128,8 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
                 const rel = Math.abs(diff) < 0.10 ? 'at' : diff > 0 ? 'above' : 'below'
                 const c = rel === 'above' ? LIME : rel === 'below' ? RED : YELLOW
                 return (
-                  <div style={{ fontSize: 11, fontFamily: MONO, color: '#888', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    POC: <strong style={{ color: '#FFFFFF' }}>${f2(poc)}</strong>
+                  <div style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary, marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    POC: <strong style={{ color: THEME.colors.text }}>${f2(poc)}</strong>
                     <span style={{ color: c, fontWeight: 700 }}>({rel}{rel !== 'at' ? ` by $${f2(Math.abs(diff))}` : ''})</span>
                   </div>
                 )
@@ -137,11 +139,11 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
               {liveData.vwapData && (
                 <>
                   <div>
-                    <div style={{ fontSize: 9, color: '#666', fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.1em', display: 'flex', alignItems: 'center' }}>VWAP<Tip tip="Volume Weighted Average Price — the average price weighted by volume. Institutions use VWAP as their anchor. Price above = bullish structure, below = bearish. Watch for price to reclaim or reject VWAP as your directional signal." /></div>
-                    <div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: '#C084FC' }}>${f2(liveData.vwapData.vwap)}</div>
+                    <div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.1em', display: 'flex', alignItems: 'center' }}>VWAP<Tip tip="Volume Weighted Average Price — the average price weighted by volume. Institutions use VWAP as their anchor. Price above = bullish structure, below = bearish. Watch for price to reclaim or reject VWAP as your directional signal." /></div>
+                    <div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: THEME.colors.purple }}>${f2(liveData.vwapData.vwap)}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 9, color: '#666', fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.1em' }}>vs VWAP</div>
+                    <div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.1em' }}>vs VWAP</div>
                     <div style={{ fontSize: 14, fontFamily: MONO, fontWeight: 700, color: liveData.price > liveData.vwapData.vwap ? LIME : RED }}>
                       {liveData.price > liveData.vwapData.vwap ? '+' : ''}{f2(liveData.price - liveData.vwapData.vwap)}
                     </div>
@@ -150,13 +152,13 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
               )}
               {(session === 'weekend' || session === 'holiday') ? (
                 <div>
-                  <div style={{ fontSize: 9, color: '#666', fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.1em' }}>RVOL</div>
-                  <div style={{ fontSize: 11, fontFamily: MONO, fontWeight: 700, color: '#666' }}>unavailable</div>
-                  <div style={{ fontSize: 9, fontFamily: MONO, color: '#444', marginTop: 2 }}>market closed</div>
+                  <div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.1em' }}>RVOL</div>
+                  <div style={{ fontSize: 11, fontFamily: MONO, fontWeight: 700, color: THEME.colors.secondary }}>unavailable</div>
+                  <div style={{ fontSize: 9, fontFamily: MONO, color: THEME.colors.secondary, marginTop: 2 }}>market closed</div>
                 </div>
               ) : liveData.rvol != null && (
                 <div>
-                  <div style={{ fontSize: 9, color: '#666', fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.1em', display: 'flex', alignItems: 'center' }}>RVOL<Tip tip="Relative Volume — how today's volume compares to the average at this time of day. Above 1.5x means institutional activity is elevated and moves are real. Below 0.8x means low conviction — don't chase breakouts." /></div>
+                  <div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.1em', display: 'flex', alignItems: 'center' }}>RVOL<Tip tip="Relative Volume — how today's volume compares to the average at this time of day. Above 1.5x means institutional activity is elevated and moves are real. Below 0.8x means low conviction — don't chase breakouts." /></div>
                   <div style={{ fontSize: 14, fontFamily: MONO, fontWeight: 700, color: liveData.rvol >= 1.2 ? LIME : liveData.rvol >= 0.8 ? YELLOW : RED }}>
                     {liveData.rvol.toFixed(2)}x
                   </div>
@@ -177,8 +179,8 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
         const vwap = liveData.vwapData?.vwap
         const vwapDelta = price != null && vwap != null ? price - vwap : null
 
-        const qColor = sq === 'ON LEVEL' ? LIME : sq === 'APPROACHING' ? YELLOW : sq === 'TIGHT RANGE' ? '#C084FC' : '#888'
-        const qBg = sq === 'ON LEVEL' ? '#0a1208' : sq === 'APPROACHING' ? '#100d04' : sq === 'TIGHT RANGE' ? '#0d0820' : '#0c0c0c'
+        const qColor = sq === 'ON LEVEL' ? LIME : sq === 'APPROACHING' ? YELLOW : sq === 'TIGHT RANGE' ? THEME.colors.purple : THEME.colors.secondary
+        const qBg = sq === 'ON LEVEL' ? THEME.colors.positiveSurface : sq === 'APPROACHING' ? THEME.colors.surface : sq === 'TIGHT RANGE' ? THEME.colors.surface : THEME.colors.background
         const qHint = sq === 'ON LEVEL' ? 'Price is touching a key level — wait for the candle to CLOSE before entering.'
           : sq === 'APPROACHING' ? 'Price is closing in on a level — prepare your entry, do not chase.'
           : sq === 'TIGHT RANGE' ? 'Price compressed between two close levels — breakout setup forming.'
@@ -193,46 +195,46 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
           <div style={{ background: qBg, border: `1px solid ${qColor}44`, borderRadius: 5, padding: '22px 26px', boxShadow: sq === 'ON LEVEL' ? `0 0 24px ${LIME}1a` : 'none' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 }}>
               <div>
-                <SLabel color="#555">Setup Quality</SLabel>
+                <SLabel color={THEME.colors.border}>Setup Quality</SLabel>
                 <div style={{ fontSize: 38, fontWeight: 900, fontFamily: MONO, color: qColor, letterSpacing: '0.02em', lineHeight: 1, marginTop: 2 }}>
                   {sq || 'NO DATA'}
                 </div>
-                <div style={{ fontSize: 12, color: '#888', fontFamily: MONO, marginTop: 8, lineHeight: 1.5, maxWidth: 540 }}>{qHint}</div>
+                <div style={{ fontSize: 12, color: THEME.colors.secondary, fontFamily: MONO, marginTop: 8, lineHeight: 1.5, maxWidth: 540 }}>{qHint}</div>
               </div>
               <div style={{ width: 12, height: 12, borderRadius: '50%', background: qColor, boxShadow: sq === 'ON LEVEL' ? `0 0 12px ${LIME}` : 'none', flexShrink: 0, marginTop: 6, animation: sq === 'ON LEVEL' ? 'hdrpulse 1.5s infinite' : 'none' }} />
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 16, borderTop: `1px solid ${qColor}22` }}>
-              <div style={{ fontSize: 9, color: '#555', letterSpacing: '0.16em', textTransform: 'uppercase', fontFamily: MONO, marginBottom: 4 }}>Entry Conditions</div>
+              <div style={{ fontSize: 9, color: THEME.colors.secondary, letterSpacing: '0.16em', textTransform: 'uppercase', fontFamily: MONO, marginBottom: 4 }}>Entry Conditions</div>
 
               {above ? (
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, fontFamily: MONO }}>
                   <span style={{ color: LIME, fontSize: 14, fontWeight: 900, letterSpacing: '0.06em', minWidth: 70 }}>▲ CALLS</span>
-                  <span style={{ color: '#aaa', fontSize: 12 }}>
-                    if {orMins} candle closes above <strong style={{ color: '#e8e8e8' }}>{above.label} ${f2(above.price)}</strong>
+                  <span style={{ color: THEME.colors.secondary, fontSize: 12 }}>
+                    if {orMins} candle closes above <strong style={{ color: THEME.colors.text }}>{above.label} ${f2(above.price)}</strong>
                   </span>
-                  <span style={{ color: '#555', fontSize: 11, marginLeft: 'auto' }}>${f2(above.price - price)} above</span>
+                  <span style={{ color: THEME.colors.secondary, fontSize: 11, marginLeft: 'auto' }}>${f2(above.price - price)} above</span>
                 </div>
               ) : (
-                <div style={{ fontFamily: MONO, fontSize: 12, color: '#444' }}>▲ CALLS — no level above current price</div>
+                <div style={{ fontFamily: MONO, fontSize: 12, color: THEME.colors.secondary }}>▲ CALLS — no level above current price</div>
               )}
 
               {below ? (
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, fontFamily: MONO }}>
                   <span style={{ color: RED, fontSize: 14, fontWeight: 900, letterSpacing: '0.06em', minWidth: 70 }}>▼ PUTS</span>
-                  <span style={{ color: '#aaa', fontSize: 12 }}>
-                    if {orMins} candle closes below <strong style={{ color: '#e8e8e8' }}>{below.label} ${f2(below.price)}</strong>
+                  <span style={{ color: THEME.colors.secondary, fontSize: 12 }}>
+                    if {orMins} candle closes below <strong style={{ color: THEME.colors.text }}>{below.label} ${f2(below.price)}</strong>
                   </span>
-                  <span style={{ color: '#555', fontSize: 11, marginLeft: 'auto' }}>${f2(price - below.price)} below</span>
+                  <span style={{ color: THEME.colors.secondary, fontSize: 11, marginLeft: 'auto' }}>${f2(price - below.price)} below</span>
                 </div>
               ) : (
-                <div style={{ fontFamily: MONO, fontSize: 12, color: '#444' }}>▼ PUTS — no level below current price</div>
+                <div style={{ fontFamily: MONO, fontSize: 12, color: THEME.colors.secondary }}>▼ PUTS — no level below current price</div>
               )}
 
               {vwapDelta != null && (
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, fontFamily: MONO, marginTop: 4 }}>
-                  <span style={{ color: '#C084FC', fontSize: 11, fontWeight: 700, minWidth: 70, letterSpacing: '0.06em' }}>vs VWAP</span>
-                  <span style={{ color: '#888', fontSize: 11 }}>
+                  <span style={{ color: THEME.colors.purple, fontSize: 11, fontWeight: 700, minWidth: 70, letterSpacing: '0.06em' }}>vs VWAP</span>
+                  <span style={{ color: THEME.colors.secondary, fontSize: 11 }}>
                     VWAP ${f2(vwap)} — <strong style={{ color: vwapDelta >= 0 ? LIME : RED }}>
                       {vwapDelta >= 0 ? `Above by $${f2(vwapDelta)}` : `Below by $${f2(Math.abs(vwapDelta))}`}
                     </strong>
@@ -271,33 +273,33 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
         else { fillMsg = 'Exhaustion gap — <20% fill probability — gap-and-go, trade with the gap direction'; fillColor = LIME }
 
         return (
-          <div style={{ background: '#0d0d08', border: `1px solid ${YELLOW}33`, borderRadius: 5, padding: '14px 18px' }}>
+          <div style={{ background: THEME.colors.surface, border: `1px solid ${YELLOW}33`, borderRadius: 5, padding: '14px 18px' }}>
             <SLabel>Pre-Market Gap Analysis</SLabel>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
               <div>
                 <div style={{ fontSize: 24, fontWeight: 900, fontFamily: MONO, color: isGapUp ? LIME : RED, lineHeight: 1 }}>
                   {isGapUp ? '▲' : '▼'} {isGapUp ? '+' : ''}{f2(gap)}
                 </div>
-                <div style={{ fontSize: 10, color: '#555', fontFamily: MONO, marginTop: 4 }}>
+                <div style={{ fontSize: 10, color: THEME.colors.secondary, fontFamily: MONO, marginTop: 4 }}>
                   {f2(gapPct)}% of prior range · PDC ${f2(pdc)} → PM ${f2(price)}
                 </div>
               </div>
               <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 9, color: '#333', fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>Prior Range</div>
-                <div style={{ fontSize: 14, fontWeight: 700, fontFamily: MONO, color: '#555' }}>${f2(pdl)} – ${f2(pdh)}</div>
+                <div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>Prior Range</div>
+                <div style={{ fontSize: 14, fontWeight: 700, fontFamily: MONO, color: THEME.colors.secondary }}>${f2(pdl)} – ${f2(pdh)}</div>
               </div>
             </div>
 
             {/* Position bar */}
-            <div style={{ position: 'relative', height: 6, background: '#1a1a1a', borderRadius: 3, margin: '10px 0' }}>
+            <div style={{ position: 'relative', height: 6, background: THEME.colors.surface, borderRadius: 3, margin: '10px 0' }}>
               {/* Prior range band */}
-              <div style={{ position: 'absolute', left: toPct(pdl), right: `${100 - parseFloat(toPct(pdh))}%`, top: 0, bottom: 0, background: '#2a2a2a', borderRadius: 3 }} />
+              <div style={{ position: 'absolute', left: toPct(pdl), right: `${100 - parseFloat(toPct(pdh))}%`, top: 0, bottom: 0, background: THEME.colors.border, borderRadius: 3 }} />
               {/* PDC tick */}
-              <div style={{ position: 'absolute', left: toPct(pdc), top: -2, bottom: -2, width: 2, background: '#555', transform: 'translateX(-50%)' }} />
+              <div style={{ position: 'absolute', left: toPct(pdc), top: -2, bottom: -2, width: 2, background: THEME.colors.border, transform: 'translateX(-50%)' }} />
               {/* Current price dot */}
               <div style={{ position: 'absolute', left: toPct(price), top: '50%', transform: 'translate(-50%, -50%)', width: 10, height: 10, borderRadius: '50%', background: isGapUp ? LIME : RED, boxShadow: `0 0 6px ${isGapUp ? LIME : RED}88`, zIndex: 1 }} />
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 8, color: '#333', fontFamily: MONO, marginBottom: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 8, color: THEME.colors.secondary, fontFamily: MONO, marginBottom: 10 }}>
               <span>PDL ${f2(pdl)}</span><span>PDC ${f2(pdc)}</span><span>PDH ${f2(pdh)}</span>
             </div>
 
@@ -312,20 +314,20 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
               return (
                 <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${YELLOW}22`, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10 }}>
                   <div>
-                    <div style={{ fontSize: 8, fontFamily: MONO, color: '#444', letterSpacing: '0.12em', textTransform: 'uppercase' }}>PMH</div>
+                    <div style={{ fontSize: 8, fontFamily: MONO, color: THEME.colors.secondary, letterSpacing: '0.12em', textTransform: 'uppercase' }}>PMH</div>
                     <div style={{ fontSize: 13, fontFamily: MONO, fontWeight: 700, color: LIME }}>${f2(pm.high)}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 8, fontFamily: MONO, color: '#444', letterSpacing: '0.12em', textTransform: 'uppercase' }}>PML</div>
+                    <div style={{ fontSize: 8, fontFamily: MONO, color: THEME.colors.secondary, letterSpacing: '0.12em', textTransform: 'uppercase' }}>PML</div>
                     <div style={{ fontSize: 13, fontFamily: MONO, fontWeight: 700, color: RED }}>${f2(pm.low)}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 8, fontFamily: MONO, color: '#444', letterSpacing: '0.12em', textTransform: 'uppercase' }}>Trend</div>
+                    <div style={{ fontSize: 8, fontFamily: MONO, color: THEME.colors.secondary, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Trend</div>
                     <div style={{ fontSize: 11, fontFamily: MONO, fontWeight: 700, color: trendColor }}>{pm.trend}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 8, fontFamily: MONO, color: '#444', letterSpacing: '0.12em', textTransform: 'uppercase' }}>PM Vol</div>
-                    <div style={{ fontSize: 11, fontFamily: MONO, fontWeight: 700, color: pmVolRatio && pmVolRatio > 1.5 ? LIME : pmVolRatio && pmVolRatio > 1.0 ? YELLOW : '#888' }}>
+                    <div style={{ fontSize: 8, fontFamily: MONO, color: THEME.colors.secondary, letterSpacing: '0.12em', textTransform: 'uppercase' }}>PM Vol</div>
+                    <div style={{ fontSize: 11, fontFamily: MONO, fontWeight: 700, color: pmVolRatio && pmVolRatio > 1.5 ? LIME : pmVolRatio && pmVolRatio > 1.0 ? YELLOW : THEME.colors.secondary }}>
                       {pmVolRatio ? `${pmVolRatio.toFixed(1)}x avg` : `${(pm.vol / 1e6).toFixed(1)}M`}
                     </div>
                   </div>
@@ -340,14 +342,14 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <Card>
           <SLabel>Market Clock</SLabel>
-          <div style={{ fontSize: 20, fontWeight: 700, fontFamily: MONO, color: '#e8e8e8' }}>{etTime} ET</div>
+          <div style={{ fontSize: 20, fontWeight: 700, fontFamily: MONO, color: THEME.colors.text }}>{etTime} ET</div>
           <div style={{ fontSize: 15, color: LIME, fontFamily: MONO, fontWeight: 700, marginTop: 2 }}>{ctTime} CT</div>
-          <div style={{ fontSize: 10, color: '#666', fontFamily: MONO, marginTop: 4 }}>OR closes: {orLabels[settings.orPeriod] || '8:45 CT'}</div>
+          <div style={{ fontSize: 10, color: THEME.colors.secondary, fontFamily: MONO, marginTop: 4 }}>OR closes: {orLabels[settings.orPeriod] || '8:45 CT'}</div>
         </Card>
         <Card style={{ border: `1px solid ${sessionColor}33` }}>
           <SLabel>Session</SLabel>
           <div style={{ fontSize: 17, fontWeight: 700, fontFamily: MONO, color: sessionColor, marginBottom: 6 }}>{SESSION_LABELS[session]}</div>
-          <div style={{ fontSize: 11, color: '#666', fontFamily: MONO, lineHeight: 1.5 }}>{SESSION_TIPS[session]}</div>
+          <div style={{ fontSize: 11, color: THEME.colors.secondary, fontFamily: MONO, lineHeight: 1.5 }}>{SESSION_TIPS[session]}</div>
         </Card>
       </div>
 
@@ -362,7 +364,7 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
 
         const cfg = {
           'pre-market': {
-            color: '#888', bg: '#111', border: '#222',
+            color: THEME.colors.secondary, bg: THEME.colors.background, border: THEME.colors.surface,
             action: 'DO NOW',
             steps: [
               'Run "Load Market Data" in Prep tab — auto-fills PDH/PDL/PP/Strike',
@@ -374,7 +376,7 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
             note: 'Do not touch the market until 8:45 CT. Prep is the job right now.',
           },
           'open': {
-            color: LIME, bg: '#0a1208', border: '#1e3018',
+            color: LIME, bg: THEME.colors.positiveSurface, border: THEME.colors.positiveSurface,
             action: isTrendDay ? 'PRIME WINDOW — TREND DAY' : isRangeDay ? 'PRIME WINDOW — RANGE DAY' : 'PRIME WINDOW',
             steps: [
               'OR formed at 8:45 CT — load ORH/ORL into the ORB tab',
@@ -394,7 +396,7 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
               : 'Your window is 8:45–10:30 CT. One good trade beats three mediocre ones.',
           },
           'chop': {
-            color: isTrendDay ? LIME : YELLOW, bg: '#0e0c04', border: '#2a2010',
+            color: isTrendDay ? LIME : YELLOW, bg: THEME.colors.surface, border: THEME.colors.negativeSurface,
             action: isTrendDay ? 'CHOP — TREND ACTIVE' : isRangeDay ? 'CHOP — RANGING' : 'AVOID ZONE',
             steps: isTrendDay ? [
               'Trend day: RVOL elevated and price has moved > 1 ATR from open',
@@ -416,7 +418,7 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
               : 'This is the hardest discipline in day trading. Doing nothing IS the trade.',
           },
           'power-hour': {
-            color: '#F97316', bg: '#0e0800', border: '#2a1800',
+            color: THEME.colors.orange, bg: THEME.colors.negativeSurface, border: THEME.colors.negativeSurface,
             action: 'POWER HOUR',
             steps: [
               '1:30–3:00 CT — trend-follow only, no reversals',
@@ -428,7 +430,7 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
             note: 'Power hour can move fast. Trust the trend, not your opinion.',
           },
           'after-hours': {
-            color: '#555', bg: '#111', border: '#222',
+            color: THEME.colors.secondary, bg: THEME.colors.background, border: THEME.colors.surface,
             action: 'MARKET CLOSED',
             steps: [
               'Log all trades in Journal tab — do it now before you forget',
@@ -440,7 +442,7 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
             note: 'Great traders prep at night. Tomorrow\'s edge is built right now.',
           },
           'weekend': {
-            color: '#888', bg: '#0c0c0c', border: '#1e1e1e',
+            color: THEME.colors.secondary, bg: THEME.colors.background, border: THEME.colors.surface,
             action: 'WEEKEND — MARKETS CLOSED',
             steps: [
               'Run the Watchlist scanner for Monday setups',
@@ -453,7 +455,7 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
             note: 'Markets reopen Monday at 8:30 CT. Prep wins Monday before Monday arrives.',
           },
           'holiday': {
-            color: '#888', bg: '#0c0c0c', border: '#1e1e1e',
+            color: THEME.colors.secondary, bg: THEME.colors.background, border: THEME.colors.surface,
             action: holidayName ? `HOLIDAY — ${holidayName.toUpperCase()}` : 'MARKET HOLIDAY',
             steps: [
               'US equity markets are closed today',
@@ -474,7 +476,7 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
           <div style={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: 5, padding: '16px 20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <div>
-                <div style={{ fontSize: 9, color: '#555', fontFamily: MONO, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 3 }}>Right Now</div>
+                <div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 3 }}>Right Now</div>
                 <div style={{ fontSize: 14, fontWeight: 700, fontFamily: MONO, color: c.color }}>{c.action}</div>
               </div>
               <div style={{ width: 8, height: 8, borderRadius: '50%', background: c.color, boxShadow: session === 'open' ? `0 0 10px ${LIME}` : 'none' }} />
@@ -483,16 +485,16 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
               const isEventStep = i < eventSteps.length
               const isMultiDayStep = !isEventStep && i < eventSteps.length + multiDaySteps.length
               const callout = isEventStep || isMultiDayStep
-              const calloutColor = isEventStep ? YELLOW : isMultiDayStep ? '#60A5FA' : c.color
+              const calloutColor = isEventStep ? YELLOW : isMultiDayStep ? THEME.colors.blue : c.color
               return (
                 <div key={i} style={{ display: 'flex', gap: 10, padding: '5px 0', borderBottom: i < allSteps.length - 1 ? `1px solid ${c.border}` : 'none' }}>
                   <span style={{ color: calloutColor, fontFamily: MONO, fontSize: 10, minWidth: 16, opacity: 0.6, marginTop: 1 }}>{callout ? (isEventStep ? '!' : '◆') : `${i - eventSteps.length - multiDaySteps.length + 1}.`}</span>
-                  <span style={{ color: callout ? calloutColor : session === 'open' ? '#aaa' : '#777', fontFamily: MONO, fontSize: 11, lineHeight: 1.5 }}>{step}</span>
+                  <span style={{ color: callout ? calloutColor : session === 'open' ? THEME.colors.secondary : THEME.colors.secondary, fontFamily: MONO, fontSize: 11, lineHeight: 1.5 }}>{step}</span>
                 </div>
               )
             })}
             <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${c.border}`, fontSize: 10, color: c.color, fontFamily: MONO, opacity: 0.7, fontStyle: 'italic' }}>{c.note}</div>
-            <div style={{ marginTop: 8, fontSize: 9, color: '#1e2e1e', fontFamily: MONO }}>New here? Tap any <span style={{ color: '#2a3a2a' }}>?</span> icon for an explanation.</div>
+            <div style={{ marginTop: 8, fontSize: 9, color: THEME.colors.positiveSurface, fontFamily: MONO }}>New here? Tap any <span style={{ color: THEME.colors.positiveSurface }}>?</span> icon for an explanation.</div>
           </div>
         )
       })()}
@@ -502,8 +504,8 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
           {liveData.prevDay && [
             { label: 'PDH', value: `$${f2(liveData.prevDay.high)}`, color: RED },
-            { label: 'PDL', value: `$${f2(liveData.prevDay.low)}`, color: '#4488FF' },
-            { label: 'PDC', value: `$${f2(liveData.prevDay.close)}`, color: '#888' },
+            { label: 'PDL', value: `$${f2(liveData.prevDay.low)}`, color: THEME.colors.blue },
+            { label: 'PDC', value: `$${f2(liveData.prevDay.close)}`, color: THEME.colors.secondary },
           ].map(({ label, value, color }) => (
             <Tile key={label} compact label={label} value={value} color={color} />
           ))}
@@ -513,8 +515,8 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
       {/* Today stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
         <Tile compact label="Today P&L" value={fmtD(todayPnl)} color={todayPnl >= 0 ? LIME : RED} />
-        <Tile compact label="Trades" value={`${tt.length}/${settings.maxTradesPerDay || '∞'}`} color={settings.maxTradesPerDay && tt.length >= settings.maxTradesPerDay ? RED : '#e8e8e8'} />
-        <Tile compact label="Win Rate" value={todayClosed.length ? `${Math.round((todayWins / todayClosed.length) * 100)}%` : '—'} color={todayClosed.length && todayWins / todayClosed.length >= 0.5 ? LIME : '#e8e8e8'} />
+        <Tile compact label="Trades" value={`${tt.length}/${settings.maxTradesPerDay || '∞'}`} color={settings.maxTradesPerDay && tt.length >= settings.maxTradesPerDay ? RED : THEME.colors.text} />
+        <Tile compact label="Win Rate" value={todayClosed.length ? `${Math.round((todayWins / todayClosed.length) * 100)}%` : '—'} color={todayClosed.length && todayWins / todayClosed.length >= 0.5 ? LIME : THEME.colors.text} />
         <Tile compact label="Loss Streak" value={streak > 0 ? `-${streak}` : '0'} color={streak >= 3 ? RED : streak >= 2 ? YELLOW : LIME} sub={streak >= 3 ? 'Stop. No revenge.' : streak >= 2 ? 'Reduce size' : ''} />
       </div>
 
@@ -523,12 +525,12 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
         <Card>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
             <SLabel>Daily Loss Limit</SLabel>
-            <span style={{ fontSize: 11, fontFamily: MONO, color: lossUsed >= settings.dailyLossLimit ? RED : '#777' }}>{fmtU(lossUsed)} / {fmtU(settings.dailyLossLimit)}</span>
+            <span style={{ fontSize: 11, fontFamily: MONO, color: lossUsed >= settings.dailyLossLimit ? RED : THEME.colors.secondary }}>{fmtU(lossUsed)} / {fmtU(settings.dailyLossLimit)}</span>
           </div>
-          <div style={{ height: 5, background: '#111', borderRadius: 3, overflow: 'hidden', border: '1px solid #222' }}>
+          <div style={{ height: 5, background: THEME.colors.background, borderRadius: 3, overflow: 'hidden', border: `1px solid ${THEME.colors.surface}` }}>
             <div style={{ height: '100%', width: `${Math.min(lpct, 100)}%`, background: lpct >= 100 ? RED : lpct >= 70 ? YELLOW : LIME, borderRadius: 3, transition: 'width 0.4s' }} />
           </div>
-          <div style={{ fontSize: 10, color: '#666', fontFamily: MONO, marginTop: 6 }}>{lpct >= 100 ? 'Locked.' : `${fmtU(settings.dailyLossLimit - lossUsed)} remaining`}</div>
+          <div style={{ fontSize: 10, color: THEME.colors.secondary, fontFamily: MONO, marginTop: 6 }}>{lpct >= 100 ? 'Locked.' : `${fmtU(settings.dailyLossLimit - lossUsed)} remaining`}</div>
         </Card>
       )}
 
@@ -543,40 +545,26 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
       </Card>
 
       {/* Live data connection status */}
-      <Card style={{ border: '1px solid #222' }}>
+      <Card style={{ border: `1px solid ${THEME.colors.surface}` }}>
         <SLabel>Live Data Stream</SLabel>
         <div style={{ display: 'flex', gap: 12, marginTop: 6, alignItems: 'center' }}>
-          <div style={{ width: 7, height: 7, borderRadius: '50%', background: liveData?.connected ? LIME : liveData?.price ? YELLOW : '#444', boxShadow: liveData?.connected ? `0 0 6px ${LIME}` : 'none' }} />
-          <span style={{ fontSize: 10, fontFamily: MONO, color: liveData?.connected ? LIME : liveData?.price ? YELLOW : '#666' }}>
-            {liveData?.connected ? 'WebSocket connected, real-time streaming' : liveData?.price ? 'REST polling, 10s updates' : 'Connecting...'}
+          <div style={{ width: 7, height: 7, borderRadius: '50%', background: liveData?.connected ? LIME : liveData?.price ? YELLOW : THEME.colors.border, boxShadow: liveData?.connected ? `0 0 6px ${LIME}` : 'none' }} />
+          <span style={{ fontSize: 10, fontFamily: MONO, color: liveData?.connected ? LIME : liveData?.price ? YELLOW : THEME.colors.secondary }}>
+            {liveData?.connected ? 'Authenticated REST polling; source recency unverified' : liveData?.price ? 'REST data unavailable; source recency unverified' : 'Connecting...'}
           </span>
         </div>
       </Card>
 
-      {/* Claude API key */}
-      <Card style={{ border: anthropicKey ? '1px solid #1e2a1e' : '1px solid #222' }}>
-        <SLabel>Claude AI — Game Plan Generator</SLabel>
-        <div style={{ fontSize: 11, color: '#666', fontFamily: MONO, marginBottom: 12, lineHeight: 1.7 }}>
-          Powers the <strong style={{ color: '#aaa' }}>AI Brief</strong> button in Prep tab. Claude reads your market data (PDH/PDL, pivots, VWAP, IV) and writes your full game plan: thesis, key levels, entry conditions, ideal setup, what to avoid. Get your key at <span style={{ color: LIME }}>console.anthropic.com</span> → API Keys (same account as claude.ai).
-        </div>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
-          <div style={{ flex: 1 }}>
-            <Fld label="Anthropic API Key" value={anthropicKey || ''} onChange={v => onAnthropicKeyChange(v.trim())} type="text" placeholder="sk-ant-..." mono />
-          </div>
-          {anthropicKey && <Btn small variant="ghost" onClick={() => onAnthropicKeyChange('')}>Clear</Btn>}
-        </div>
-        {anthropicKey && (
-          <div style={{ display: 'flex', gap: 10, marginTop: 10, alignItems: 'center' }}>
-            <div style={{ width: 7, height: 7, borderRadius: '50%', background: LIME, boxShadow: `0 0 6px ${LIME}` }} />
-            <span style={{ fontSize: 10, fontFamily: MONO, color: LIME }}>Claude AI active — AI Brief available in Prep tab</span>
-          </div>
-        )}
-        <div style={{ fontSize: 9, color: '#444', fontFamily: MONO, marginTop: 8 }}>Key stored in your browser only. Calls go directly to api.anthropic.com.</div>
+      <Card>
+        <SLabel>Claude AI, server configuration</SLabel>
+        <p style={{ color: aiCapability.available ? LIME : YELLOW, fontSize: 12 }}>{aiCapability.message}</p>
+        <p style={{ color: THEME.colors.secondary, fontSize: 11 }}>Claude credentials stay on the server. Market Intelligence does not require Claude. Legacy browser keys are neither read nor migrated.</p>
+        {!aiCapability.available && <OperatorAccess/>}
       </Card>
 
       {/* ── Broker, Schwab ─────────────────────────────────────────────── */}
       {(() => {
-        const BLUE = '#3B82F6'
+        const BLUE = THEME.colors.blue
         const connected = !!schwab?.isConnected
         const acct = schwab?.account || null
         const dayTrades = schwab?.dayTrades || 0
@@ -592,12 +580,12 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
 
             {!connected ? (
               <>
-                <div style={{ fontSize: 11, color: '#666', fontFamily: MONO, marginBottom: 14, lineHeight: 1.7 }}>
+                <div style={{ fontSize: 11, color: THEME.colors.secondary, fontFamily: MONO, marginBottom: 14, lineHeight: 1.7 }}>
                   Connecting Schwab unlocks live ask prices, order staging, journal sync, buying-power check, and PDT-rule tracking.
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14, fontSize: 10, fontFamily: MONO, color: '#666' }}>
-                  <div style={{ color: '#aaa', fontWeight: 700 }}>One-time setup:</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14, fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary }}>
+                  <div style={{ color: THEME.colors.secondary, fontWeight: 700 }}>One-time setup:</div>
                   {[
                     'App registered at developer.schwab.com with Accounts+Trading AND Market Data',
                     'App approved by Schwab (1 to 3 business days)',
@@ -605,7 +593,7 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
                     'KV_REST_API_URL and KV_REST_API_TOKEN set (Upstash Redis from Vercel Marketplace)',
                   ].map((s, i) => (
                     <div key={i} style={{ display: 'flex', gap: 8 }}>
-                      <span style={{ color: '#333' }}>{i + 1}.</span>
+                      <span style={{ color: THEME.colors.secondary }}>{i + 1}.</span>
                       <span>{s}</span>
                     </div>
                   ))}
@@ -614,7 +602,7 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
                 <button
                   onClick={() => schwab?.connect?.()}
                   style={{
-                    background: BLUE, color: '#fff',
+                    background: BLUE, color: THEME.colors.background,
                     border: 'none', borderRadius: 4, padding: '10px 18px',
                     fontFamily: MONO, fontSize: 11, fontWeight: 700, letterSpacing: '0.14em',
                     cursor: 'pointer',
@@ -627,7 +615,7 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
                   <div style={{ fontSize: 10, fontFamily: MONO, color: RED, marginTop: 10 }}>{schwab.lastError.message || 'Schwab error'}</div>
                 )}
 
-                <div style={{ fontSize: 9, color: '#333', fontFamily: MONO, marginTop: 12, lineHeight: 1.6 }}>
+                <div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, marginTop: 12, lineHeight: 1.6 }}>
                   Credentials live in Vercel env vars. OAuth tokens live in Upstash Redis. The browser never sees the app secret or access token.
                 </div>
               </>
@@ -636,29 +624,29 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
                   <div style={{ width: 8, height: 8, borderRadius: '50%', background: BLUE, boxShadow: `0 0 8px ${BLUE}` }} />
                   <span style={{ fontSize: 12, fontFamily: MONO, fontWeight: 700, color: BLUE, letterSpacing: '0.06em' }}>Schwab Connected</span>
-                  {masked && <span style={{ fontSize: 10, fontFamily: MONO, color: '#888' }}>Account {masked}</span>}
+                  {masked && <span style={{ fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary }}>Account {masked}</span>}
                 </div>
 
                 {schwab?.warning && (
-                  <div style={{ fontSize: 10, fontFamily: MONO, color: YELLOW, marginBottom: 12, padding: '6px 10px', background: '#15100400', border: `1px solid ${YELLOW}33`, borderRadius: 3 }}>{schwab.warning}</div>
+                  <div style={{ fontSize: 10, fontFamily: MONO, color: YELLOW, marginBottom: 12, padding: '6px 10px', background: THEME.colors.negativeSurface + '00', border: `1px solid ${YELLOW}33`, borderRadius: 3 }}>{schwab.warning}</div>
                 )}
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 14, fontFamily: MONO }}>
                   <div>
-                    <div style={{ fontSize: 9, color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 3 }}>Buying Power</div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#e8e8e8' }}>{acct?.buyingPower != null ? `$${acct.buyingPower.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}</div>
+                    <div style={{ fontSize: 9, color: THEME.colors.secondary, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 3 }}>Buying Power</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: THEME.colors.text }}>{acct?.buyingPower != null ? `$${acct.buyingPower.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 9, color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 3 }}>Day Trades</div>
+                    <div style={{ fontSize: 9, color: THEME.colors.secondary, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 3 }}>Day Trades</div>
                     <div style={{ fontSize: 14, fontWeight: 700, color: dayTrades >= 3 ? RED : dayTrades >= 2 ? YELLOW : LIME }}>{dayTrades}/3 {dayTrades >= 3 ? 'NO MORE' : 'remaining ' + (3 - dayTrades)}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 9, color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 3 }}>PDT Status</div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: acct?.isDayTrader ? LIME : '#aaa' }}>{acct?.isDayTrader ? 'Marked PDT' : 'Standard'}</div>
+                    <div style={{ fontSize: 9, color: THEME.colors.secondary, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 3 }}>PDT Status</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: acct?.isDayTrader ? LIME : THEME.colors.secondary }}>{acct?.isDayTrader ? 'Marked PDT' : 'Standard'}</div>
                   </div>
                 </div>
 
-                <button onClick={disconnect} style={{ background: 'transparent', border: `1px solid ${BORDER}`, color: '#aaa', fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', padding: '8px 14px', borderRadius: 4, cursor: 'pointer' }}>
+                <button onClick={disconnect} style={{ background: 'transparent', border: `1px solid ${BORDER}`, color: THEME.colors.secondary, fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', padding: '8px 14px', borderRadius: 4, cursor: 'pointer' }}>
                   Disconnect
                 </button>
               </>
@@ -668,7 +656,7 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
       })()}
 
       {/* Non-negotiables */}
-      <div style={{ background: '#0d1208', border: '1px solid #1e2a18', borderRadius: 5, padding: '16px 20px' }}>
+      <div style={{ background: THEME.colors.positiveSurface, border: `1px solid ${THEME.colors.positiveSurface}`, borderRadius: 5, padding: '16px 20px' }}>
         <SLabel>{instrument === 'stock' ? 'Stock/ETF ORB Non-Negotiables' : 'Options ORB Non-Negotiables'}</SLabel>
         {(instrument === 'stock' ? [
           'Wait for OR to fully form. Never trade inside the range.',
@@ -686,9 +674,9 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
           '10:30–1:30 CT is chop. Theta burns. No new positions.',
           'Three consecutive losses = close the platform.',
         ]).map((r, i, arr) => (
-          <div key={i} style={{ display: 'flex', gap: 10, padding: '7px 0', borderBottom: i < arr.length - 1 ? '1px solid #151e10' : 'none' }}>
+          <div key={i} style={{ display: 'flex', gap: 10, padding: '7px 0', borderBottom: i < arr.length - 1 ? `1px solid ${THEME.colors.positiveSurface}` : 'none' }}>
             <span style={{ color: LIME, fontFamily: MONO, fontSize: 11, minWidth: 18, opacity: 0.5 }}>{i + 1}.</span>
-            <span style={{ color: '#6a8060', fontFamily: MONO, fontSize: 11, lineHeight: 1.6 }}>{r}</span>
+            <span style={{ color: THEME.colors.positive, fontFamily: MONO, fontSize: 11, lineHeight: 1.6 }}>{r}</span>
           </div>
         ))}
       </div>

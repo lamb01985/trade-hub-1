@@ -1,3 +1,4 @@
+import { THEME } from '../lib/theme.js'
 // ─────────────────────────────────────────────────────────────────────────────
 // BotPatternsPanel.jsx — three small cards that surface long-running patterns
 // across today and the last 20 archived sessions.
@@ -10,9 +11,9 @@
 import { LIME, RED, YELLOW, BLUE, PANEL, BORDER, MONO, SANS, fmtD } from '../constants.js'
 import { PLAYBOOK_BY_ID } from '../lib/playbook.js'
 
-const FG = '#e8e8e8'
-const DIM = '#888'
-const MUTED = '#666'
+const FG = THEME.colors.text
+const DIM = THEME.colors.secondary
+const MUTED = THEME.colors.secondary
 
 function Card({ title, children, accent = DIM }) {
   return (

@@ -1,12 +1,23 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { MassiveStreamClient, getLastTrade, getPriorSession, getIntradayBars, getIntradayBarsForDate, priorTradingDayStr, getWeeklyData, getHistoricalBars } from '../lib/massive.js'
+import { MassiveStreamClient, getLastTradeDetails, getPriorSession, getIntradayBars, getIntradayBarsForDate, priorTradingDayStr, getWeeklyData, getHistoricalBars } from '../lib/massive.js'
+import { selectLatestTrade, REST_QUOTE_REFRESH_MS } from '../lib/quoteQuality.js'
 import { calcVWAP, calcPivots, detectSDZones, calcIntradayVolumeProfile, calcATR, tickSizeFor } from '../lib/levels.js'
 import { computePreMarketStats, filterRegularSession } from '../lib/premarket.js'
 import { checkLevelAlerts } from '../lib/alerts.js'
 import { todayStr, getETMins } from '../constants.js'
 
 export function useLiveData(ticker = 'QQQ', levelMap = null, settings = {}) {
-  const [price, setPrice] = useState(null)
+  if (settings.mode === 'unified') throw new Error('Migration pending: legacy market subscriptions unavailable in Unified mode')
+  const [lastTrade, setLastTrade] = useState(null)
+  const price = lastTrade?.price ?? null
+  const latestTradeRef = useRef(null)
+  const updateTrade = useCallback(incoming => {
+    const next = selectLatestTrade(latestTradeRef.current, incoming)
+    if (next === latestTradeRef.current) return
+    latestTradeRef.current = next
+    setLastTrade(next)
+    priceRef.current = next?.price ?? null
+  }, [])
   const [bid, setBid] = useState(null)
   const [ask, setAsk] = useState(null)
   const [connected, setConnected] = useState(false)
@@ -43,11 +54,12 @@ export function useLiveData(ticker = 'QQQ', levelMap = null, settings = {}) {
   const tickerRef = useRef(ticker)
   tickerRef.current = ticker
 
-  // ── WebSocket connection ────────────────────────────────────────────────────
+  // ── Authenticated REST observation transport ────────────────────────────────────────────────────
   useEffect(() => {
     if (!ticker) return
     priceRef.current = null
-    setPrice(null)
+    latestTradeRef.current = null
+    setLastTrade(null)
     setBid(null)
     setAsk(null)
 
@@ -58,11 +70,15 @@ export function useLiveData(ticker = 'QQQ', levelMap = null, settings = {}) {
         stream.subscribe(ticker)
       },
       onDisconnected: () => setConnected(false),
+      onStatus: ({ ticker: sym, trade_available, quote_available }) => {
+        if (sym !== ticker) return
+        if (!trade_available) { setLastTrade(null); latestTradeRef.current = null; priceRef.current = null }
+        if (!quote_available) { setBid(null); setAsk(null) }
+      },
       onError: (msg) => { setWsError(msg); setConnected(false) },
-      onTrade: ({ ticker: sym, price: p }) => {
+      onTrade: ({ ticker: sym, price: p, timestamp }) => {
         if (sym !== ticker || tickerRef.current !== ticker) return
-        priceRef.current = p
-        setPrice(p)
+        updateTrade({ price: p, timestamp, source: 'Massive REST polling' })
         // Update VWAP with new trade (simple approach: re-use bar data)
       },
       onQuote: ({ ticker: sym, bid: b, ask: a }) => {
@@ -183,25 +199,15 @@ export function useLiveData(ticker = 'QQQ', levelMap = null, settings = {}) {
     return () => clearInterval(interval)
   }, [loadContext])
 
-  // Fallback REST poll for price if WebSocket fails
-  useEffect(() => {
-    if (connected) return
-    const poll = async () => {
-      try {
-        const p = await getLastTrade(ticker)
-        if (p && tickerRef.current === ticker) setPrice(p)
-      } catch {}
-    }
-    poll()
-    const iv = setInterval(poll, 10000)
-    return () => clearInterval(iv)
-  }, [connected, ticker])
 
   return {
     price,
+    priceTimestamp: lastTrade?.timestamp ?? null,
+    priceSource: lastTrade?.source ?? null,
     bid,
     ask,
     connected,
+    transport: 'REST_POLL',
     wsError,
     vwapData,
     prevDay,

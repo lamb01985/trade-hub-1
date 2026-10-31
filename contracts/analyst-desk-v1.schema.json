@@ -1,0 +1,147 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "analyst-desk-v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "simple_sections",
+    "quant",
+    "flow_detail",
+    "validation",
+    "training",
+    "provenance"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "analyst-desk-v1"
+    },
+    "simple_sections": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "text",
+          "teach"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "teach": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "quant": {
+      "type": "object"
+    },
+    "flow_detail": {
+      "type": "object"
+    },
+    "validation": {
+      "type": "object",
+      "required": [
+        "status",
+        "validated_samples",
+        "confidence_interval",
+        "out_of_sample_result",
+        "multiple_testing_status",
+        "reason",
+        "requirements"
+      ],
+      "properties": {
+        "status": {
+          "const": "NOT_VALIDATED"
+        },
+        "validated_samples": {
+          "const": 0
+        },
+        "confidence_interval": {
+          "type": "null"
+        },
+        "out_of_sample_result": {
+          "type": "null"
+        },
+        "multiple_testing_status": {
+          "const": "NOT_RUN"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "requirements": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "training": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "context",
+          "choices",
+          "correct_index",
+          "explanation",
+          "source_cutoff",
+          "report_id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "context": {
+            "type": "string"
+          },
+          "explanation": {
+            "type": "string"
+          },
+          "report_id": {
+            "type": "string"
+          },
+          "source_cutoff": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "choices": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 3,
+            "items": {
+              "type": "string"
+            }
+          },
+          "correct_index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "provenance": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,934 @@
+{
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "market-data-envelope-v1"
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "deployment_profile": {
+      "type": "string"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "instrument": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "canonical_id": {
+              "enum": [
+                "ETF:US:QQQ",
+                "ETF:US:SPY",
+                "ETF:US:IWM"
+              ]
+            },
+            "provider_symbol": {
+              "enum": [
+                "QQQ",
+                "SPY",
+                "IWM"
+              ]
+            },
+            "asset_class": {
+              "const": "ETF"
+            },
+            "currency": {
+              "const": "USD"
+            }
+          },
+          "required": [
+            "canonical_id",
+            "provider_symbol",
+            "asset_class",
+            "currency"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "source": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "const": "Massive"
+        },
+        "transport": {
+          "const": "REST"
+        },
+        "endpoint_family": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "transport",
+        "endpoint_family"
+      ],
+      "additionalProperties": false
+    },
+    "availability": {
+      "enum": [
+        "AVAILABLE",
+        "UNAVAILABLE",
+        "NOT_ENTITLED",
+        "ERROR"
+      ]
+    },
+    "data": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "last_trade": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "instrument_id": {
+                      "type": "string"
+                    },
+                    "endpoint_family": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "number"
+                    },
+                    "price_kind": {
+                      "enum": [
+                        "TRADE",
+                        "QUOTE_MIDPOINT",
+                        "INDEX_VALUE",
+                        "BAR_CLOSE",
+                        "BID",
+                        "ASK"
+                      ]
+                    },
+                    "source_time": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "Z$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "raw_time": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "^[0-9]+$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "timestamp_unit": {
+                      "enum": [
+                        "NS",
+                        "MS",
+                        "ISO",
+                        "UNKNOWN"
+                      ]
+                    },
+                    "feed_timeframe": {
+                      "enum": [
+                        "REAL_TIME",
+                        "DELAYED",
+                        "EOD",
+                        "UNKNOWN"
+                      ]
+                    },
+                    "field_quality": {
+                      "type": "object",
+                      "properties": {
+                        "valid": {
+                          "type": "boolean"
+                        },
+                        "freshness": {
+                          "enum": [
+                            "CURRENT",
+                            "DELAYED",
+                            "STALE",
+                            "LAST_CLOSED_SESSION",
+                            "UNKNOWN",
+                            "INVALID_CLOCK"
+                          ]
+                        },
+                        "reasons": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "valid",
+                        "freshness",
+                        "reasons"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "instrument_id",
+                    "endpoint_family",
+                    "value",
+                    "price_kind",
+                    "source_time",
+                    "raw_time",
+                    "timestamp_unit",
+                    "feed_timeframe",
+                    "field_quality"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "bid": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "instrument_id": {
+                      "type": "string"
+                    },
+                    "endpoint_family": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "number"
+                    },
+                    "price_kind": {
+                      "enum": [
+                        "TRADE",
+                        "QUOTE_MIDPOINT",
+                        "INDEX_VALUE",
+                        "BAR_CLOSE",
+                        "BID",
+                        "ASK"
+                      ]
+                    },
+                    "source_time": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "Z$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "raw_time": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "^[0-9]+$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "timestamp_unit": {
+                      "enum": [
+                        "NS",
+                        "MS",
+                        "ISO",
+                        "UNKNOWN"
+                      ]
+                    },
+                    "feed_timeframe": {
+                      "enum": [
+                        "REAL_TIME",
+                        "DELAYED",
+                        "EOD",
+                        "UNKNOWN"
+                      ]
+                    },
+                    "field_quality": {
+                      "type": "object",
+                      "properties": {
+                        "valid": {
+                          "type": "boolean"
+                        },
+                        "freshness": {
+                          "enum": [
+                            "CURRENT",
+                            "DELAYED",
+                            "STALE",
+                            "LAST_CLOSED_SESSION",
+                            "UNKNOWN",
+                            "INVALID_CLOCK"
+                          ]
+                        },
+                        "reasons": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "valid",
+                        "freshness",
+                        "reasons"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "instrument_id",
+                    "endpoint_family",
+                    "value",
+                    "price_kind",
+                    "source_time",
+                    "raw_time",
+                    "timestamp_unit",
+                    "feed_timeframe",
+                    "field_quality"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ask": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "instrument_id": {
+                      "type": "string"
+                    },
+                    "endpoint_family": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "number"
+                    },
+                    "price_kind": {
+                      "enum": [
+                        "TRADE",
+                        "QUOTE_MIDPOINT",
+                        "INDEX_VALUE",
+                        "BAR_CLOSE",
+                        "BID",
+                        "ASK"
+                      ]
+                    },
+                    "source_time": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "Z$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "raw_time": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "^[0-9]+$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "timestamp_unit": {
+                      "enum": [
+                        "NS",
+                        "MS",
+                        "ISO",
+                        "UNKNOWN"
+                      ]
+                    },
+                    "feed_timeframe": {
+                      "enum": [
+                        "REAL_TIME",
+                        "DELAYED",
+                        "EOD",
+                        "UNKNOWN"
+                      ]
+                    },
+                    "field_quality": {
+                      "type": "object",
+                      "properties": {
+                        "valid": {
+                          "type": "boolean"
+                        },
+                        "freshness": {
+                          "enum": [
+                            "CURRENT",
+                            "DELAYED",
+                            "STALE",
+                            "LAST_CLOSED_SESSION",
+                            "UNKNOWN",
+                            "INVALID_CLOCK"
+                          ]
+                        },
+                        "reasons": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "valid",
+                        "freshness",
+                        "reasons"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "instrument_id",
+                    "endpoint_family",
+                    "value",
+                    "price_kind",
+                    "source_time",
+                    "raw_time",
+                    "timestamp_unit",
+                    "feed_timeframe",
+                    "field_quality"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "bid_size": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ask_size": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "last_trade",
+            "bid",
+            "ask",
+            "bid_size",
+            "ask_size"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "interval": {
+              "const": "1m"
+            },
+            "adjusted": {
+              "type": "boolean"
+            },
+            "bars": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "instrument_id": {
+                    "type": "string"
+                  },
+                  "start": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "Z$"
+                  },
+                  "end": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "Z$"
+                  },
+                  "completed": {
+                    "type": "boolean"
+                  },
+                  "open": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "high": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "low": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "close": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "volume": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "source_time": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "Z$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "raw_time": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^[0-9]+$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "timestamp_unit": {
+                    "enum": [
+                      "NS",
+                      "MS",
+                      "ISO",
+                      "UNKNOWN"
+                    ]
+                  }
+                },
+                "required": [
+                  "instrument_id",
+                  "start",
+                  "end",
+                  "completed",
+                  "open",
+                  "high",
+                  "low",
+                  "close",
+                  "volume",
+                  "source_time",
+                  "raw_time",
+                  "timestamp_unit"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "interval",
+            "adjusted",
+            "bars"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "records": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "profile": {
+                    "type": "string"
+                  },
+                  "asset_class": {
+                    "type": "string"
+                  },
+                  "endpoint_family": {
+                    "type": "string"
+                  },
+                  "instrument_scope": {
+                    "type": "string"
+                  },
+                  "field_group": {
+                    "type": "string"
+                  },
+                  "recency_class": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "enum": [
+                      "UNKNOWN",
+                      "OBSERVED_AVAILABLE",
+                      "NOT_ENTITLED",
+                      "TEMPORARILY_UNVERIFIED"
+                    ]
+                  },
+                  "evidence_source": {
+                    "enum": [
+                      "USER_REPORTED",
+                      "PUBLIC_DOCUMENTATION",
+                      "CONNECTOR_OBSERVED",
+                      "DEPLOYMENT_PROBED"
+                    ]
+                  },
+                  "checked_at": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "Z$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "expires_at": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "Z$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "observed_fields": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "known_quota": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "profile",
+                  "asset_class",
+                  "endpoint_family",
+                  "instrument_scope",
+                  "field_group",
+                  "recency_class",
+                  "state",
+                  "evidence_source",
+                  "checked_at",
+                  "expires_at",
+                  "observed_fields",
+                  "known_quota"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "records"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "quality": {
+      "type": "object",
+      "properties": {
+        "freshness": {
+          "enum": [
+            "CURRENT",
+            "DELAYED",
+            "STALE",
+            "LAST_CLOSED_SESSION",
+            "UNKNOWN",
+            "INVALID_CLOCK"
+          ]
+        },
+        "coverage": {
+          "enum": [
+            "COMPLETE",
+            "PARTIAL",
+            "UNKNOWN"
+          ]
+        },
+        "policy_version": {
+          "type": "string"
+        },
+        "source_age_seconds": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "missing_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "invalid_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "freshness",
+        "coverage",
+        "policy_version",
+        "source_age_seconds",
+        "missing_fields",
+        "invalid_fields",
+        "reasons"
+      ],
+      "additionalProperties": false
+    },
+    "coverage_details": {
+      "type": "object",
+      "properties": {
+        "requested_window": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "from": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "Z$"
+                },
+                "to": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "Z$"
+                },
+                "interval": {
+                  "type": "string"
+                },
+                "adjusted": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "from",
+                "to",
+                "interval",
+                "adjusted"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "returned_window": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "from": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "Z$"
+                },
+                "to": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "Z$"
+                },
+                "interval": {
+                  "type": "string"
+                },
+                "adjusted": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "from",
+                "to",
+                "interval",
+                "adjusted"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pages_read": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pagination_complete": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "observations": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "minimum_required": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "missing_intervals": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "Z$"
+          }
+        }
+      },
+      "required": [
+        "requested_window",
+        "returned_window",
+        "pages_read",
+        "pagination_complete",
+        "observations",
+        "minimum_required",
+        "missing_intervals"
+      ],
+      "additionalProperties": false
+    },
+    "error": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string"
+            },
+            "retryable": {
+              "type": "boolean"
+            },
+            "retry_after_seconds": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "code",
+            "retryable",
+            "retry_after_seconds"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "request_id",
+    "deployment_profile",
+    "generated_at",
+    "instrument",
+    "source",
+    "availability",
+    "data",
+    "quality",
+    "coverage_details",
+    "error"
+  ],
+  "additionalProperties": false,
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "market-data-envelope-v1"
+}
