@@ -6,3 +6,12 @@ dist
 .vercel
 .env*.local
 .env*
+
+# Licensed reports and local operator credentials stay outside public Git/static assets.
+private-reports/
+.local/
+
+# Local compiled Python helpers are not source.
+__pycache__/
+*.py[cod]
+.pytest_cache/

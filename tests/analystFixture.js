@@ -1,0 +1,4 @@
+export function briefFixture() {
+ const scenario=side=>({id:side,name:side,direction:side,trigger:side==='bullish'?102:98,reference_targets:side==='bullish'?[105]:[95],confirmation:'Confirm using fresh current-session data.',invalidation:'Invalidate on a failed retest.',interpretation:'Unvalidated research hypothesis.',level_source:'Synthetic test data.',validation:'RESEARCH_HYPOTHESIS_NOT_VALIDATED'})
+ return {schema_version:'analyst-brief-v1',symbol:'QQQ',report_id:'synthetic',report_date:'2026-10-26',source_cutoff:'2026-10-23T20:00:00Z',session_open:'2026-10-26T13:30:00Z',headline:'Synthetic analyst context',observation_confidence:'LIMITED_HISTORICAL_COVERAGE',historical_validation:'NOT_VALIDATED',sections:['facts','positioning','unusual','volatility','confirmation','limitations'].map(id=>({id,title:id,paragraphs:['Evidence is historical and incomplete.']})),scenarios:[scenario('bullish'),scenario('bearish')]}
+}

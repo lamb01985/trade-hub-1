@@ -60,7 +60,8 @@ function emptyBundle() {
   }
 }
 
-export function useLiveDataMulti(tickers = []) {
+export function useLiveDataMulti(tickers = [], { mode = 'legacy' } = {}) {
+  if (mode === 'unified') throw new Error('Migration pending: legacy market subscriptions unavailable in Unified mode')
   // Normalize incoming tickers: uppercase, unique, stable.
   const normalized = useMemo(() => {
     const seen = new Set()
@@ -85,7 +86,7 @@ export function useLiveDataMulti(tickers = []) {
   const streamRef = useRef(null)
   const subscribedRef = useRef(new Set())
 
-  // ── WebSocket: one shared connection, subscriptions reconciled on tickers
+  // ── Authenticated REST transport; subscriptions reconciled on tickers
   // change. Stream is created once on mount.
   useEffect(() => {
     if (streamRef.current) return // existing connection survives ticker changes
@@ -98,6 +99,9 @@ export function useLiveDataMulti(tickers = []) {
         for (const t of subscribedRef.current) stream.subscribe(t)
       },
       onDisconnected: () => setConnected(false),
+      onStatus: ({ ticker: sym, trade_available, quote_available }) => {
+        setData(prev => ({ ...prev, [sym]: { ...(prev[sym] || emptyBundle()), ...(!trade_available ? {price: null} : {}), ...(!quote_available ? {bid: null, ask: null} : {}) } }))
+      },
       onError: (msg) => { setWsError(msg); setConnected(false) },
       onTrade: ({ ticker: sym, price: p }) => {
         if (p == null) return
@@ -241,32 +245,11 @@ export function useLiveDataMulti(tickers = []) {
     return () => clearInterval(iv)
   }, [loadContext])
 
-  // ── REST poll fallback for price if WebSocket is down.
-  useEffect(() => {
-    if (connected || normalized.length === 0) return
-    let cancelled = false
-    const poll = async () => {
-      await Promise.all(normalized.map(async (ticker) => {
-        try {
-          const p = await getLastTrade(ticker)
-          if (cancelled) return
-          if (p != null) {
-            setData(prev => {
-              const cur = prev[ticker] || emptyBundle()
-              return { ...prev, [ticker]: { ...cur, price: p } }
-            })
-          }
-        } catch {}
-      }))
-    }
-    poll()
-    const iv = setInterval(poll, 10000)
-    return () => { cancelled = true; clearInterval(iv) }
-  }, [connected, tickersKey])
 
   return {
     data,
     connected,
+    transport: 'REST_POLL',
     wsError,
     loadingContext,
     contextError,

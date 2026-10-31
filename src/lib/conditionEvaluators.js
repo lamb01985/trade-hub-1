@@ -99,6 +99,7 @@ export function macd(closes, fast = 12, slow = 26, signalPeriod = 9) {
 // daily-bar history (fetched outside this module). Returns null if the bundle
 // has no price yet.
 export function buildSnapshot(ticker, bundle, histBars = [], extras = {}) {
+  if (bundle?.schema_version === 'market-data-envelope-v1' || extras.mode === 'unified') return { mode: 'unified', ticker }
   if (!bundle || bundle.price == null) return null
 
   const closes = (histBars || []).map(b => b?.c).filter(v => v != null && v > 0)
@@ -417,6 +418,7 @@ const EVALUATORS = {
 // Evaluate a single condition against a snapshot. Returns the evaluator's
 // shape with the condition id and params attached for downstream display.
 export function evaluateCondition(condition, snapshot) {
+  if (snapshot?.mode === 'unified' || snapshot?.schema_version === 'market-data-envelope-v1') return { met: false, currentValue: null, label: 'Migration pending: current action evaluation unavailable' }
   if (!condition || !snapshot) return { met: false, currentValue: null, label: 'no condition or snapshot' }
   const def = CONDITIONS_BY_ID[condition.type]
   if (!def) return { met: false, currentValue: null, label: `unknown condition: ${condition.type}` }

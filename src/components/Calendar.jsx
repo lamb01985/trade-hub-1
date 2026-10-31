@@ -1,3 +1,4 @@
+import { isLocalServicePreview } from '../lib/localPreview.js'
 import { useMemo, useState, useEffect } from 'react'
 import { Card, SLabel, Heading, Pill, Btn } from './ui.jsx'
 import { useLocalStorage } from '../hooks/useStore.js'
@@ -410,6 +411,7 @@ export default function CalendarTab({ putTheses = {}, apiKey }) {
   const [nasdaqEarnings, setNasdaqEarnings] = useState([])
   const [nasdaqStatus, setNasdaqStatus] = useState('idle') // idle | loading | ok | empty | error
   const [nasdaqError, setNasdaqError] = useState('')
+  const [nasdaqCoverage, setNasdaqCoverage] = useState({requested:0,successful:0,failed:0})
 
   const baseEvents = useMemo(() => getAllEvents(new Date(), 14), [])
 
@@ -431,12 +433,16 @@ export default function CalendarTab({ putTheses = {}, apiKey }) {
       if (!alive) return
       const successes = results.filter(r => r.status === 'fulfilled' && !r.value?.error)
       const failures = results.filter(r => r.status === 'rejected' || r.value?.error)
+      setNasdaqCoverage({requested:dates.length,successful:successes.length,failed:failures.length})
       const flat = successes.flatMap(r => r.value.rows || [])
       if (successes.length === 0) {
         const firstErr = failures[0]?.value?.error || failures[0]?.reason?.message || 'proxy unreachable'
         setNasdaqError(firstErr)
         setNasdaqStatus('error')
         setNasdaqEarnings([])
+      } else if (failures.length > 0) {
+        setNasdaqStatus('partial')
+        setNasdaqEarnings(flat)
       } else if (flat.length === 0) {
         setNasdaqStatus('empty')
         setNasdaqEarnings([])
@@ -473,6 +479,21 @@ export default function CalendarTab({ putTheses = {}, apiKey }) {
         <div><SLabel>Events & Catalysts</SLabel><Heading>Calendar</Heading></div>
       </div>
 
+      {isLocalServicePreview() && <p role="status" style={{color:YELLOW,fontSize:11}}>Local review: sector rotation needs server-side Massive access and is unavailable here. Calendar dates still render; Nasdaq earnings use a public proxy, not fixtures.</p>}
+      {nasdaqStatus === 'partial' && <p role="status" style={{color:YELLOW,fontSize:11}}>Earnings coverage incomplete: {nasdaqCoverage.successful} of {nasdaqCoverage.requested} dates succeeded; {nasdaqCoverage.failed} failed. Visible earnings do not represent full coverage.</p>}
+      {nasdaqStatus === 'loading' && <p role="status" style={{color:'#aaa',fontSize:11}}>Loading public earnings feed...</p>}
+      {nasdaqStatus === 'error' && (
+        <div style={{ fontSize: 10, fontFamily: MONO, color: YELLOW, background: '#1a1208', border: `1px solid ${YELLOW}44`, borderRadius: 4, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+          <span>Earnings feed unavailable: {nasdaqError || 'proxy error'}. Other calendar events still shown. Tracking: {MAJOR_TICKERS.join(', ')}, plus any company over ${MIN_EARNINGS_MARKET_CAP / 1e9}B.</span>
+          <Btn small variant="ghost" onClick={() => { setNasdaqStatus('idle'); setTimeout(() => window.location.reload(), 0) }}>Retry</Btn>
+        </div>
+      )}
+      {nasdaqStatus === 'empty' && (
+        <div style={{ fontSize: 10, fontFamily: MONO, color: '#666', background: '#0c0c0c', border: `1px solid ${BORDER}`, borderRadius: 4, padding: '8px 12px' }}>
+          No tracked earnings in the next 14 days. Tracking: {MAJOR_TICKERS.join(', ')}, plus any company over ${MIN_EARNINGS_MARKET_CAP / 1e9}B.
+        </div>
+      )}
+
       {/* Top-level sub-tab switcher */}
       <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid #161616' }}>
         {TOP_TABS.map(t => {
@@ -491,12 +512,12 @@ export default function CalendarTab({ putTheses = {}, apiKey }) {
       </div>
 
       {/* ── ROTATION sub-tab ─────────────────────────────────────────────── */}
-      {topTab === 'rotation' && <SectorRotationView apiKey={apiKey} />}
+      {topTab === 'rotation' && (isLocalServicePreview() ? <Card><p role="status" style={{color:YELLOW}}>Sector rotation unavailable: the local review has no live Massive connection. No neutral scores or live flows are inferred from missing data.</p></Card> : <SectorRotationView apiKey={apiKey} />)}
 
       {/* ── EARNINGS sub-tab ─────────────────────────────────────────────── */}
       {topTab === 'earnings' && (
         earningsOnly.length === 0
-          ? <div style={{ fontSize: 11, fontFamily: MONO, color: '#444', padding: '20px 0' }}>No earnings in the next 14 days.</div>
+          ? <div style={{ fontSize: 11, fontFamily: MONO, color: '#444', padding: '20px 0' }}>{nasdaqStatus === 'loading' || nasdaqStatus === 'idle' ? 'Loading earnings coverage...' : nasdaqStatus === 'error' ? 'Earnings unavailable. An empty display does not mean there are no earnings.' : nasdaqStatus === 'partial' ? 'Earnings coverage is incomplete. No tracked rows were returned for the dates that succeeded.' : 'No tracked earnings returned for the covered dates.'}</div>
           : <ListView events={earningsOnly} />
       )}
 
@@ -527,17 +548,6 @@ export default function CalendarTab({ putTheses = {}, apiKey }) {
 
       {!edu && <OpexEducation onDismiss={() => setEdu(true)} />}
 
-      {nasdaqStatus === 'error' && (
-        <div style={{ fontSize: 10, fontFamily: MONO, color: YELLOW, background: '#1a1208', border: `1px solid ${YELLOW}44`, borderRadius: 4, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-          <span>Earnings feed unavailable: {nasdaqError || 'proxy error'}. Other calendar events still shown. Tracking: {MAJOR_TICKERS.join(', ')}, plus any company over ${MIN_EARNINGS_MARKET_CAP / 1e9}B.</span>
-          <Btn small variant="ghost" onClick={() => { setNasdaqStatus('idle'); setTimeout(() => window.location.reload(), 0) }}>Retry</Btn>
-        </div>
-      )}
-      {nasdaqStatus === 'empty' && (
-        <div style={{ fontSize: 10, fontFamily: MONO, color: '#666', background: '#0c0c0c', border: `1px solid ${BORDER}`, borderRadius: 4, padding: '8px 12px' }}>
-          No tracked earnings in the next 14 days. Tracking: {MAJOR_TICKERS.join(', ')}, plus any company over ${MIN_EARNINGS_MARKET_CAP / 1e9}B.
-        </div>
-      )}
 
       {view === 'week' && <WeekView events={events} />}
       {view === 'list' && <ListView events={events} />}

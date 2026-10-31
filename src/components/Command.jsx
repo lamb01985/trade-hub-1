@@ -1,9 +1,10 @@
+import OperatorAccess from './intelligence/OperatorAccess.jsx'
 import { useState, useEffect } from 'react'
 import { Card, SLabel, Heading, Tile, Fld, Sel, Btn, Tip } from './ui.jsx'
 import { LIME, RED, YELLOW, MONO, BORDER, SESSION_LABELS, SESSION_COLORS, SESSION_TIPS, getSession, getMarketHolidayName, todayStr, f2, fmtD, fmtU } from '../constants.js'
 import { rotationContextForTicker } from '../lib/sectors.js'
 
-export default function Command({ trades, settings, onSettingsChange, lockedOut, onUnlock, anthropicKey, onAnthropicKeyChange, liveData, marketEvents, instrument, ticker = 'QQQ', levelMap, todayEvents = [], schwab }) {
+export default function Command({ trades, settings, onSettingsChange, lockedOut, onUnlock, aiCapability, liveData, marketEvents, instrument, ticker = 'QQQ', levelMap, todayEvents = [], schwab }) {
   const [time, setTime] = useState(new Date())
   useEffect(() => { const t = setInterval(() => setTime(new Date()), 1000); return () => clearInterval(t) }, [])
 
@@ -94,7 +95,7 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
         <div style={{ fontSize: 10, color: '#666', fontFamily: MONO, marginTop: 10, lineHeight: 1.6 }}>
           {polygonStatus === 'env_missing'
             ? 'Set POLYGON_API_KEY as a Sensitive env var in the Vercel project (Production + Preview), then redeploy. The key is read server-side only and never reaches the browser.'
-            : 'API key is managed server-side via POLYGON_API_KEY in Vercel env. REST calls are proxied through /api/polygon/proxy. The WebSocket fetches its auth from /api/polygon/ws-auth on connect, so no Polygon key is persisted in browser storage.'}
+            : 'API key is managed server-side via POLYGON_API_KEY in Vercel env. REST calls are proxied through /api/polygon/proxy. Observations use authenticated REST polling; no provider key is delivered to this browser.'}
         </div>
       </Card>
 
@@ -103,7 +104,7 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
         <div style={{ background: '#0a1206', border: `1px solid ${LIME}28`, borderRadius: 5, padding: '18px 22px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
-              <SLabel color="#5a7a5a">LIVE {ticker} — {liveData.connected ? 'WebSocket' : 'Polling'}</SLabel>
+              <SLabel color="#5a7a5a">{ticker} — authenticated REST polling</SLabel>
               <div style={{ fontSize: 48, fontWeight: 900, fontFamily: MONO, color: '#e8e8e8', letterSpacing: '-0.03em', lineHeight: 1 }}>${f2(liveData.price)}</div>
               {liveData.bid && liveData.ask && (
                 <div style={{ fontSize: 11, fontFamily: MONO, color: '#777', marginTop: 6 }}>Bid ${f2(liveData.bid)} / Ask ${f2(liveData.ask)}</div>
@@ -548,30 +549,16 @@ export default function Command({ trades, settings, onSettingsChange, lockedOut,
         <div style={{ display: 'flex', gap: 12, marginTop: 6, alignItems: 'center' }}>
           <div style={{ width: 7, height: 7, borderRadius: '50%', background: liveData?.connected ? LIME : liveData?.price ? YELLOW : '#444', boxShadow: liveData?.connected ? `0 0 6px ${LIME}` : 'none' }} />
           <span style={{ fontSize: 10, fontFamily: MONO, color: liveData?.connected ? LIME : liveData?.price ? YELLOW : '#666' }}>
-            {liveData?.connected ? 'WebSocket connected, real-time streaming' : liveData?.price ? 'REST polling, 10s updates' : 'Connecting...'}
+            {liveData?.connected ? 'Authenticated REST polling; source recency unverified' : liveData?.price ? 'REST data unavailable; source recency unverified' : 'Connecting...'}
           </span>
         </div>
       </Card>
 
-      {/* Claude API key */}
-      <Card style={{ border: anthropicKey ? '1px solid #1e2a1e' : '1px solid #222' }}>
-        <SLabel>Claude AI — Game Plan Generator</SLabel>
-        <div style={{ fontSize: 11, color: '#666', fontFamily: MONO, marginBottom: 12, lineHeight: 1.7 }}>
-          Powers the <strong style={{ color: '#aaa' }}>AI Brief</strong> button in Prep tab. Claude reads your market data (PDH/PDL, pivots, VWAP, IV) and writes your full game plan: thesis, key levels, entry conditions, ideal setup, what to avoid. Get your key at <span style={{ color: LIME }}>console.anthropic.com</span> → API Keys (same account as claude.ai).
-        </div>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
-          <div style={{ flex: 1 }}>
-            <Fld label="Anthropic API Key" value={anthropicKey || ''} onChange={v => onAnthropicKeyChange(v.trim())} type="text" placeholder="sk-ant-..." mono />
-          </div>
-          {anthropicKey && <Btn small variant="ghost" onClick={() => onAnthropicKeyChange('')}>Clear</Btn>}
-        </div>
-        {anthropicKey && (
-          <div style={{ display: 'flex', gap: 10, marginTop: 10, alignItems: 'center' }}>
-            <div style={{ width: 7, height: 7, borderRadius: '50%', background: LIME, boxShadow: `0 0 6px ${LIME}` }} />
-            <span style={{ fontSize: 10, fontFamily: MONO, color: LIME }}>Claude AI active — AI Brief available in Prep tab</span>
-          </div>
-        )}
-        <div style={{ fontSize: 9, color: '#444', fontFamily: MONO, marginTop: 8 }}>Key stored in your browser only. Calls go directly to api.anthropic.com.</div>
+      <Card>
+        <SLabel>Claude AI, server configuration</SLabel>
+        <p style={{ color: aiCapability.available ? LIME : YELLOW, fontSize: 12 }}>{aiCapability.message}</p>
+        <p style={{ color: '#999', fontSize: 11 }}>Claude credentials stay on the server. Market Intelligence does not require Claude. Legacy browser keys are neither read nor migrated.</p>
+        {!aiCapability.available && <OperatorAccess/>}
       </Card>
 
       {/* ── Broker, Schwab ─────────────────────────────────────────────── */}

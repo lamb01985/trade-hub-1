@@ -1,0 +1,455 @@
+{
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "market-intelligence-v1"
+    },
+    "report_id": {
+      "type": "string"
+    },
+    "report_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "observation_cutoff": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "market_regime": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "additionalProperties": true
+    },
+    "daily_features": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "symbol": {
+            "type": "string"
+          },
+          "source_timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "close": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "daily_trend": {
+            "type": "string"
+          },
+          "weekly_trend": {
+            "type": "string"
+          },
+          "previous_day": {
+            "type": "object"
+          },
+          "previous_week": {
+            "type": "object"
+          },
+          "support_resistance": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "symbol",
+          "source_timestamp",
+          "close",
+          "daily_trend",
+          "weekly_trend",
+          "previous_day",
+          "previous_week",
+          "support_resistance"
+        ],
+        "additionalProperties": true
+      }
+    },
+    "intraday_features": {
+      "type": "object"
+    },
+    "intraday_playbook": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "symbol": {
+            "type": "string"
+          },
+          "source_timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "direction": {
+            "enum": [
+              "LONG",
+              "SHORT",
+              "NEUTRAL"
+            ]
+          },
+          "trigger": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "invalidation": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "targets": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "confirmation": {
+            "type": "string"
+          },
+          "no_trade_if": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "symbol",
+          "source_timestamp",
+          "direction",
+          "trigger",
+          "invalidation",
+          "targets",
+          "confirmation",
+          "no_trade_if"
+        ],
+        "additionalProperties": true
+      }
+    },
+    "swing_playbook": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "symbol": {
+            "type": "string"
+          },
+          "source_timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "direction": {
+            "enum": [
+              "LONG",
+              "SHORT",
+              "NEUTRAL"
+            ]
+          },
+          "trigger": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "invalidation": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "targets": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "confirmation": {
+            "type": "string"
+          },
+          "no_trade_if": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "symbol",
+          "source_timestamp",
+          "direction",
+          "trigger",
+          "invalidation",
+          "targets",
+          "confirmation",
+          "no_trade_if"
+        ],
+        "additionalProperties": true
+      }
+    },
+    "options_intelligence": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "options_flow_intelligence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "symbol": {
+            "type": "string"
+          },
+          "source_cutoff": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expirations": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          "contracts_observed": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "positioning": {
+            "type": "object",
+            "properties": {
+              "by_strike": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "strike": {
+                      "type": "number"
+                    },
+                    "type": {
+                      "enum": [
+                        "call",
+                        "put"
+                      ]
+                    },
+                    "open_interest": {
+                      "type": "number",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "strike",
+                    "type",
+                    "open_interest"
+                  ],
+                  "additionalProperties": true
+                }
+              },
+              "by_expiration": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "expiration": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "type": {
+                      "enum": [
+                        "call",
+                        "put"
+                      ]
+                    },
+                    "open_interest": {
+                      "type": "number",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "expiration",
+                    "type",
+                    "open_interest"
+                  ],
+                  "additionalProperties": true
+                }
+              },
+              "interpretation_limit": {
+                "type": "string"
+              },
+              "contracts_missing_open_interest": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "by_strike",
+              "by_expiration",
+              "interpretation_limit",
+              "contracts_missing_open_interest"
+            ],
+            "additionalProperties": true
+          },
+          "unusual_activity": {
+            "type": "object",
+            "properties": {
+              "contracts": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "ticker": {
+                      "type": "string"
+                    },
+                    "volume": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "open_interest": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "baseline_status": {
+                      "type": "string"
+                    },
+                    "baseline_observations": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "volume_baseline_ratio": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "flagged": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ticker",
+                    "volume",
+                    "open_interest",
+                    "baseline_status",
+                    "baseline_observations",
+                    "volume_baseline_ratio",
+                    "flagged"
+                  ],
+                  "additionalProperties": true
+                }
+              },
+              "minimum_baseline_observations": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "required": [
+              "contracts",
+              "minimum_baseline_observations"
+            ],
+            "additionalProperties": true
+          },
+          "trade_flow": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "status"
+            ],
+            "additionalProperties": true
+          },
+          "volatility": {
+            "type": "object"
+          },
+          "gamma": {
+            "type": "object"
+          },
+          "data_quality": {
+            "type": "object"
+          },
+          "signal_policy": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "symbol",
+          "source_cutoff",
+          "expirations",
+          "contracts_observed",
+          "positioning",
+          "unusual_activity",
+          "trade_flow",
+          "volatility",
+          "gamma",
+          "data_quality",
+          "signal_policy"
+        ],
+        "additionalProperties": true
+      }
+    },
+    "data_quality": {
+      "type": "object",
+      "properties": {
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "warnings"
+      ],
+      "additionalProperties": true
+    },
+    "data_errors": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "report_id",
+    "report_date",
+    "generated_at",
+    "observation_cutoff",
+    "market_regime",
+    "daily_features",
+    "intraday_features",
+    "intraday_playbook",
+    "swing_playbook",
+    "options_intelligence",
+    "options_flow_intelligence",
+    "data_quality",
+    "data_errors"
+  ],
+  "additionalProperties": true,
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "python-market-intelligence-v1"
+}

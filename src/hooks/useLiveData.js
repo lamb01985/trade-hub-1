@@ -6,6 +6,7 @@ import { checkLevelAlerts } from '../lib/alerts.js'
 import { todayStr, getETMins } from '../constants.js'
 
 export function useLiveData(ticker = 'QQQ', levelMap = null, settings = {}) {
+  if (settings.mode === 'unified') throw new Error('Migration pending: legacy market subscriptions unavailable in Unified mode')
   const [price, setPrice] = useState(null)
   const [bid, setBid] = useState(null)
   const [ask, setAsk] = useState(null)
@@ -43,8 +44,9 @@ export function useLiveData(ticker = 'QQQ', levelMap = null, settings = {}) {
   const tickerRef = useRef(ticker)
   tickerRef.current = ticker
 
-  // ── WebSocket connection ────────────────────────────────────────────────────
+  // ── Authenticated REST observation transport ────────────────────────────────────────────────────
   useEffect(() => {
+    setPrice(null); setBid(null); setAsk(null); priceRef.current = null
     if (!ticker) return
 
     const stream = new MassiveStreamClient({
@@ -54,6 +56,11 @@ export function useLiveData(ticker = 'QQQ', levelMap = null, settings = {}) {
         stream.subscribe(ticker)
       },
       onDisconnected: () => setConnected(false),
+      onStatus: ({ ticker: sym, trade_available, quote_available }) => {
+        if (sym !== ticker) return
+        if (!trade_available) { setPrice(null); priceRef.current = null }
+        if (!quote_available) { setBid(null); setAsk(null) }
+      },
       onError: (msg) => { setWsError(msg); setConnected(false) },
       onTrade: ({ ticker: sym, price: p }) => {
         if (sym !== ticker) return
@@ -178,25 +185,13 @@ export function useLiveData(ticker = 'QQQ', levelMap = null, settings = {}) {
     return () => clearInterval(interval)
   }, [loadContext])
 
-  // Fallback REST poll for price if WebSocket fails
-  useEffect(() => {
-    if (connected) return
-    const poll = async () => {
-      try {
-        const p = await getLastTrade(ticker)
-        if (p) setPrice(p)
-      } catch {}
-    }
-    poll()
-    const iv = setInterval(poll, 10000)
-    return () => clearInterval(iv)
-  }, [connected, ticker])
 
   return {
     price,
     bid,
     ask,
     connected,
+    transport: 'REST_POLL',
     wsError,
     vwapData,
     prevDay,

@@ -178,9 +178,11 @@ function expandOneOffs(start, end) {
 // callers can distinguish "no earnings that day" from "fetch failed".
 
 export async function fetchNasdaqEarnings(dateStr) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 12000)
   try {
     const res = await fetch(`/api/calendar-earnings?date=${encodeURIComponent(dateStr)}`, {
-      headers: { 'Accept': 'application/json' },
+      headers: { 'Accept': 'application/json' }, signal: controller.signal,
     })
     if (!res.ok) {
       return { rows: [], error: `proxy returned ${res.status}` }
@@ -189,7 +191,8 @@ export async function fetchNasdaqEarnings(dateStr) {
     if (data?.error) {
       return { rows: [], error: data.error }
     }
-    const rows = data?.data?.rows || []
+    if (!data?.data || !Object.hasOwn(data.data, 'rows') || (data.data.rows !== null && !Array.isArray(data.data.rows))) return { rows: [], error: 'Invalid earnings response; coverage is unknown.' }
+    const rows = data.data.rows || []
     const mapped = rows
       .map(r => ({ ...r, _cap: parseMarketCap(r.marketCap) }))
       .filter(r => MAJOR_TICKERS.includes((r.symbol || '').toUpperCase()) || r._cap >= MIN_EARNINGS_MARKET_CAP)
@@ -206,8 +209,8 @@ export async function fetchNasdaqEarnings(dateStr) {
       }))
     return { rows: mapped, error: null }
   } catch (err) {
-    return { rows: [], error: err?.message || 'fetch failed' }
-  }
+    return { rows: [], error: controller.signal.aborted ? 'Earnings request timed out.' : 'Earnings feed could not be reached.' }
+  } finally { clearTimeout(timer) }
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────

@@ -1,3 +1,4 @@
+import { isLocalServicePreview, LOCAL_MARKET_LIMITATION } from '../lib/localPreview.js'
 import { useState, useMemo } from 'react'
 import { Card, SLabel, Heading, Fld, Btn, Pill, Tip } from './ui.jsx'
 import { buildLevelMap, calcFibs } from '../lib/levels.js'
@@ -351,14 +352,13 @@ export default function Levels({ liveData, orbHigh, orbLow, settings, onSettings
 
       {!price && (
         <div style={{ background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 5, padding: '28px 24px' }}>
-          <div style={{ fontSize: 11, fontFamily: MONO, color: '#2a2a2a', marginBottom: 10, letterSpacing: '0.04em' }}>Levels load automatically once your Massive API key is connected.</div>
-          <div style={{ fontSize: 10, fontFamily: MONO, color: '#1e1e1e', lineHeight: 1.8 }}>
-            You'll see VWAP, pivot points, PDH/PDL, S/D zones, and Fibonacci drawn from the prior day range — all calculated automatically from live market data.
-          </div>
-          <div style={{ marginTop: 14, fontSize: 9, fontFamily: MONO, color: '#1a1a1a', letterSpacing: '0.08em' }}>→ Add your key in the Command tab to activate.</div>
+          <div role="status" style={{ fontSize: 12, fontFamily: MONO, color: YELLOW, marginBottom: 10 }}>Live levels unavailable</div>
+          <p style={{ fontSize: 11, fontFamily: MONO, color: '#aaa', lineHeight: 1.7 }}>{isLocalServicePreview() ? LOCAL_MARKET_LIMITATION : liveData?.loadingContext ? 'Loading server market-data context. No live price has been returned yet.' : liveData?.contextError ? 'The server market-data context could not be loaded. Check the server connection and retry.' : 'No current market-data price has been returned. A server-side Massive connection is required; browser key entry does not configure the server.'}</p>
+          <p style={{fontSize:11,color:'#999'}}>No current VWAP or live price confirmation is inferred. You can still enter manual reference levels below.</p>
         </div>
       )}
 
+      {price && liveData?.isHistoricalFallback && <p role="status" style={{color:YELLOW,fontSize:11}}>Historical minute-bar fallback is in use. These levels are not live intraday confirmation.</p>}
       {/* Stats row */}
       {price && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>

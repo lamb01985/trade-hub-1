@@ -1,4 +1,9 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import UnifiedMarketContext from './components/UnifiedMarketContext.jsx'
+import { useMarketData } from './hooks/useMarketData.js'
+import { lazy, Suspense, useState, useEffect, useMemo, useRef } from 'react'
+import LocalPreviewNotice from './components/LocalPreviewNotice.jsx'
+import { intelligenceFromSearch } from './lib/intelligenceNavigation.js'
+import { useAiCapability } from './hooks/useAiCapability.js'
 import { useLocalStorage } from './hooks/useStore.js'
 import { useLiveData } from './hooks/useLiveData.js'
 import { useLiveDataMulti } from './hooks/useLiveDataMulti.js'
@@ -43,6 +48,9 @@ import Journal from './components/Journal.jsx'
 import QuickLog from './components/QuickLog.jsx'
 import GlossaryModal from './components/Glossary.jsx'
 import { LIME, RED, YELLOW, BLUE, MONO, SANS, DARK, BORDER, PANEL, todayStr, localDateStr, uid, getSession, f2 } from './constants.js'
+
+const ResearchLedger = lazy(() => import('./components/intelligence/ResearchLedger.jsx'))
+const MarketIntelligence = lazy(() => import('./components/intelligence/MarketIntelligence.jsx'))
 
 const TABS = [
   { id: 'plan', label: 'Plan', desc: 'Pre-market game plan' },
@@ -91,13 +99,28 @@ const defaultSettings = { dailyLossLimit: 500, maxTradesPerDay: 5, orPeriod: '15
 const defaultPrep = { ticker: 'QQQ', orPeriod: '15', orbHigh: '', orbLow: '', sessionOpen: '', sessionClose: '', keyLevel: '', plannedStrike: '', plannedDTE: '1', ivNote: '', gamePlan: '', avoidNotes: '', dayReview: '', marketEvents: '', instrument: 'options' }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState(defaultTabForSession)
+  const capabilities = useMarketData('capabilities')
+  const [mode, setMode] = useState('legacy')
+  if (import.meta.env.VITE_LOCAL_SERVICE_PREVIEW === 'true') return <LegacyApp />
+  if (!capabilities.modeKnown) return <p role="status">Market mode is unavailable or being verified. Reload to retry.</p>
+  if (capabilities.previewOnly && !capabilities.unifiedEnabled) return <p role="status">Protected preview is not activated.</p>
+  if ((mode === 'unified' || capabilities.previewOnly) && capabilities.unifiedEnabled) return <UnifiedMarketContext capabilities={capabilities.envelope} ready={capabilities.ready} onLegacy={capabilities.previewOnly ? null : () => setMode('legacy')} />
+  return <>{capabilities.unifiedEnabled && <button onClick={() => setMode('unified')}>Switch to Unified ETF context (read-only)</button>}<LegacyApp /></>
+}
+
+function LegacyApp() {
+  const [activeTab, setActiveTab] = useState(() => intelligenceFromSearch(window.location.search) ? 'plan' : defaultTabForSession())
   // Sub-tab state per top tab. In-memory only: switching top tabs preserves
   // your last sub-tab within each, but reload resets to defaults (same model
   // as activeTab, which resets via session each load).
-  const [planSubTab, setPlanSubTab] = useState('watchlist')
+  const [planSubTab, setPlanSubTab] = useState(() => intelligenceFromSearch(window.location.search) ? 'intelligence' : 'watchlist')
   const [tradeSubTab, setTradeSubTab] = useState('chart')
   const [reviewSubTab, setReviewSubTab] = useState('journal')
+  useEffect(() => {
+    const open = () => { setActiveTab('review'); setReviewSubTab('research') }
+    window.addEventListener('tradehub-open-research', open)
+    return () => window.removeEventListener('tradehub-open-research', open)
+  }, [])
   // Increments whenever something external (Layer 2 → Prep, etc.) wants
   // PrepTab to auto-fire Load Market Data after the tab switch settles.
   const [autoLoadPrepTrigger, setAutoLoadPrepTrigger] = useState(0)
@@ -109,7 +132,7 @@ export default function App() {
   // a sweep of every gate in this commit. Child components no longer call
   // any data-fetch function with this value.
   const apiKey = 'server-managed'
-  const [anthropicKey, setAnthropicKey] = useLocalStorage('th-anthropic-key', '')
+  const aiCapability = useAiCapability()
   const [trades, setTrades] = useLocalStorage('th-trades', [])
   const [settings, setSettings] = useLocalStorage('th-settings', defaultSettings)
   const [prep, setPrep] = useLocalStorage('th-prep', defaultPrep)
@@ -633,6 +656,7 @@ export default function App() {
         button:hover { opacity: 0.85; }
       `}</style>
 
+      <LocalPreviewNotice/>
       {/* Content. TRADE gets a wider container so the chart has room. */}
       <div style={{ maxWidth: activeTab === 'trade' ? 1200 : 960, margin: '0 auto', padding: '28px 20px 60px' }}>
 
@@ -640,6 +664,7 @@ export default function App() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             <SubNav
               tabs={[
+                { id: 'intelligence', label: 'Market Intelligence' },
                 { id: 'watchlist', label: 'Watchlist' },
                 { id: 'focus', label: 'Focus' },
                 { id: 'wheel', label: 'Wheel' },
@@ -656,6 +681,7 @@ export default function App() {
               onChange={setPlanSubTab}
             />
 
+            {planSubTab === 'intelligence' && <Suspense fallback={<p>Loading intelligence...</p>}><MarketIntelligence initialView={intelligenceFromSearch(window.location.search) || 'map'}/></Suspense>}
             <div style={{ display: planSubTab === 'watchlist' ? 'flex' : 'none', flexDirection: 'column', gap: 24 }}>
               <PreMarketSummarySection liveData={liveData} ticker={prep.ticker || 'QQQ'} />
               <WatchlistTab
@@ -723,7 +749,7 @@ export default function App() {
                 onSendToORB={fill => { setOrbPrefill(fill); setActiveTab('trade'); setTradeSubTab('orb') }}
                 settings={settings}
                 liveData={liveData}
-                anthropicKey={anthropicKey}
+                aiCapability={aiCapability}
                 savedPreps={savedPreps}
                 onSavedPrepsChange={setSavedPreps}
                 levelMap={fullLevelMap}
@@ -928,8 +954,7 @@ export default function App() {
                 onSettingsChange={setSettings}
                 lockedOut={lockedOut}
                 onUnlock={() => setSettings(s => ({ ...s, dailyLossLimit: 0 }))}
-                anthropicKey={anthropicKey}
-                onAnthropicKeyChange={setAnthropicKey}
+                aiCapability={aiCapability}
                 liveData={liveData}
                 marketEvents={prep.marketEvents}
                 instrument={prep.instrument || 'options'}
@@ -948,6 +973,7 @@ export default function App() {
             <SubNav
               tabs={[
                 { id: 'journal', label: 'Journal' },
+                { id: 'research', label: 'Research outcomes' },
                 { id: 'outcomes', label: 'Outcomes' },
                 { id: 'stats', label: 'Stats' },
               ]}
@@ -955,6 +981,7 @@ export default function App() {
               onChange={setReviewSubTab}
             />
 
+            {reviewSubTab === 'research' && <Suspense fallback={<p>Loading research history...</p>}><ResearchLedger/></Suspense>}
             <div style={{ display: reviewSubTab === 'journal' ? 'block' : 'none' }}>
               <ErrorBoundary label="Journal">
                 <Journal

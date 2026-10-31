@@ -1,0 +1,300 @@
+{
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "options-workspace-v1"
+    },
+    "report_id": {
+      "type": "string"
+    },
+    "report_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "retrieval_mode": {
+      "const": "SAVED_REPORT_AND_MATCHED_ARCHIVE_ONLY"
+    },
+    "symbols": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "symbol": {
+            "type": "string"
+          },
+          "archive_status": {
+            "type": "string"
+          },
+          "expiry_groups": {
+            "type": "object",
+            "properties": {
+              "zero_dte": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date"
+              },
+              "next": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date"
+              },
+              "weekly": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date"
+              },
+              "monthly": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date"
+              },
+              "classification": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "zero_dte",
+              "next",
+              "weekly",
+              "monthly",
+              "classification"
+            ],
+            "additionalProperties": true
+          },
+          "expirations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "expiration": {
+                  "type": "string",
+                  "format": "date"
+                },
+                "source_cutoff": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "underlying_price": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "underlying_timestamp": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "summary": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "strikes": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "strike": {
+                        "type": "number"
+                      },
+                      "call_oi": {
+                        "type": [
+                          "number",
+                          "null"
+                        ],
+                        "minimum": 0
+                      },
+                      "call_change": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "call_status": {
+                        "type": "string"
+                      },
+                      "put_oi": {
+                        "type": [
+                          "number",
+                          "null"
+                        ],
+                        "minimum": 0
+                      },
+                      "put_change": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "put_status": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "strike",
+                      "call_oi",
+                      "call_change",
+                      "call_status",
+                      "put_oi",
+                      "put_change",
+                      "put_status"
+                    ],
+                    "additionalProperties": true
+                  }
+                },
+                "chart_max_oi": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "change_status": {
+                  "type": "string"
+                },
+                "prior_observed_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "unusual_activity": {
+                  "type": "object",
+                  "properties": {
+                    "contracts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "baseline_adequate": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "baseline_missing_or_inadequate": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "flagged_count": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "minimum_observations": {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  },
+                  "required": [
+                    "contracts",
+                    "baseline_adequate",
+                    "baseline_missing_or_inadequate",
+                    "flagged_count",
+                    "minimum_observations"
+                  ],
+                  "additionalProperties": true
+                },
+                "trade_flow": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ],
+                  "additionalProperties": true
+                },
+                "expected_move": {
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                },
+                "mean_iv": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "near_25_delta": {
+                  "type": "object"
+                },
+                "term_structure": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "liquidity": {
+                  "type": "object"
+                },
+                "gamma": {
+                  "type": "object"
+                },
+                "coverage_note": {
+                  "type": "string"
+                },
+                "pagination_status": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "expiration",
+                "source_cutoff",
+                "underlying_price",
+                "underlying_timestamp",
+                "summary",
+                "strikes",
+                "chart_max_oi",
+                "change_status",
+                "prior_observed_at",
+                "unusual_activity",
+                "trade_flow",
+                "expected_move",
+                "mean_iv",
+                "near_25_delta",
+                "term_structure",
+                "liquidity",
+                "gamma",
+                "coverage_note",
+                "pagination_status"
+              ],
+              "additionalProperties": true
+            }
+          }
+        },
+        "required": [
+          "symbol",
+          "archive_status",
+          "expiry_groups",
+          "expirations"
+        ],
+        "additionalProperties": true
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "report_id",
+    "report_date",
+    "retrieval_mode",
+    "symbols"
+  ],
+  "additionalProperties": true,
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "options-workspace-v1"
+}

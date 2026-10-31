@@ -1725,7 +1725,7 @@ const ROUTINE = [
 // adds slack for slower connections without making the UX feel sluggish.
 const PREP_AUTOLOAD_DELAY_MS = 1500
 
-export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, anthropicKey, savedPreps, onSavedPrepsChange, levelMap, mtfAlignment, onVolumeThresholdsChange, autoLoadTrigger }) {
+export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, aiCapability, savedPreps, onSavedPrepsChange, levelMap, mtfAlignment, onVolumeThresholdsChange, autoLoadTrigger }) {
   const [rc, setRc] = useState({})
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState('')
@@ -1778,7 +1778,7 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
 
   const tickerMatchesData = (liveData?.dataTicker || '').toUpperCase() === (prep.ticker || '').toUpperCase()
   const hasLiveData = tickerMatchesData && !!(liveData?.prevDay?.high || liveData?.pivots?.pp)
-  const hasClaudeKey = !!anthropicKey
+  const hasClaudeKey = aiCapability?.available === true
 
   async function loadMarketData() {
     if (loadingData) return
@@ -1932,7 +1932,7 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
   }, [autoLoadTrigger])
 
   async function generateBrief() {
-    if (!anthropicKey) return
+    if (!hasClaudeKey) return
     setAiLoading(true)
     setAiError('')
     setPriceWarning('')
@@ -2320,7 +2320,7 @@ STRUCTURED (parsing block, do not modify the format): output exactly one JSON ob
             </Btn>
           )}
           <Btn small variant={hasClaudeKey ? 'lime' : 'ghost'} onClick={generateBrief} disabled={!hasClaudeKey || aiLoading}>
-            {aiLoading ? '✦ Writing...' : hasClaudeKey ? '✦ Generate AI Brief' : 'Add Claude Key → Command'}
+            {aiLoading ? '✦ Writing...' : hasClaudeKey ? '✦ Generate AI Brief' : 'Verify AI → Command'}
           </Btn>
           <div style={{ fontSize: 12, color: LIME, fontFamily: MONO, fontWeight: 700 }}>
             {new Date(todayStr() + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
@@ -2343,7 +2343,7 @@ STRUCTURED (parsing block, do not modify the format): output exactly one JSON ob
       {!hasClaudeKey && (
         <div style={{ background: '#0d100a', border: `1px solid ${LIME}22`, borderRadius: 5, padding: '12px 16px', display: 'flex', gap: 10, alignItems: 'center' }}>
           <span style={{ fontSize: 11, fontFamily: MONO, color: '#6a8060' }}>
-            ✦ Add your Claude API key in the <strong style={{ color: LIME }}>Command</strong> tab to enable AI game plan generation — gets your thesis, key levels, entry conditions, and ideal setup in one click.
+            ✦ Verify authenticated server AI in the <strong style={{ color: LIME }}>Command</strong> tab to enable AI game plan generation — gets your thesis, key levels, entry conditions, and ideal setup in one click.
           </span>
         </div>
       )}
@@ -2454,7 +2454,7 @@ STRUCTURED (parsing block, do not modify the format): output exactly one JSON ob
           const qDesc = sq === 'ON LEVEL' ? 'price is touching a key level: await candle close' : sq === 'APPROACHING' ? 'price is closing in on a level: get ready' : sq === 'TIGHT RANGE' ? 'compressed between two close levels: breakout setup' : sq === 'BETWEEN LEVELS' ? 'no immediate level: wait for price to reach one' : sq === 'MARKET CLOSED' ? 'prep mode: live signals resume at the open, plan against the structure below' : 'live data not loaded'
 
           const plan = (prep.gamePlan || '').trim()
-          const briefDetected = !!anthropicKey && (plan.includes('THESIS') || plan.includes('PRIMARY SETUP') || plan.includes('KEY LEVELS'))
+          const briefDetected = hasClaudeKey && (plan.includes('THESIS') || plan.includes('PRIMARY SETUP') || plan.includes('KEY LEVELS'))
 
           const checks = [
             { label: `Ticker set${prep.ticker ? ` (${prep.ticker})` : ''}`, done: !!prep.ticker, nudge: 'Enter a ticker above' },
@@ -2462,7 +2462,7 @@ STRUCTURED (parsing block, do not modify the format): output exactly one JSON ob
             { label: `Key level (PP) set${prep.keyLevel ? ` ($${prep.keyLevel})` : ''}`, done: !!prep.keyLevel, nudge: 'Hit "Load Market Data" ↑' },
             { label: `Strike plan set${prep.plannedStrike ? ` ($${prep.plannedStrike})` : ''}`, done: !!prep.plannedStrike, nudge: 'Set a planned strike above' },
             { label: 'Game plan written', done: plan.length > 20, nudge: 'Write your plan below' },
-            { label: 'AI brief generated', done: briefDetected, nudge: anthropicKey ? 'Hit "Generate AI Brief" ↑' : 'Add Claude API key in Command' },
+            { label: 'AI brief generated', done: briefDetected, nudge: hasClaudeKey ? 'Hit "Generate AI Brief" ↑' : 'Verify server AI in Command' },
           ]
           const doneCount = checks.filter(c => c.done).length
           const allDone = doneCount === checks.length
