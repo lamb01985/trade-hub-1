@@ -1,5 +1,10 @@
 {
-  "rewrites": [
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
-  ]
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": false
+  },
+  "ignoreCommand": "exit 0",
+  "buildCommand": "npm run build:ui-preview",
+  "outputDirectory": "dist",
+  "framework": null
 }

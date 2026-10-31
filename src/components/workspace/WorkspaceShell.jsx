@@ -1,3 +1,4 @@
+import { isUiPreview } from '../../lib/uiPreview.js'
 import { useEffect, useRef, useState } from 'react'
 import { ArrowLeftToLine, ArrowRightToLine, ChevronDown, ChevronRight, Command, Search, Menu, X, ShieldCheck, LogOut } from 'lucide-react'
 import { PRIMARY_NAV, NAV_GROUPS } from './navigation.js'
@@ -34,7 +35,7 @@ export default function WorkspaceShell({ active, onNavigate, ticker, onTicker, s
     <div className="eq-main" inert={mobile?'':undefined}>
       <header className="eq-topbar"><div className="eq-topbar-context"><button ref={toggleRef} className="eq-icon-button eq-mobile-menu" aria-label="Open navigation" aria-expanded={mobile} aria-controls="edge-workspace-navigation" onClick={()=>setMobile(true)}><Menu size={20}/></button><span className="eq-topbar-root">Workspace</span><ChevronRight className="eq-breadcrumb-chevron" size={13}/><strong>{active.label}</strong></div>
         <form className="eq-search" role="search" onSubmit={submit}><Search size={16}/><input ref={searchRef} aria-label="Search ticker" value={query} onChange={e=>{setQuery(e.target.value);setError('')}} placeholder="Search ticker…" maxLength={20}/><kbd><Command size={10}/> K</kbd><button type="submit" className="eq-sr-only">Open ticker</button></form>
-        <div className="eq-topbar-status"><span className="eq-session"><i/>{session}</span><StatusBadge tone={connected?'positive':'neutral'}>{connected?'REST connected':'Data unavailable'}</StatusBadge><button className="eq-icon-button eq-signout" aria-label="Sign out of EdgeIQ" title="Sign out" onClick={()=>window.dispatchEvent(new Event('edgeiq-request-signout'))}><LogOut size={17}/></button></div>
+        <div className="eq-topbar-status"><span className="eq-session"><i/>{session}</span><StatusBadge tone={connected?'positive':'neutral'}>{connected?'REST connected':'Data unavailable'}</StatusBadge>{isUiPreview() ? <span title="Access is controlled by Vercel Authentication" aria-label="Protected UI preview"><ShieldCheck size={17}/></span> : <button className="eq-icon-button eq-signout" aria-label="Sign out of EdgeIQ" title="Sign out" onClick={()=>window.dispatchEvent(new Event('edgeiq-request-signout'))}><LogOut size={17}/></button>}</div>
       </header>
       {error&&<p className="eq-search-error" role="alert">{error}</p>}
       <div className="eq-status-strip"><div className="eq-source-label"><span className={`eq-status-dot ${freshness?.fresh?'is-current':''}`}/><strong>{ticker}</strong><span>{freshness?.label || 'No verified quote'}</span></div>{status}<div className="eq-strip-actions">{actions}</div></div>

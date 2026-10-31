@@ -8,7 +8,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "preview:local": "node scripts/local-preview.mjs"
+    "preview:local": "node scripts/local-preview.mjs",
+    "build:ui-preview": "node scripts/build-ui-preview.mjs"
   },
   "dependencies": {
     "@polygon.io/client-js": "^7.3.0",

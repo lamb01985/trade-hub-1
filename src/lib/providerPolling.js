@@ -1,3 +1,4 @@
+import { isUiPreview } from './uiPreview.js'
 // Credential-free compatibility transport. CURRENT quality belongs to M2 envelopes.
 const SYMBOL = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,31}$/
 const positive = n => typeof n === 'number' && Number.isFinite(n) && n > 0
@@ -23,6 +24,7 @@ export class ProviderPolling {
     this.currentTicker = null
   }
   connect() {
+    if (isUiPreview()) { this.handlers.onDisconnected?.(); this.handlers.onError?.('Live market services are disabled in this protected UI preview.'); return }
     if (this.running) return
     this.running = true
     this.paused = false

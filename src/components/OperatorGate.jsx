@@ -1,3 +1,4 @@
+import { isUiPreview } from '../lib/uiPreview.js'
 import { Brand } from './Brand.jsx'
 import { BRAND } from '../lib/brand.js'
 import { THEME } from '../lib/theme.js'
@@ -8,7 +9,11 @@ export const OPERATOR_CHECK_MS = 60_000
 const CHECK_TIMEOUT_MS = 5_000
 const LOGOUT_KEY = 'th-operator-logout'
 
-export default function OperatorGate({ children }) {
+export default function OperatorGate(props) {
+  return isUiPreview() ? <>{props.children}</> : <OperatorSessionGate {...props}/>
+}
+
+function OperatorSessionGate({ children }) {
   const [status, setStatus] = useState('checking')
   const [error, setError] = useState('')
   const generation = useRef(0)

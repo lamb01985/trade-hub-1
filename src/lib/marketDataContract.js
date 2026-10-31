@@ -1,11 +1,17 @@
 import Ajv from 'ajv'
 import addFormats from 'ajv-formats'
 import schema from '../../contracts/market-data-envelope-v1.schema.json' with { type: 'json' }
-const ajv = new Ajv({ allErrors: true, strictNumbers: true })
-addFormats(ajv)
-const check = ajv.compile(schema)
+let check
+function validator() {
+  if (!check) {
+    const ajv = new Ajv({ allErrors: true, strictNumbers: true })
+    addFormats(ajv)
+    check = ajv.compile(schema)
+  }
+  return check
+}
 export function assertMarketDataEnvelope(value, { resource, symbol, profile } = {}) {
-  if (!check(value)) throw new Error('INVALID_MARKET_DATA_ENVELOPE')
+  if (!validator()(value)) throw new Error('INVALID_MARKET_DATA_ENVELOPE')
   const instrument = value.instrument
   if (instrument && instrument.canonical_id !== `ETF:US:${instrument.provider_symbol}`) throw new Error('INSTRUMENT_MISMATCH')
   if (symbol && instrument?.provider_symbol !== symbol) throw new Error('INSTRUMENT_MISMATCH')

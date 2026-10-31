@@ -1,3 +1,4 @@
+import { isUiPreview } from './lib/uiPreview.js'
 import { useThesisAvailability } from './hooks/useThesisAvailability.js'
 import WorkspaceShell from './components/workspace/WorkspaceShell.jsx'
 import Portfolio from './components/workspace/Portfolio.jsx'
@@ -113,6 +114,10 @@ const defaultSettings = { dailyLossLimit: 500, maxTradesPerDay: 5, orPeriod: '15
 const defaultPrep = { ticker: 'QQQ', orPeriod: '15', orbHigh: '', orbLow: '', sessionOpen: '', sessionClose: '', keyLevel: '', plannedStrike: '', plannedDTE: '1', ivNote: '', gamePlan: '', avoidNotes: '', dayReview: '', marketEvents: '', instrument: 'options' }
 
 export default function App() {
+  return isUiPreview() ? <LegacyApp/> : <LiveApp/>
+}
+
+function LiveApp() {
   const capabilities = useMarketData('capabilities')
   const [mode, setMode] = useState('legacy')
   const thesisAvailable = useThesisAvailability()

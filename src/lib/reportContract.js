@@ -6,13 +6,17 @@ import deskSchema from '../../contracts/analyst-desk-v1.schema.json'
 import analystSchema from '../../contracts/analyst-brief-v1.schema.json'
 import reportSchema from '../../contracts/tradehub-intelligence-v1.schema.json'
 
-const ajv = new Ajv({ strict: true, allErrors: false, ownProperties: true })
-addFormats(ajv)
-const validatePython = ajv.compile(pythonSchema)
-ajv.addSchema(optionsWorkspaceSchema)
-ajv.addSchema(deskSchema)
-ajv.addSchema(analystSchema)
-const validateReport = ajv.compile(reportSchema)
+let validatePython, validateReport
+function initializeValidators() {
+  if (validateReport) return
+  const ajv = new Ajv({ strict: true, allErrors: false, ownProperties: true })
+  addFormats(ajv)
+  ajv.addSchema(optionsWorkspaceSchema)
+  ajv.addSchema(deskSchema)
+  ajv.addSchema(analystSchema)
+  validatePython = ajv.compile(pythonSchema)
+  validateReport = ajv.compile(reportSchema)
+}
 export const REPORT_STALE_HOURS = 24
 export function freshness(timestamp, now = new Date()) {
   const age = now.getTime() - Date.parse(timestamp)
@@ -20,10 +24,12 @@ export function freshness(timestamp, now = new Date()) {
   return age < 0 ? 'FUTURE_TIMESTAMP' : age > REPORT_STALE_HOURS * 3600000 ? 'STALE' : 'RECENT'
 }
 export function parseReport(value) {
+  initializeValidators()
   if (!validateReport(value)) throw new Error('Report schema is unavailable or incompatible.')
   return value
 }
 export function adaptPythonReport(raw, now = new Date()) {
+  initializeValidators()
   if (!validatePython(raw)) throw new Error('Python report schema is unavailable or incompatible.')
   // Select provider-derived results only. No analytics are recalculated here.
   return parseReport({
