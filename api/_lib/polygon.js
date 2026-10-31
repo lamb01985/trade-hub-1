@@ -32,14 +32,19 @@ const BLOCKED_PREFIXES = [
 ]
 
 export function isAllowedPath(path) {
-  if (typeof path !== 'string' || !path.startsWith('/')) return false
-  for (const blocked of BLOCKED_PREFIXES) {
-    if (path.startsWith(blocked)) return false
-  }
-  for (const allowed of ALLOWED_PREFIXES) {
-    if (path.startsWith(allowed)) return true
-  }
-  return false
+  if (typeof path !== 'string' || !path.startsWith('/') || path.length > 512 || /[%\\?#]|\/\//.test(path) || path.split('/').some(part => part === '.' || part === '..')) return false
+  const url = new URL(path, POLYGON_BASE)
+  if (url.origin !== POLYGON_BASE || url.pathname !== path || url.username || url.password || url.search || url.hash) return false
+  if (BLOCKED_PREFIXES.some(prefix => path.startsWith(prefix))) return false
+  return ALLOWED_PREFIXES.some(prefix => path.startsWith(prefix))
+}
+function redact(value, key) {
+  const variants = [...new Set([key, encodeURIComponent(key), encodeURIComponent(encodeURIComponent(key))])].filter(Boolean)
+  const clean = text => variants.reduce((result, secret) => result.split(secret).join('[REDACTED]'), text)
+  if (typeof value === 'string') return clean(value)
+  if (Array.isArray(value)) return value.map(item => redact(item, key))
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([name, item]) => [clean(name), /^(?:api_?key|access_token|refresh_token|client_secret)$/i.test(name) ? '[REDACTED]' : redact(item, key)]))
+  return value
 }
 
 export function requireApiKey() {
@@ -56,24 +61,30 @@ export function requireApiKey() {
 // Forwards a request to api.polygon.io with the key injected from env. One
 // retry on 429 with a short backoff; everything else passes through as-is.
 export async function polygonFetch(path, params = {}) {
+  if (!isAllowedPath(path) || !params || typeof params !== 'object' || Array.isArray(params) || Object.entries(params).some(([name, value]) => /key|token|secret|authorization/i.test(name) || Array.isArray(value) || value && typeof value === 'object')) {
+    const error = new Error('Invalid provider request'); error.code = 'invalid_provider_request'; error.statusCode = 400; throw error
+  }
   const apiKey = requireApiKey()
   const url = new URL(POLYGON_BASE + path)
-  url.searchParams.set('apiKey', apiKey)
   for (const [k, v] of Object.entries(params)) {
     if (v != null && v !== '') url.searchParams.set(k, String(v))
   }
+
+  url.searchParams.set('apiKey', apiKey)
 
   for (let attempt = 0; attempt < 2; attempt++) {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
     try {
-      const res = await fetch(url.toString(), { signal: controller.signal })
+      const res = await fetch(url.toString(), { signal: controller.signal, redirect: 'error' })
       if (res.status === 429 && attempt === 0) {
         await new Promise(r => setTimeout(r, 500))
         continue
       }
       const body = await res.text()
-      return { status: res.status, body, contentType: res.headers.get('content-type') || 'application/json' }
+      let parsed
+      try { parsed = JSON.parse(body) } catch { throw new Error('Invalid provider response') }
+      return { status: res.status, body: JSON.stringify(redact(parsed, apiKey)), contentType: 'application/json' }
     } finally {
       clearTimeout(timer)
     }

@@ -1,30 +1,9 @@
-// GET /api/polygon/ws-auth
-//
-// Returns the Polygon API key so the browser's MassiveStream WebSocket can
-// authenticate with wss://socket.polygon.io/stocks. The WebSocket protocol
-// requires the client to send `{ action: 'auth', params: <key> }` in the
-// first frame, and Polygon doesn't expose a short-lived token alternative,
-// so the key necessarily reaches the browser when WebSocket is in use.
-//
-// Compared to the prior setup, the key is no longer persisted in localStorage
-// or echoed in REST URL query params. It lives only in browser memory during
-// the WebSocket session.
-//
-// This endpoint is intentionally simple: no origin check, no rate limiting.
-// For an internal-use single-operator app this matches the existing security
-// posture. Add a same-origin check here if the deployment becomes shared.
-
-import { requireApiKey } from '../_lib/polygon.js'
-
-export default async function handler(req, res) {
-  if (req.method !== 'GET') {
-    res.status(405).json({ error: 'method_not_allowed' })
-    return
-  }
-  try {
-    const apiKey = requireApiKey()
-    res.status(200).json({ apiKey })
-  } catch (err) {
-    res.status(500).json({ error: err?.code || 'unknown', message: err?.message || 'failed' })
-  }
+// Permanently retired. Provider credentials must never be delivered to browsers,
+// including callers with cookies or Origin headers. Do not read provider config.
+export default function handler(_req, res) {
+  res.setHeader('Cache-Control', 'private, no-store, max-age=0')
+  res.setHeader('CDN-Cache-Control', 'no-store')
+  res.setHeader('Vercel-CDN-Cache-Control', 'no-store')
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  return res.status(410).json({ error: 'PROVIDER_CREDENTIAL_DELIVERY_RETIRED' })
 }
