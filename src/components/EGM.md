@@ -43,3 +43,7 @@ Export/import surfaces were inventoried across all JSX files. A 50 KB directory 
 ## Unified read-only ETF context
 
 `UnifiedMarketContext` shows only QQQ/SPY/IWM quote and completed-minute evidence, source times, profile, capability evidence and explicit freshness/coverage. It is separate from `LegacyApp`; coach, setup, Wheel and scanner consumers do not mount behind it. Later Market Map/options/action adapters remain migration pending. `OperatorGate` guards both modes.
+
+## Premium UI and event ownership
+
+The [workspace shell](./workspace/EGM.md) replaces multi-row global navigation with a grouped sidebar and top bar. Existing content branches and handoffs remain. Calendar defaults to a combined chronological feed with Earnings/Economic/Options Expiry filters; SectorRotationView is exported for Market Intelligence. Estimated calendars and absent quotes remain labeled, never verified by presentation alone. QuickLog and glossary dialogs share focus containment.

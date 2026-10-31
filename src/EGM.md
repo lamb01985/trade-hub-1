@@ -2,19 +2,19 @@
 
 ## Overview
 
-The Vite/React SPA mounts App into `#root`. App coordinates Plan, Trade and Review workspaces, browser-owned journal/settings/prep state, multiple market subscriptions, server-managed broker access and protected saved intelligence. Library modules supply calculations, contracts and client adapters.
+The Vite/React SPA mounts App into `#root`. App presents a Personalized Overview and grouped premium sidebar over the preserved Plan, Trade and Review state, browser-owned journal/settings/prep state, multiple market subscriptions, server-managed broker access and protected saved intelligence. Library modules supply calculations, contracts and client adapters.
 
 ## Interface
 
-- [main.jsx](./main.jsx) calls `createRoot(...).render(<App />)`; [App.jsx](./App.jsx) exports the root component and owns tab selection, shared state and integration callbacks.
+- [main.jsx](./main.jsx) installs the shared theme and calls `createRoot(...).render(<OperatorGate><App /></OperatorGate>)`; [App.jsx](./App.jsx) exports the root component and owns tab selection, shared state and integration callbacks.
 - [constants.js](./constants.js) exports theme tokens, level/session labels and colors, setup labels, ET session helpers, holiday lookup, date/format helpers, IV context, `calcOptionRR` and `bsCalc`.
 - [Components](./components/EGM.md) compose planning, chart/levels/checks, coach, scanners, journal and protected intelligence. [Hooks](./hooks/EGM.md) own browser lifecycle and integration effects. [Libraries](./lib/EGM.md) supply calculation, contract and client modules.
 - Plan intelligence and review research are lazily imported. An `intelligence` query parameter selects the intelligence entry state; `tradehub-open-research` switches to Review / research.
 
 ## Invariants
 
-- Default workspace follows the ET session: pre-market Plan, regular-session Trade, otherwise Review. Workspace/subtab state is in memory; persisted user records use origin-local keys such as `th-trades`, `th-settings`, `th-prep` and `th-saved-preps`.
-- Browser `apiKey = 'server-managed'` is a compatibility sentinel. App's comments identify Polygon REST proxy and WebSocket-auth endpoints as the credential boundary; it is not a usable secret.
+- Default workspace is Personalized Overview; its content emphasis follows the ET session. Explicit intelligence deep links retain their existing destination. Workspace/subtab state is in memory; persisted user records use origin-local keys such as `th-trades`, `th-settings`, `th-prep` and `th-saved-preps`.
+- Browser `apiKey = 'server-managed'` is a compatibility sentinel. The authenticated REST relay is the provider boundary; ws-auth is an authenticated 410 tombstone; it is not a usable secret.
 - Operator AI capability, protected intelligence login and Schwab broker authentication are separate states. Browser UI must not treat one as evidence that another is enabled.
 - Single active-ticker data, bot watchlist, wheel watchlist and setup/focus universe data are separate hook instances. Preserve ticker identity and historical-fallback provenance when sharing levels or strategy context.
 - Retired Setups UI remains in source; App still hydrates setup state, subscribes its active universes and computes snapshots/evaluations. Focus symbols join that subscription union. Library calls and stored state may therefore remain active without the editor being mounted.
@@ -42,3 +42,7 @@ The root scout inspected main, constants and the first 300 lines of App within 5
 ## Security remediation update
 
 `OperatorGate` verifies the private operator session before mounting App, every 60 seconds and on focus/visibility restoration. Five-second verification failures unmount market consumers. Logout/expiry broadcasts only timestamp/nonce metadata across tabs; market caches, denial caches and pending WebSocket authentication are invalidated by session generation. Local journals remain intact. Provider 403 entitlement responses are distinct from app authentication failure. Legacy authenticated WebSocket key delivery remains a documented credential-exposure risk.
+
+## Premium workspace update
+
+See [workspace contract](./components/workspace/EGM.md). Navigation preserves every existing destination and browser key. Company research has an independently authenticated fallback during market discovery failure; protected market-only preview cannot use it. See [Alpha readiness](../docs/EDGEIQ-ALPHA-1-READINESS.md) for unactivated integrations and remaining risks.

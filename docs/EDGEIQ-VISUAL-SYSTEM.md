@@ -1,5 +1,7 @@
 # EdgeIQ visual system
 
+Historical first branding pass. The charcoal palette and workspace shell in [premium UI](./EDGEIQ-PREMIUM-UI.md) supersede this earlier layout/palette; the preservation and initial test record below is retained.
+
 EdgeIQ is a temporary public identity. Tagline: **Find your edge.** Browser title:
 **EdgeIQ | Investment Intelligence**. Repository names, API paths, environment
 variables, deployment identities and persisted browser keys remain unchanged.
