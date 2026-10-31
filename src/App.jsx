@@ -1,3 +1,12 @@
+import { useThesisAvailability } from './hooks/useThesisAvailability.js'
+import WorkspaceShell from './components/workspace/WorkspaceShell.jsx'
+import Portfolio from './components/workspace/Portfolio.jsx'
+import Opportunities from './components/workspace/Opportunities.jsx'
+import Overview, { verifiedBundle } from './components/workspace/Overview.jsx'
+import CompanyIntelligence from './components/workspace/CompanyIntelligence.jsx'
+import ServiceStatus from './components/workspace/ServiceStatus.jsx'
+import { activeNavigation } from './components/workspace/navigation.js'
+import { PageHeading, StatusBadge } from './components/workspace/primitives.jsx'
 import { Brand } from './components/Brand.jsx'
 import { BRAND } from './lib/brand.js'
 import { THEME } from './lib/theme.js'
@@ -106,20 +115,34 @@ const defaultPrep = { ticker: 'QQQ', orPeriod: '15', orbHigh: '', orbLow: '', se
 export default function App() {
   const capabilities = useMarketData('capabilities')
   const [mode, setMode] = useState('legacy')
+  const thesisAvailable = useThesisAvailability()
   if (import.meta.env.VITE_LOCAL_SERVICE_PREVIEW === 'true') return <LegacyApp />
-  if (!capabilities.modeKnown) return <main style={{padding:24}}><Brand /><p role="status">Market mode is unavailable or being verified. Reload to retry.</p></main>
+  if (mode === 'research' && thesisAvailable && !capabilities.previewOnly) return <ResearchOnlyWorkspace onExit={() => setMode('legacy')}/>
+  if (!capabilities.modeKnown) return <main style={{padding:24}}><Brand /><p role="status">Market mode is unavailable or being verified. Reload to retry.</p>{thesisAvailable && !capabilities.previewOnly && <button className="eq-button" onClick={() => setMode('research')}>Open Company Intelligence</button>}</main>
   if (capabilities.previewOnly && !capabilities.unifiedEnabled) return <main style={{padding:24}}><Brand /><p role="status">Protected preview is not activated.</p></main>
   if ((mode === 'unified' || capabilities.previewOnly) && capabilities.unifiedEnabled) return <UnifiedMarketContext capabilities={capabilities.envelope} ready={capabilities.ready} onLegacy={capabilities.previewOnly ? null : () => setMode('legacy')} />
   return <>{capabilities.unifiedEnabled && <button onClick={() => setMode('unified')}>Switch to Unified ETF context (read-only)</button>}<LegacyApp /></>
 }
 
+function ResearchOnlyWorkspace({onExit}) {
+  const [ticker,setTicker]=useState('AMD'),[view,setView]=useState('company')
+  return <WorkspaceShell active={activeNavigation('company',null,view)} ticker={ticker} onTicker={setTicker}
+    onNavigate={item=>{if(item.tab==='company')setView(item.view||'company');else onExit()}}
+    session="Research only" connected={false} freshness={{fresh:false,label:'Market gateway unavailable'}}
+    status={<span className="eq-muted">Authenticated financial research · trading consumers inactive</span>}>
+    <CompanyIntelligence ticker={ticker} view={view}/>
+  </WorkspaceShell>
+}
+
 function LegacyApp() {
-  const [activeTab, setActiveTab] = useState(() => intelligenceFromSearch(window.location.search) ? 'plan' : defaultTabForSession())
+  const [activeTab, setActiveTab] = useState(() => intelligenceFromSearch(window.location.search) ? 'plan' : 'overview')
   // Sub-tab state per top tab. In-memory only: switching top tabs preserves
   // your last sub-tab within each, but reload resets to defaults (same model
   // as activeTab, which resets via session each load).
   const [planSubTab, setPlanSubTab] = useState(() => intelligenceFromSearch(window.location.search) ? 'intelligence' : 'watchlist')
   const [tradeSubTab, setTradeSubTab] = useState('chart')
+  const [intelligenceView, setIntelligenceView] = useState(null)
+  const [companyView, setCompanyView] = useState('company')
   const [reviewSubTab, setReviewSubTab] = useState('journal')
   useEffect(() => {
     const open = () => { setActiveTab('review'); setReviewSubTab('research') }
@@ -131,8 +154,8 @@ function LegacyApp() {
   const [autoLoadPrepTrigger, setAutoLoadPrepTrigger] = useState(0)
   // The Polygon API key is managed server-side via POLYGON_API_KEY in Vercel
   // env vars. src/lib/massive.js routes every REST call through
-  // /api/polygon/proxy and the WebSocket fetches its auth from
-  // /api/polygon/ws-auth on connect. A truthy sentinel is passed down so
+  // /api/polygon/proxy through an authenticated server-side REST relay.
+  // The retired ws-auth route never delivers provider credentials. A truthy sentinel is passed down so
   // existing apiKey-gated UI in child components stays clean without forcing
   // a sweep of every gate in this commit. Child components no longer call
   // any data-fetch function with this value.
@@ -528,41 +551,39 @@ function LegacyApp() {
     setTrades(prev => prev.filter(t => t.id !== id))
   }
 
+  const selectedTicker = (prep.ticker || 'QQQ').toUpperCase()
+  const selectedData = verifiedBundle(selectedTicker, liveData)
   const session = getSession()
-  const priceStatus = tradeFreshness(liveData.priceTimestamp)
-  const priceTime = liveData.priceTimestamp ? new Date(liveData.priceTimestamp).toLocaleString('en-US', {
+  const priceStatus = tradeFreshness(selectedData?.priceTimestamp)
+  const priceTime = selectedData?.priceTimestamp ? new Date(selectedData.priceTimestamp).toLocaleString('en-US', {
     timeZone: 'America/Chicago', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit',
   }) + ' CT' : 'timestamp unavailable'
+  function navigateWorkspace(item) {
+    setActiveTab(item.tab)
+    if (item.tab === 'plan' && item.sub) { setPlanSubTab(item.sub); if (item.sub === 'intelligence') setIntelligenceView(item.intelligence || null) }
+    if (item.tab === 'trade' && item.sub) setTradeSubTab(item.sub)
+    if (item.tab === 'review' && item.sub) setReviewSubTab(item.sub)
+    if (item.tab === 'company') setCompanyView(item.view || 'company')
+  }
+  function selectTicker(ticker) {
+    if (ticker === selectedTicker) return
+    setOrbPrefill(null); setCalcPrefill(null); setManualFibs(null); setCustomLevels([])
+    setPrep(p => ({ ...p, ticker, orbHigh: '', orbLow: '', sessionOpen: '', sessionClose: '', keyLevel: '', plannedStrike: '', plannedDTE: '', plannedContract: null, ivNote: '', gamePlan: '', avoidNotes: '', marketEvents: '' }))
+  }
 
   return (
-    <div style={{ minHeight: '100vh', background: DARK, fontFamily: SANS }}>
-      {/* Header */}
-      <div style={{ borderBottom: `1px solid ${BORDER}`, position: 'sticky', top: 0, zIndex: 100, background: THEME.colors.background }}>
-        <div style={{ maxWidth: 960, margin: '0 auto', padding: '0 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 48 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ fontSize: 15, fontWeight: 900, color: THEME.colors.text, fontFamily: MONO, letterSpacing: '-0.03em' }}><Brand /></div>
-            {liveData.price ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div title={`${priceStatus.label}. REST transport ${liveData.connected ? 'ready' : 'unavailable'}; connection does not establish price freshness.`} style={{ width: 6, height: 6, borderRadius: '50%', background: priceStatus.fresh ? LIME : YELLOW }} />
-                <span style={{ fontSize: 13, fontFamily: MONO, fontWeight: 700, color: THEME.colors.secondary }}>{prep.ticker || 'QQQ'}</span>
-                <span style={{ fontSize: 16, fontFamily: MONO, fontWeight: 900, color: priceStatus.fresh ? LIME : YELLOW }}>${liveData.price?.toFixed(2)}</span>
-                <span style={{ fontSize: 9, color: priceStatus.fresh ? THEME.colors.secondary : YELLOW }} title={liveData.priceSource || 'Massive'}>{priceStatus.label}<br />{tradeSession(liveData.priceTimestamp)}: {priceTime}</span>
-              </div>
-            ) : (
-              <span style={{ fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary, letterSpacing: '0.08em' }}>
-                {apiKey ? 'connecting...' : 'no live data'}
-              </span>
-            )}
-            <ApiHealthIndicator />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {lockedOut && (
+    <WorkspaceShell active={activeNavigation(activeTab, activeTab === 'plan' ? planSubTab : activeTab === 'trade' ? tradeSubTab : activeTab === 'review' ? reviewSubTab : null, companyView)}
+      onNavigate={navigateWorkspace} ticker={selectedTicker} onTicker={selectTicker}
+      session={session.replaceAll('-', ' ')} connected={liveData.connected}
+      freshness={priceStatus}
+      status={<><ServiceStatus freshness={priceStatus} ticker={selectedTicker} data={selectedData} priceTime={priceTime} events={todayHighImpact} onCalendar={() => {setActiveTab('plan');setPlanSubTab('calendar')}}/>{todayHighImpact.length > 0 && <button className="eq-event-chip" onClick={() => {setActiveTab('plan');setPlanSubTab('calendar')}}>{todayHighImpact.length} high-impact event{todayHighImpact.length > 1 ? 's' : ''} today</button>}</>}
+      actions={<><ApiHealthIndicator />            {lockedOut && (
               <span style={{ fontSize: 9, color: RED, fontFamily: MONO, border: `1px solid ${RED}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.1em' }}>LOCKED</span>
             )}
-            {fullLevelMap.setupQuality === 'ON LEVEL' && (
+            {selectedData && priceStatus.fresh && fullLevelMap.setupQuality === 'ON LEVEL' && (
               <button onClick={() => { setActiveTab('trade'); setTradeSubTab('chart') }} title="Jump to Trade / Chart" style={{ fontSize: 9, color: LIME, fontFamily: MONO, background: 'transparent', border: `1px solid ${LIME}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.1em', animation: 'hdrpulse 1.5s infinite', cursor: 'pointer' }}>ON LEVEL →</button>
             )}
-            {fullLevelMap.setupQuality === 'APPROACHING' && (
+            {selectedData && priceStatus.fresh && fullLevelMap.setupQuality === 'APPROACHING' && (
               <button onClick={() => { setActiveTab('trade'); setTradeSubTab('chart') }} title="Jump to Trade / Chart" style={{ fontSize: 9, color: YELLOW, fontFamily: MONO, background: 'transparent', border: `1px solid ${YELLOW}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.1em', cursor: 'pointer' }}>APPROACHING →</button>
             )}
             {headerOpenSummary && headerOpenAny && (
@@ -591,117 +612,28 @@ function LegacyApp() {
                 </span>
               )
             })()}
-            {mtfAlignment.score > 0 && (() => {
+            {selectedData && priceStatus.fresh && mtfAlignment.score > 0 && (() => {
               const c = mtfAlignment.score >= 85 ? LIME : mtfAlignment.score >= 70 ? LIME : mtfAlignment.score >= 55 ? YELLOW : mtfAlignment.score >= 40 ? THEME.colors.orange : RED
               return (
                 <button onClick={() => { setActiveTab('trade'); setTradeSubTab('chart') }} title={`${mtfAlignment.label}, jump to Trade / Chart`} style={{ fontSize: 9, color: c, fontFamily: MONO, background: 'transparent', border: `1px solid ${c}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.1em', cursor: 'pointer' }}>ALIGN: {mtfAlignment.score} →</button>
               )
-            })()}
-          </div>
-        </div>
+            })()}</>}>
 
-        {/* Tabs */}
-        <div style={{ maxWidth: 960, margin: '0 auto', padding: '0 20px', display: 'flex', gap: 0, overflowX: 'auto' }}>
-          {TABS.map(tab => {
-            const isActive = activeTab === tab.id
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  borderBottom: isActive ? `2px solid ${LIME}` : '2px solid transparent',
-                  color: isActive ? (tab.accent ? LIME : THEME.colors.text) : THEME.colors.secondary,
-                  fontFamily: MONO,
-                  fontSize: 10,
-                  fontWeight: isActive ? 700 : 400,
-                  letterSpacing: '0.12em',
-                  textTransform: 'uppercase',
-                  padding: '10px 14px 8px',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  transition: 'color 0.15s',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: 2,
-                }}
-              >
-                <span>{tab.label}
-                  {tab.id === 'trade' && fullLevelMap.setupQuality === 'ON LEVEL' && (
-                    <span style={{ marginLeft: 5, width: 5, height: 5, borderRadius: '50%', background: LIME, display: 'inline-block', boxShadow: `0 0 6px ${LIME}`, verticalAlign: 'middle' }} />
-                  )}
-                </span>
-                <span style={{ fontSize: 8, color: isActive ? THEME.colors.secondary : THEME.colors.secondary, letterSpacing: '0.06em', textTransform: 'none', fontWeight: 400 }}>{tab.desc}</span>
-              </button>
-            )
-          })}
-        </div>
-      </div>
 
-      {!priceStatus.fresh && (
-        <div role="status" style={{ background: THEME.colors.cautionSurface, borderBottom: `1px solid ${YELLOW}66`, color: YELLOW }}>
-          <div style={{ maxWidth: 960, margin: '0 auto', padding: '10px 20px', fontSize: 12, lineHeight: 1.6 }}>
-            <strong>{priceStatus.label}.</strong> Massive stocks coverage is 3 a.m. to 7 p.m. CT. BOATS overnight prices are not connected.
-            {liveData.price != null ? ` Displayed $${liveData.price.toFixed(2)} is a recorded ${tradeSession(liveData.priceTimestamp).toLowerCase()} (${priceTime}), not a verified current price.` : ' No verified current trade is available.'}
-            {liveData.dataTicker === (prep.ticker || 'QQQ') && liveData.prevDay?.close != null && ` Last completed regular-session close: $${liveData.prevDay.close.toFixed(2)} (${liveData.prevDay.date}).`}
-          </div>
-        </div>
-      )}
-
-      {/* High-impact event banner, visible on every tab */}
-      {todayHighImpact.length > 0 && (
-        <div style={{ background: THEME.colors.cautionSurface, borderBottom: `1px solid ${YELLOW}33` }}>
-          <div style={{ maxWidth: 960, margin: '0 auto', padding: '7px 20px', display: 'flex', alignItems: 'center', gap: 10, fontFamily: MONO }}>
-            <span style={{ fontSize: 11, color: YELLOW }}>⚠</span>
-            <span style={{ fontSize: 10, color: YELLOW, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>High Impact Today:</span>
-            <span style={{ fontSize: 10, color: THEME.colors.caution, flex: 1 }}>
-              {todayHighImpact.map(e => `${e.name}${e.time ? ` at ${e.time} CT` : ''}`).join(' · ')}
-            </span>
-            <button onClick={() => { setActiveTab('plan'); setPlanSubTab('calendar') }} style={{ background: 'transparent', border: `1px solid ${YELLOW}44`, color: YELLOW, fontFamily: MONO, fontSize: 9, padding: '3px 9px', borderRadius: 3, cursor: 'pointer', letterSpacing: '0.1em', textTransform: 'uppercase' }}>View Calendar →</button>
-          </div>
-        </div>
-      )}
-
-      <style>{`
-        @keyframes hdrpulse { 0%,100%{opacity:1}50%{opacity:0.5} }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
-        input::placeholder, textarea::placeholder { color: ${THEME.colors.secondary} !important; }
-        select option { background: ${THEME.colors.background}; color: ${THEME.colors.text}; }
-        ::-webkit-scrollbar { width: 3px; height: 3px; }
-        ::-webkit-scrollbar-thumb { background: ${THEME.colors.surface}; }
-        button { transition: opacity 0.15s; }
-        button:hover { opacity: 0.85; }
-      `}</style>
-
-      <LocalPreviewNotice/>
       {/* Content. TRADE gets a wider container so the chart has room. */}
-      <div style={{ maxWidth: activeTab === 'trade' ? 1200 : 960, margin: '0 auto', padding: '28px 20px 60px' }}>
+      <div className="eq-content-body">
+        {activeTab === 'overview' && <Overview ticker={selectedTicker} liveData={liveData} multiData={liveDataMulti?.data || {}} watchlist={botWatchlist} trades={trades} setups={setups} levelMap={fullLevelMap} onNavigate={navigateWorkspace} onTicker={selectTicker} onLogTrade={() => openQuickLog(null)} connected={liveData.connected} session={session} schwab={schwab} aiCapability={aiCapability} events={calendarEvents}/>}
+        {activeTab === 'portfolio' && <Portfolio schwab={schwab} onConnections={() => {setActiveTab('trade');setTradeSubTab('command')}}/>}
+        {activeTab === 'opportunities' && <Opportunities onNavigate={navigateWorkspace}/>}
+        {activeTab === 'company' && <CompanyIntelligence view={companyView} ticker={selectedTicker}/>}
+        {activeTab === 'trade' && <PageHeading eyebrow="Execution workspace" title="Trading Desk" description={`${selectedTicker} · Chart, levels and execution tools. Decisions grounded in verified observations.`}/>}
+
 
         {activeTab === 'plan' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            <SubNav
-              tabs={[
-                { id: 'intelligence', label: 'Market Intelligence' },
-                { id: 'watchlist', label: 'Watchlist' },
-                { id: 'focus', label: 'Focus' },
-                { id: 'wheel', label: 'Wheel' },
-                { id: 'prep', label: 'Prep' },
-                { id: 'playbook', label: 'Playbook' },
-                { id: 'calendar', label: 'Calendar' },
-                { id: 'levels', label: 'Levels' },
-                { id: 'movers', label: 'Movers' },
-                { id: 'universe', label: 'Universe' },
-                { id: 'setups', label: 'Setups' },
-                { id: 'glossary', label: 'Glossary' },
-              ]}
-              active={planSubTab}
-              onChange={setPlanSubTab}
-            />
+          <div className="eq-legacy-content" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
 
-            {planSubTab === 'intelligence' && <Suspense fallback={<p>Loading intelligence...</p>}><MarketIntelligence initialView={intelligenceFromSearch(window.location.search) || 'map'}/></Suspense>}
+
+            {planSubTab === 'intelligence' && <Suspense fallback={<p>Loading intelligence...</p>}><MarketIntelligence key={intelligenceView || 'default'} initialView={intelligenceView || intelligenceFromSearch(window.location.search) || 'map'}/></Suspense>}
             <div style={{ display: planSubTab === 'watchlist' ? 'flex' : 'none', flexDirection: 'column', gap: 24 }}>
               <PreMarketSummarySection liveData={liveData} ticker={prep.ticker || 'QQQ'} />
               <WatchlistTab
@@ -892,17 +824,13 @@ function LegacyApp() {
           ]
           const tradeSubTabs = TRADE_SUBTAB_CATALOG.filter(t => !HIDDEN_TRADE_SUBTABS.includes(t.id))
           return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            <SubNav
-              tabs={tradeSubTabs}
-              active={tradeSubTab}
-              onChange={setTradeSubTab}
-            />
+          <div className="eq-legacy-content" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+
 
             <div style={{ display: tradeSubTab === 'chart' ? 'block' : 'none' }}>
               <ErrorBoundary label="Chart">
                 <ChartTab
-                  liveData={liveData}
+                  liveData={selectedData || {price:null,intradayBars:[],dataTicker:null}}
                   levelMap={fullLevelMap}
                   trades={trades}
                   ticker={prep.ticker || 'QQQ'}
@@ -1009,17 +937,8 @@ function LegacyApp() {
         })()}
 
         {activeTab === 'review' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            <SubNav
-              tabs={[
-                { id: 'journal', label: 'Journal' },
-                { id: 'research', label: 'Research outcomes' },
-                { id: 'outcomes', label: 'Outcomes' },
-                { id: 'stats', label: 'Stats' },
-              ]}
-              active={reviewSubTab}
-              onChange={setReviewSubTab}
-            />
+          <div className="eq-legacy-content" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+
 
             {reviewSubTab === 'research' && <Suspense fallback={<p>Loading research history...</p>}><ResearchLedger/></Suspense>}
             <div style={{ display: reviewSubTab === 'journal' ? 'block' : 'none' }}>
@@ -1055,27 +974,12 @@ function LegacyApp() {
         )}
       </div>
 
-      {/* Footer */}
-      <div style={{ borderTop: `1px solid ${THEME.colors.background}`, padding: '16px 20px', textAlign: 'center' }}>
-        <button
-          onClick={() => setShowGlossary(true)}
-          style={{ background: 'none', border: 'none', color: THEME.colors.secondary, fontFamily: MONO, fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer', textDecoration: 'underline', textDecorationColor: THEME.colors.surface }}
-        >
-          Glossary
-        </button>
-        <span style={{ color: THEME.colors.secondary, fontSize: 9, fontFamily: MONO, margin: '0 10px' }}>·</span>
-        <span style={{ color: THEME.colors.secondary, fontSize: 9, fontFamily: MONO, letterSpacing: '0.1em' }}>{BRAND.name} — personal use only</span>
-      </div>
+      <div className="eq-workspace-help"><button onClick={() => setShowGlossary(true)}>Glossary & terminology</button><span>Personal research workspace</span></div>
 
       {showGlossary && <GlossaryModal onClose={() => setShowGlossary(false)} />}
 
       {/* Floating action button — visible on every tab */}
-      <button onClick={() => openQuickLog(null)} title="Log a trade" style={{
-        position: 'fixed', bottom: 22, right: 22, width: 56, height: 56, borderRadius: '50%',
-        background: LIME, color: THEME.colors.background, border: 'none', fontSize: 26, fontWeight: 900,
-        cursor: 'pointer', boxShadow: '0 6px 20px rgba(209,255,121,0.35), 0 2px 6px rgba(0,0,0,0.5)',
-        zIndex: 150, fontFamily: MONO,
-      }}>+</button>
+      <button className="eq-quick-log" onClick={() => openQuickLog(null)} title="Log a trade" aria-label="Log a trade">+</button>
 
       <QuickLog
         open={quickLogOpen}
@@ -1092,7 +996,7 @@ function LegacyApp() {
       )}
 
       <NotificationOverlay />
-    </div>
+    </WorkspaceShell>
   )
 }
 
@@ -1111,6 +1015,7 @@ function ApiHealthIndicator() {
       <button
         onClick={() => setOpen(true)}
         title={tip}
+        aria-label={tip}
         style={{
           background: 'transparent', border: 'none', padding: '4px',
           cursor: 'pointer', display: 'inline-flex', alignItems: 'center',

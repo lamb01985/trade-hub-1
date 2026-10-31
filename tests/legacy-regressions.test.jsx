@@ -28,22 +28,22 @@ it('Levels renders existing calculated levels when the actual hook supplies data
 })
 it('Calendar keeps ordinary events available while failed earnings remain unknown',async()=>{
  fetchNasdaqEarnings.mockResolvedValue({rows:[],error:'proxy unavailable'})
- render(<Calendar apiKey="server-managed"/>);fireEvent.click(screen.getByRole('button',{name:'EARNINGS',exact:true}))
+ render(<Calendar apiKey="server-managed"/>);fireEvent.click(screen.getByRole('button',{name:'Earnings',exact:true}))
  await screen.findByText(/Earnings unavailable. An empty display does not mean/)
  expect(screen.queryByText('No earnings in the next 14 days.')).not.toBeInTheDocument()
- fireEvent.click(screen.getByRole('button',{name:'EVENTS',exact:true}));expect(screen.getByRole('button',{name:'Month',exact:true})).toBeInTheDocument()
+ fireEvent.click(screen.getByRole('button',{name:'Combined feed',exact:true}));expect(screen.getByRole('button',{name:'Month',exact:true})).toBeInTheDocument()
  expect(screen.getByText(/sector rotation needs server-side Massive access/i)).toBeInTheDocument()
 })
 it('Calendar renders supplied Nasdaq rows and distinguishes partial coverage',async()=>{
  let first=true
  fetchNasdaqEarnings.mockImplementation(async date=>{if(first){first=false;return{rows:[],error:'one failed day'}}return{rows:[{date,time:'15:30',type:'earnings',impact:'high',name:'AAPL Earnings',ticker:'AAPL',bmo:'AMC'}],error:null}})
- render(<Calendar apiKey="server-managed"/>);fireEvent.click(screen.getByRole('button',{name:'EARNINGS',exact:true}))
+ render(<Calendar apiKey="server-managed"/>);fireEvent.click(screen.getByRole('button',{name:'Earnings',exact:true}))
  await waitFor(()=>expect(screen.getAllByText('AAPL Earnings').length).toBeGreaterThan(0))
  expect(screen.getByText(/Earnings coverage incomplete:/)).toBeInTheDocument()
  expect(screen.queryByText(/No tracked earnings in the next 14 days/)).not.toBeInTheDocument()
 })
 it('Calendar says empty only after every requested earnings date succeeded',async()=>{
- render(<Calendar apiKey="server-managed"/>);fireEvent.click(screen.getByRole('button',{name:'EARNINGS',exact:true}))
+ render(<Calendar apiKey="server-managed"/>);fireEvent.click(screen.getByRole('button',{name:'Earnings',exact:true}))
  await screen.findByText('No tracked earnings returned for the covered dates.')
  expect(fetchNasdaqEarnings).toHaveBeenCalled()
 })

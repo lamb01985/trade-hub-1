@@ -87,9 +87,14 @@ export default function OperatorGate({ children }) {
       window.dispatchEvent(new Event('tradehub-operator-logout'))
     } catch { setError('Sign-out failed. Retry before leaving this browser.') }
   }
+  useEffect(() => {
+    const requested = () => { signOut() }
+    window.addEventListener('edgeiq-request-signout', requested)
+    return () => window.removeEventListener('edgeiq-request-signout', requested)
+  }, [])
   return <div style={{ background: THEME.colors.background, color: THEME.colors.text, minHeight: '100vh' }}>
     {error && <p role="alert">{error}</p>}
-    {status === 'authenticated' ? <><button onClick={signOut}>Sign out of {BRAND.name}</button>{children}</>
+    {status === 'authenticated' ? <><button className="eq-auth-fallback-signout" onClick={signOut}>Sign out of {BRAND.name}</button>{children}</>
       : status === 'checking' ? <p role="status">Verifying private operator access...</p>
         : <div style={{ padding: 24, maxWidth: 650 }}><Brand /><h1 style={{fontSize:18}}>Private operator access</h1>
           {status === 'error' && <button onClick={verify}>Retry session check</button>}

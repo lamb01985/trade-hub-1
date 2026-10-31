@@ -58,7 +58,7 @@ export function Tip({ tip }) {
 
 export function Card({ children, style = {} }) {
   return (
-    <div style={{ background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 5, padding: '16px 20px', ...style }}>
+    <div className="eq-legacy-card" style={{ background: PANEL, border: `1px solid ${BORDER}`, borderRadius: THEME.radius.medium, padding: '18px 20px', ...style }}>
       {children}
     </div>
   )
@@ -66,7 +66,7 @@ export function Card({ children, style = {} }) {
 
 export function SLabel({ children, color, style = {} }) {
   return (
-    <div style={{ fontSize: 9, letterSpacing: '0.16em', color: color || THEME.colors.secondary, textTransform: 'uppercase', fontFamily: MONO, marginBottom: 6, ...style }}>
+    <div style={{ fontSize: 11, letterSpacing: '0.04em', color: color || THEME.colors.secondary, textTransform: 'uppercase', fontFamily: SANS, marginBottom: 6, ...style }}>
       {children}
     </div>
   )
@@ -83,7 +83,7 @@ export function Heading({ children }) {
 export function Tile({ label, value, sub, color, compact }) {
   return (
     <Card style={{ padding: compact ? '12px 14px' : '15px 18px' }}>
-      <div style={{ fontSize: 9, letterSpacing: '0.15em', color: THEME.colors.secondary, fontFamily: MONO, textTransform: 'uppercase', marginBottom: 5 }}>{label}</div>
+      <div style={{ fontSize: 11, letterSpacing: '0.02em', color: THEME.colors.secondary, fontFamily: SANS, textTransform: 'none', marginBottom: 5 }}>{label}</div>
       <div style={{ fontSize: compact ? 18 : 22, fontWeight: 700, color: color || THEME.colors.text, fontFamily: MONO, letterSpacing: '-0.02em' }}>{value}</div>
       {sub && <div style={{ fontSize: 10, color: THEME.colors.secondary, fontFamily: MONO, marginTop: 3 }}>{sub}</div>}
     </Card>
@@ -93,7 +93,7 @@ export function Tile({ label, value, sub, color, compact }) {
 export function Fld({ label, value, onChange, type = 'number', placeholder, step = '0.01', prefix, suffix, disabled, mono, accent, tip }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-      {label && <label style={{ fontSize: 9, letterSpacing: '0.14em', color: accent ? THEME.colors.positive : THEME.colors.secondary, textTransform: 'uppercase', fontFamily: MONO, display: 'flex', alignItems: 'center' }}>{label}{tip && <Tip tip={tip} />}</label>}
+      {label && <label style={{ fontSize: 11, letterSpacing: '0.02em', color: accent ? THEME.colors.positive : THEME.colors.secondary, textTransform: 'uppercase', fontFamily: MONO, display: 'flex', alignItems: 'center' }}>{label}{tip && <Tip tip={tip} />}</label>}
       <div style={{ position: 'relative' }}>
         {prefix && <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: THEME.colors.secondary, fontFamily: MONO, fontSize: 13, pointerEvents: 'none' }}>{prefix}</span>}
         <input
@@ -116,7 +116,7 @@ export function Fld({ label, value, onChange, type = 'number', placeholder, step
 export function Sel({ label, value, onChange, options, small }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-      {label && <label style={{ fontSize: 9, letterSpacing: '0.14em', color: THEME.colors.secondary, textTransform: 'uppercase', fontFamily: MONO }}>{label}</label>}
+      {label && <label style={{ fontSize: 11, letterSpacing: '0.02em', color: THEME.colors.secondary, textTransform: 'uppercase', fontFamily: MONO }}>{label}</label>}
       <select
         value={value}
         onChange={e => onChange(e.target.value)}
@@ -144,7 +144,7 @@ export function Btn({ children, onClick, variant = 'primary', disabled, small })
     <button
       onClick={onClick}
       disabled={disabled}
-      style={{ background: v.bg, color: v.color, border: v.border || 'none', borderRadius: 4, padding: small ? '6px 12px' : '10px 20px', fontFamily: MONO, fontWeight: 700, fontSize: small ? 10 : 11, letterSpacing: '0.1em', textTransform: 'uppercase', cursor: disabled ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}
+      style={{ background: v.bg, color: v.color, border: v.border || 'none', borderRadius: 4, padding: small ? '6px 12px' : '10px 20px', fontFamily: SANS, fontWeight: 600, fontSize: small ? 12 : 13, letterSpacing: 'normal', textTransform: 'none', cursor: disabled ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}
     >
       {children}
     </button>

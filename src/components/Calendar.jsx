@@ -112,7 +112,7 @@ function ListView({ events }) {
                 const color = colorForEvent(e)
                 return (
                   <div key={i} style={{ display: 'grid', gridTemplateColumns: '70px 90px 1fr 130px', gap: 12, padding: '11px 16px', borderTop: i > 0 ? `1px solid ${THEME.colors.surface}` : 'none', alignItems: 'center' }}>
-                    <span style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary, fontWeight: 700 }}>{e.time || '—'} CT</span>
+                    <span style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary, fontWeight: 700 }}>{e.type === 'earnings' ? (e.bmo === 'BMO' ? 'Before open' : e.bmo === 'AMC' ? 'After close' : 'Time unknown') : `${e.time || '—'} CT · est.`}</span>
                     <span style={{ fontSize: 9, fontFamily: MONO, color, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
                       {e.type === 'opex' && e.tripleWitching ? 'TRIPLE WITCH' : e.type === 'opex' ? 'OPEX' : e.type === 'fomc' ? 'FOMC' : e.type === 'earnings' ? 'EARNINGS' : e.impact?.toUpperCase()}
                     </span>
@@ -190,7 +190,7 @@ function SmartWarnings({ events }) {
     // Tomorrow high-impact
     const tHigh = events.filter(e => e.date === tomorrowStr && e.impact === 'high')
     for (const e of tHigh) {
-      out.push({ icon: '⚠', color: YELLOW, text: `Tomorrow: ${e.name} at ${e.time || '—'} CT — consider reducing size or standing aside.` })
+      out.push({ icon: '⚠', color: YELLOW, text: `Tomorrow: ${e.name} at ${e.type === 'earnings' ? (e.bmo === 'BMO' ? 'Before open' : e.bmo === 'AMC' ? 'After close' : 'Time unknown') : `${e.time || '—'} CT · est.`} — consider reducing size or standing aside.` })
     }
 
     // OPEX this week
@@ -278,7 +278,7 @@ function SectorHeatTile({ row, onClick }) {
   )
 }
 
-function SectorRotationView({ apiKey }) {
+export function SectorRotationView({ apiKey }) {
   const [data, setData] = useState(() => {
     const cached = readSectorCache()
     return cached?.rows ? cached : null
@@ -405,8 +405,8 @@ function SectorRotationView({ apiKey }) {
 // ── Calendar root ────────────────────────────────────────────────────────────
 
 export default function CalendarTab({ putTheses = {}, apiKey }) {
-  const [topTab, setTopTab] = useState('rotation')
-  const [view, setView] = useState('week')
+  const [topTab, setTopTab] = useState('events')
+  const [view, setView] = useState('list')
   const [selectedDate, setSelectedDate] = useState(null)
   const [edu, setEdu] = useLocalStorage('th-opex-edu-dismissed', false)
   const [nasdaqEarnings, setNasdaqEarnings] = useState([])
@@ -469,15 +469,16 @@ export default function CalendarTab({ putTheses = {}, apiKey }) {
 
   const earningsOnly = events.filter(e => e.type === 'earnings')
   const TOP_TABS = [
-    { id: 'rotation', label: 'ROTATION' },
-    { id: 'events', label: 'EVENTS' },
-    { id: 'earnings', label: 'EARNINGS' },
+    { id: 'events', label: 'Combined feed' },
+    { id: 'earnings', label: 'Earnings' },
+    { id: 'economic', label: 'Economic' },
+    { id: 'opex', label: 'Options Expiry' },
   ]
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
-        <div><SLabel>Events & Catalysts</SLabel><Heading>Calendar</Heading></div>
+        <div><SLabel>Events & Catalysts</SLabel><Heading>Events</Heading></div>
       </div>
 
       {isLocalServicePreview() && <p role="status" style={{color:YELLOW,fontSize:11}}>Local review: sector rotation needs server-side Massive access and is unavailable here. Calendar dates still render; Nasdaq earnings use a public proxy, not fixtures.</p>}
@@ -495,12 +496,13 @@ export default function CalendarTab({ putTheses = {}, apiKey }) {
         </div>
       )}
 
+      <p className="eq-inline-alert" role="status">Earnings dates come from the public Nasdaq response; BMO/AMC times are windows, not verified release times. Economic schedules include legacy estimates and hardcoded dates, not a verified official feed. Options expirations are rule-based projections; contract calendars and holiday adjustments require verification.</p>
       {/* Top-level sub-tab switcher */}
       <div style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${THEME.colors.surface}` }}>
         {TOP_TABS.map(t => {
           const active = topTab === t.id
           return (
-            <button key={t.id} onClick={() => setTopTab(t.id)} style={{
+            <button key={t.id} onClick={() => {setTopTab(t.id);setView('list')}} style={{
               background: 'transparent', border: 'none',
               borderBottom: active ? `2px solid ${LIME}` : '2px solid transparent',
               color: active ? LIME : THEME.colors.secondary,
@@ -523,9 +525,9 @@ export default function CalendarTab({ putTheses = {}, apiKey }) {
       )}
 
       {/* ── EVENTS sub-tab ───────────────────────────────────────────────── */}
-      {topTab === 'events' && (<>
+      {['events','economic','opex'].includes(topTab) && (<>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 5 }}>
-        {VIEWS.map(v => <Pill key={v.id} label={v.label} active={view === v.id} onClick={() => setView(v.id)} />)}
+        {(topTab === 'events' ? VIEWS : VIEWS.filter(v => v.id === 'list')).map(v => <Pill key={v.id} label={v.label} active={view === v.id} onClick={() => setView(v.id)} />)}
       </div>
 
       <SmartWarnings events={events} />
@@ -551,7 +553,7 @@ export default function CalendarTab({ putTheses = {}, apiKey }) {
 
 
       {view === 'week' && <WeekView events={events} />}
-      {view === 'list' && <ListView events={events} />}
+      {view === 'list' && <ListView events={topTab === 'economic' ? events.filter(e => ['economic','fomc'].includes(e.type)) : topTab === 'opex' ? events.filter(e => e.type === 'opex') : events} />}
       {view === 'month' && (
         <>
           <MonthView events={events} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
@@ -563,7 +565,7 @@ export default function CalendarTab({ putTheses = {}, apiKey }) {
                   const color = colorForEvent(e)
                   return (
                     <div key={i} style={{ display: 'grid', gridTemplateColumns: '70px 1fr 100px', gap: 10, padding: '8px 12px', background: THEME.colors.background, border: `1px solid ${color}33`, borderRadius: 3 }}>
-                      <span style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary }}>{e.time || '—'} CT</span>
+                      <span style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary }}>{e.type === 'earnings' ? (e.bmo === 'BMO' ? 'Before open' : e.bmo === 'AMC' ? 'After close' : 'Time unknown') : `${e.time || '—'} CT · est.`}</span>
                       <span style={{ fontSize: 12, fontFamily: MONO, color: THEME.colors.text }}>{e.name}</span>
                       <span style={{ fontSize: 10, fontFamily: MONO, color, textAlign: 'right', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{e.type}</span>
                     </div>

@@ -1,3 +1,4 @@
+import { useModalFocus } from './workspace/useModalFocus.js'
 import { THEME } from '../lib/theme.js'
 import { useState, useEffect, useMemo } from 'react'
 import { LIME, RED, YELLOW, MONO, BORDER, PANEL, uid, f2, todayStr, localDateStr, JOURNAL_SETUP_OPTIONS } from '../constants.js'
@@ -40,6 +41,7 @@ function ToggleGroup({ options, value, onChange }) {
 }
 
 export default function QuickLog({ open, onClose, onSubmit, prep, editing }) {
+  const dialogRef = useModalFocus(open, onClose)
   const [ticker, setTicker] = useState('')
   const [optType, setOptType] = useState('call')
   const [strike, setStrike] = useState('')
@@ -183,8 +185,8 @@ export default function QuickLog({ open, onClose, onSubmit, prep, editing }) {
   const valid = !!ticker.trim() && !!entry && !isNaN(parseFloat(entry)) && !!tradeDate && tradeDate <= localDateStr() && !timeWarning
 
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.82)', zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', overflow: 'auto' }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: PANEL, width: '100%', maxWidth: 560, maxHeight: '94vh', overflow: 'auto', borderRadius: '12px 12px 0 0', padding: '20px 22px 26px', border: `1px solid ${BORDER}`, borderBottom: 'none' }}>
+    <div className="eq-modal-overlay" onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.82)', zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', overflow: 'auto' }}>
+      <div ref={dialogRef} className="eq-modal-panel" role="dialog" aria-modal="true" aria-label={editing ? 'Edit trade' : 'Log a trade'} tabIndex={-1} onClick={e => e.stopPropagation()} style={{ background: PANEL, width: '100%', maxWidth: 560, maxHeight: '94vh', overflow: 'auto', borderRadius: '12px 12px 0 0', padding: '20px 22px 26px', border: `1px solid ${BORDER}`, borderBottom: 'none' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
           <div style={{ fontSize: 14, fontFamily: MONO, fontWeight: 900, color: LIME, letterSpacing: '0.1em' }}>{editing ? 'EDIT TRADE' : 'LOG TRADE'}</div>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: THEME.colors.secondary, fontFamily: MONO, fontSize: 12, cursor: 'pointer', letterSpacing: '0.1em' }}>CLOSE ✕</button>

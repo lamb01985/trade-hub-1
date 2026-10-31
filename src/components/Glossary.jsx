@@ -1,3 +1,4 @@
+import { useModalFocus } from './workspace/useModalFocus.js'
 import { THEME } from '../lib/theme.js'
 import { LIME, MONO, BORDER } from '../constants.js'
 
@@ -24,16 +25,17 @@ const TERMS = [
 ]
 
 export default function GlossaryModal({ onClose }) {
+  const dialogRef = useModalFocus(true, onClose)
   return (
     <div
-      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+      className="eq-modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose() }}
       style={{
         position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 10000,
         display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
         padding: '40px 20px', overflowY: 'auto',
       }}
     >
-      <div style={{ background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 8, maxWidth: 680, width: '100%', padding: '28px 32px' }}>
+      <div ref={dialogRef} className="eq-modal-panel" role="dialog" aria-modal="true" aria-label="Trading glossary" tabIndex={-1} style={{ background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 8, maxWidth: 680, width: '100%', padding: '28px 32px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
           <div>
             <div style={{ fontSize: 9, fontFamily: MONO, color: THEME.colors.secondary, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 4 }}>Reference</div>

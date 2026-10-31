@@ -34,7 +34,7 @@ it('shows missing report and authorization states without fabricating data',asyn
   vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:false,status:401}));render(<MarketIntelligence/>);expect(await screen.findByLabelText('Operator password')).toBeInTheDocument();expect(screen.queryByText(/LOCAL SAMPLE/)).not.toBeInTheDocument()
 })
 it('supports scoped deep links without changing ordinary workspace defaults',()=>{
- expect(INTELLIGENCE_VIEWS.map(x=>x.label)).toEqual(['Analyst Brief','Training Mode','Market Map','Options Positioning','Intraday Playbook','Swing Playbook'])
+ expect(INTELLIGENCE_VIEWS.map(x=>x.label)).toEqual(['Sector Rotation','Analyst Brief','Training Mode','Market Map','Options Positioning','Intraday Playbook','Swing Playbook'])
  expect(intelligenceFromSearch('?intelligence=map')).toBe('map')
  expect(intelligenceFromSearch('?intelligence=unknown')).toBe(null)
  expect(intelligenceFromSearch('')).toBe(null)

@@ -1,4 +1,5 @@
 export const INTELLIGENCE_VIEWS = [
+  { id: 'rotation', label: 'Sector Rotation' },
   { id: 'analyst', label: 'Analyst Brief' },
   { id: 'training', label: 'Training Mode' },
   { id: 'map', label: 'Market Map' },

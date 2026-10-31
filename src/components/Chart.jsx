@@ -1,3 +1,4 @@
+import { EmptyState } from './workspace/primitives.jsx'
 import { THEME } from '../lib/theme.js'
 import { useEffect, useRef, useState, useMemo } from 'react'
 import { createChart, CandlestickSeries, HistogramSeries, LineSeries, LineStyle, createSeriesMarkers } from 'lightweight-charts'
@@ -1035,7 +1036,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
       {/* ── Volume threshold readout ───────────────────────────────────────── */}
       {(() => {
         const above = volumeState.current >= currentThreshold && currentThreshold > 0
-        const statusColor = above ? LIME : RED
+        const statusColor = !liveData?.intradayBars?.length ? THEME.colors.secondary : above ? LIME : RED
         const statusGlyph = above ? '✓' : '✗'
         return (
           <div style={{
@@ -1047,7 +1048,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
               Vol Threshold, {tickerKey}
             </span>
             <span style={{ fontSize: 13, fontFamily: MONO, fontWeight: 800, color: statusColor }}>
-              {humanVol(volumeState.current)}
+              {liveData?.intradayBars?.length ? humanVol(volumeState.current) : '—'}
             </span>
             <span style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary }}>/</span>
             <input
@@ -1069,7 +1070,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
               border: `1px solid ${statusColor}55`, borderRadius: 3, padding: '2px 8px',
               letterSpacing: '0.08em',
             }}>
-              {statusGlyph} {above ? 'ABOVE' : 'BELOW'}
+              {liveData?.intradayBars?.length ? `${statusGlyph} ${above ? 'ABOVE' : 'BELOW'}` : 'Not observed'}
             </span>
             <VolumeSparkline values={volumeState.lastN} threshold={currentThreshold} />
             <span style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, letterSpacing: '0.08em' }}>
@@ -1094,17 +1095,18 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
             <span style={{
               fontSize: 13, fontWeight: 800, letterSpacing: '0.08em',
               color: banner.color,
-            }}>{banner.text}</span>
+            }}>{liveData?.intradayBars?.length ? banner.text : 'Market data unavailable · Setup not evaluated'}</span>
           </div>
         )
       })()}
 
-      <div style={{ position: 'relative', width: '100%', height: '70vh', minHeight: 480, background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 5 }}>
+      <div style={{ position: 'relative', width: '100%', height: 'clamp(320px, 48vh, 560px)', minHeight: 300, background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 5 }}>
         <div ref={wrapRef} style={{ width: '100%', height: '100%' }} />
+        {!liveData?.intradayBars?.length && <div className="eq-chart-unavailable"><EmptyState title="Waiting for verified market observations">The chart will populate from your authenticated Massive connection. No sample candles or prices are substituted.</EmptyState></div>}
         <div ref={profileOverlayRef} style={{ position: 'absolute', top: 0, right: 60, width: 60, height: '100%', pointerEvents: 'none' }} />
 
         {/* ── Top-right bias indicator + score panel ─────────────────────── */}
-        {mtfAlignment && (() => {
+        {liveData?.intradayBars?.length > 0 && mtfAlignment && (() => {
           const a = mtfAlignment
           const bias = synthesizeBias(a.mtf)
           const c = a.score >= 85 ? LIME : a.score >= 70 ? LIME : a.score >= 55 ? YELLOW : a.score >= 40 ? ORANGE : RED
@@ -1296,6 +1298,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
 
       {/* Market Structure Panel */}
       {(() => {
+        if (!liveData?.intradayBars?.length) return <div className="eq-no-structure"><strong>Market structure not evaluated</strong><span>Verified bars are required before a trend, strength or setup score can be shown.</span></div>
         const a = currentAnalysis
         const mtf = mtfAnalysis
         const stateColor = a?.state === 'BULLISH' ? LIME : a?.state === 'BEARISH' ? RED : a?.state === 'TRANSITION' ? ORANGE : YELLOW

@@ -8,8 +8,8 @@ export const ORANGE = THEME.colors.orange
 export const DARK = THEME.colors.background
 export const PANEL = THEME.colors.surface
 export const BORDER = THEME.colors.border
-export const MONO = "'DM Mono', monospace"
-export const SANS = "'IBM Plex Sans', sans-serif"
+export const MONO = THEME.typography.mono
+export const SANS = THEME.typography.sans
 
 export const LEVEL_COLORS = {
   pivot: THEME.colors.secondary,
