@@ -23,6 +23,11 @@ function family(path) {
   }
   if (new RegExp(`^/v2/snapshot/locale/us/markets/stocks/(?:tickers/${TICKER}|gainers|losers)$`).test(path)) return 'snapshot'
   if (/^\/v3\/snapshot\/options\/[A-Z][A-Z0-9.-]{0,9}$/.test(path)) return 'options'
+  const contract = path.match(/^\/v3\/snapshot\/options\/([A-Z][A-Z0-9.-]{0,9})\/O:([A-Z][A-Z0-9.-]{0,9})([0-9]{6})[CP][0-9]{8}$/)
+  if (contract) {
+    if (contract[1] !== contract[2] || !realDate(`20${contract[3].slice(0,2)}-${contract[3].slice(2,4)}-${contract[3].slice(4,6)}`)) invalid()
+    return 'none'
+  }
   if (path === '/v2/reference/news') return 'news'
   if (path === '/v3/reference/short-interest') return 'short'
   if (path === '/vX/reference/financials') return 'financials'

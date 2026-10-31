@@ -101,3 +101,11 @@ it('retries REST once on 429 and never retries notification delivery',async()=>{
 it.each(['60','invalid','86402'])('propagates safe provider Retry-After %s without an early retry',async hint=>{
  const cookie=await login();fetch.mockResolvedValue(new Response('{}',{status:429,headers:{'Retry-After':hint}}));const r=await call('polygon/proxy',cookie);expect(r.code).toBe(429);expect(r.headers['Retry-After']).toBe(hint==='60'?'60':'86401');expect(fetch).toHaveBeenCalledTimes(1)
 })
+
+it('preserves bounded authenticated option access without restoring prefix/query bypasses',async()=>{
+ const {validateProviderRequest:v}=await import('../api/_lib/polygon.js')
+ expect(()=>v('/v3/snapshot/options/QQQ',{expiration_date:'2026-10-23',contract_type:'put',strike_price:'725',sort:'expiration_date',order:'asc',limit:'250'})).not.toThrow()
+ expect(()=>v('/v3/snapshot/options/QQQ/O:QQQ261023C00725000')).not.toThrow()
+ for(const [path,query] of [['/v3/snapshot/options/QQQ',{limit:'251'}],['/v3/snapshot/options/QQQ',{apiKey:'override'}],['/v3/snapshot/options/QQQ',{expiration_date:'2026-02-30'}],['/v3/snapshot/options/QQQ',{strike_price:'NaN'}],['/v3/snapshot/options/QQQ/O:SPY261023C00725000',{}],['/v3/snapshot/options/QQQ/../admin',{}]])expect(()=>v(path,query)).toThrow()
+ const cookie=await login();fetch.mockResolvedValue(new Response('{"results":[]}'));expect((await call('polygon/proxy',cookie,{query:{path:'/v3/snapshot/options/QQQ',limit:'250'}})).code).toBe(200)
+})
