@@ -36,7 +36,7 @@ import {
   calcATR,
   tickSizeFor,
 } from '../lib/levels.js'
-import { computePreMarketStats } from '../lib/premarket.js'
+import { computePreMarketStats, filterRegularSession } from '../lib/premarket.js'
 import { getETMins } from '../constants.js'
 
 function emptyBundle() {
@@ -188,23 +188,24 @@ export function useLiveDataMulti(tickers = [], { mode = 'legacy' } = {}) {
             isHistoricalFallback = fallback.length > 0
           }
 
-          const vwap = calcVWAP(bars)
+          const regularBars = filterRegularSession(intradayBars)
+          const vwap = calcVWAP(regularBars)
           const pivots = pd ? calcPivots(pd.high, pd.low, pd.close) : null
           const zones = detectSDZones(histBars)
-          const openPrice = bars.length > 0 ? bars[0].o : null
+          const openPrice = regularBars[0]?.o ?? null
           const atr = calcATR(histBars)
           const refPrice = bars[0]?.c || pd?.close
           const tick = tickSizeFor(refPrice)
-          const volProfile = calcIntradayVolumeProfile(bars, tick)
-          const preMarket = computePreMarketStats(bars, pd?.close)
+          const volProfile = calcIntradayVolumeProfile(regularBars, tick)
+          const preMarket = computePreMarketStats(intradayBars, pd?.close)
 
-          const sessionVol = bars.reduce((s, b) => s + (b.v || 0), 0)
+          const sessionVol = regularBars.reduce((s, b) => s + (b.v || 0), 0)
           const avgDV = histBars.length > 0
             ? histBars.reduce((s, b) => s + (b.v || 0), 0) / histBars.length
             : 0
           const avgDayVol = avgDV > 0 ? avgDV : null
-          const minsElapsed = Math.max(1, getETMins() - 570)
-          const rvol = avgDV > 0 ? sessionVol / (avgDV * minsElapsed / 390) : null
+          const minsElapsed = Math.min(390, Math.max(1, getETMins() - 570))
+          const rvol = avgDV > 0 && regularBars.length ? sessionVol / (avgDV * minsElapsed / 390) : null
 
           setData(prev => {
             const cur = prev[ticker] || emptyBundle()

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { MassiveStreamClient, getLastTrade, getPriorSession, getIntradayBars, getIntradayBarsForDate, priorTradingDayStr, getWeeklyData, getHistoricalBars } from '../lib/massive.js'
 import { calcVWAP, calcPivots, detectSDZones, calcIntradayVolumeProfile, calcATR, tickSizeFor } from '../lib/levels.js'
-import { computePreMarketStats } from '../lib/premarket.js'
+import { computePreMarketStats, filterRegularSession } from '../lib/premarket.js'
 import { checkLevelAlerts } from '../lib/alerts.js'
 import { todayStr, getETMins } from '../constants.js'
 
@@ -63,13 +63,13 @@ export function useLiveData(ticker = 'QQQ', levelMap = null, settings = {}) {
       },
       onError: (msg) => { setWsError(msg); setConnected(false) },
       onTrade: ({ ticker: sym, price: p }) => {
-        if (sym !== ticker) return
+        if (sym !== ticker || tickerRef.current !== ticker) return
         priceRef.current = p
         setPrice(p)
         // Update VWAP with new trade (simple approach: re-use bar data)
       },
       onQuote: ({ ticker: sym, bid: b, ask: a }) => {
-        if (sym !== ticker) return
+        if (sym !== ticker || tickerRef.current !== ticker) return
         setBid(b)
         setAsk(a)
       },
@@ -121,8 +121,9 @@ export function useLiveData(ticker = 'QQQ', levelMap = null, settings = {}) {
       // The ticker changed mid-fetch — discard this run's results entirely.
       if (runTicker !== tickerRef.current) return
 
-      vwapBarsRef.current = intradayBars
-      const vwap = calcVWAP(intradayBars)
+      const regularBars = filterRegularSession(intradayBars)
+      vwapBarsRef.current = regularBars
+      const vwap = calcVWAP(regularBars)
       setVwapData(vwap)
 
       // Chart bars: today if available, else prior trading day fallback so the chart is never empty
@@ -149,25 +150,25 @@ export function useLiveData(ticker = 'QQQ', levelMap = null, settings = {}) {
       setSdZones(zones)
 
       // Open price (first intraday bar)
-      setOpenPrice(intradayBars.length > 0 ? intradayBars[0].o : null)
+      setOpenPrice(regularBars[0]?.o ?? null)
 
       // ATR from daily bars
       setAtr(calcATR(histBars))
 
       // Intraday Volume Profile with proper bucketing + VAH/VAL
-      const refPrice = intradayBars[0]?.c || pd?.close
+      const refPrice = regularBars[0]?.c || pd?.close
       const tick = tickSizeFor(refPrice)
-      setVolProfile(calcIntradayVolumeProfile(intradayBars, tick))
+      setVolProfile(calcIntradayVolumeProfile(regularBars, tick))
 
       // Pre-market stats
       setPreMarket(computePreMarketStats(intradayBars, pd?.close))
 
       // RVOL: session volume vs projected daily average
-      const sessionVol = intradayBars.reduce((s, b) => s + (b.v || 0), 0)
+      const sessionVol = regularBars.reduce((s, b) => s + (b.v || 0), 0)
       const avgDV = histBars.length > 0 ? histBars.reduce((s, b) => s + (b.v || 0), 0) / histBars.length : 0
       setAvgDayVol(avgDV > 0 ? avgDV : null)
-      const minsElapsed = Math.max(1, getETMins() - 570) // 9:30 ET = 570 mins from midnight
-      setRvol(avgDV > 0 ? sessionVol / (avgDV * minsElapsed / 390) : null)
+      const minsElapsed = Math.min(390, Math.max(1, getETMins() - 570))
+      setRvol(avgDV > 0 && regularBars.length ? sessionVol / (avgDV * minsElapsed / 390) : null)
 
       // Stamp the loaded context with its ticker — last thing, only on success.
       setDataTicker(runTicker)
@@ -184,6 +185,7 @@ export function useLiveData(ticker = 'QQQ', levelMap = null, settings = {}) {
     const interval = setInterval(loadContext, 5 * 60 * 1000)
     return () => clearInterval(interval)
   }, [loadContext])
+
 
 
   return {

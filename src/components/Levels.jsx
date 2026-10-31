@@ -1,5 +1,8 @@
 import { isLocalServicePreview, LOCAL_MARKET_LIMITATION } from '../lib/localPreview.js'
 import { useState, useMemo } from 'react'
+import SessionResearch from './SessionResearch.jsx'
+import { getResearchLevels } from '../lib/sessionResearch.js'
+import { marketDateStr } from '../lib/massive.js'
 import { Card, SLabel, Heading, Fld, Btn, Pill, Tip } from './ui.jsx'
 import { buildLevelMap, calcFibs } from '../lib/levels.js'
 import { requestNotificationPermission, Sounds } from '../lib/alerts.js'
@@ -174,15 +177,20 @@ function SetupBadge({ quality, nearestAbove, nearestBelow, price, atr, vwapData,
   )
 }
 
-export default function Levels({ liveData, orbHigh, orbLow, settings, onSettingsChange, mtfAlignment, putThesis }) {
+export default function Levels({ liveData, ticker, onSelectTicker, orbHigh, orbLow, settings, onSettingsChange, mtfAlignment, putThesis }) {
   const [customLabel, setCustomLabel] = useState('')
   const [customPrice, setCustomPrice] = useState('')
-  const [customLevels, setCustomLevels] = useState([])
+  const [customLevelsByTicker, setCustomLevelsByTicker] = useState({})
+  const customLevels = useMemo(() => customLevelsByTicker[ticker] || [], [customLevelsByTicker, ticker])
+  const setCustomLevels = update => setCustomLevelsByTicker(prev => ({
+    ...prev, [ticker]: update(prev[ticker] || []),
+  }))
   const [notifGranted, setNotifGranted] = useState(typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted')
   const notifSupported = typeof window !== 'undefined' && 'Notification' in window
   const [filter, setFilter] = useState('all')
 
-  const { price, vwapData, prevDay, weeklyData, pivots, sdZones } = liveData || {}
+  const contextMatches = liveData?.dataTicker === ticker
+  const { price, vwapData, prevDay, weeklyData, pivots, sdZones } = contextMatches ? liveData : {}
 
   // Auto-compute Fibonacci from best available range: OR high/low → prev day → none
   const autoFibs = useMemo(() => {
@@ -197,6 +205,10 @@ export default function Levels({ liveData, orbHigh, orbLow, settings, onSettings
   }, [orbHigh, orbLow, prevDay])
 
   const session = getSession()
+  const marketDate = marketDateStr()
+  const researchLevels = useMemo(() => getResearchLevels(ticker, marketDate).map(level => ({
+    price: level.price, label: `Research: ${level.label}`,
+  })), [ticker, marketDate])
   const levelMap = useMemo(() => buildLevelMap(price, {
     pivots,
     fibs: autoFibs?.fibs ?? null,
@@ -206,11 +218,11 @@ export default function Levels({ liveData, orbHigh, orbLow, settings, onSettings
     orbHigh: parseFloat(orbHigh) || null,
     orbLow: parseFloat(orbLow) || null,
     sdZones,
-    customLevels,
+    customLevels: [...researchLevels, ...customLevels],
     volProfile: liveData?.volProfile,
     atr: liveData?.atr,
     session,
-  }), [price, pivots, autoFibs, vwapData, prevDay, weeklyData, orbHigh, orbLow, sdZones, customLevels, liveData?.volProfile, liveData?.atr, session])
+  }), [price, pivots, autoFibs, vwapData, prevDay, weeklyData, orbHigh, orbLow, sdZones, customLevels, researchLevels, liveData?.volProfile, liveData?.atr, session])
 
   const { levels, nearestAbove, nearestBelow, setupQuality, blueSkyUp, blueSkyDown } = levelMap
 
@@ -267,6 +279,7 @@ export default function Levels({ liveData, orbHigh, orbLow, settings, onSettings
       </div>
 
       {/* Active put thesis banner */}
+      <SessionResearch ticker={ticker} onSelectTicker={onSelectTicker} />
       {putThesis?.trigger != null && (() => {
         const triggered = price != null && price <= putThesis.trigger
         return (
