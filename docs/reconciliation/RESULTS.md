@@ -13,3 +13,5 @@ Frontend integration branch: integration/thesis-reconciliation. Original source 
 Frontend reconciliation:224tests passed, production build passed; all security/allowlist/authentication regressions included. Python remote main is an ancestor of the preserved engine branch; no remote changes were missing. Full PostgreSQL integration verification and real Redis proof are recorded at completion. The pre-existing production workflow remains preserved for review only and has not run.
 
 Remaining operational risks: actual server-account entitlements/recency and Vercel configuration/protection remain unverified, existing deployed versions are unchanged, and previously disclosed provider keys remain valid until separately revoked. These local changes are not production hardening until an approved rollout.
+
+Verified baseline before feature development: frontend224tests and production build passed; Python398tests passed with isolated PostgreSQL and no skips. Existing deprecation/bundle warnings remain. Both repositories were checkpointed before reconciliation; no protected-preview worktree was used as a base. EdgeIQ branding begins only after this baseline.
