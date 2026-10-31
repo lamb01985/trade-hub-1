@@ -70,7 +70,7 @@ confirmed Major/Blocker in the UI scope. This is not hosted-security certificati
 
 ## Validation
 
-- Complete frontend suite: **254 passed / 37 files**, including existing security,
+- Complete frontend suite: **255 passed / 37 files**, including existing security,
   operator/provider/notification/preview regressions and new navigation,
   ticker-identity, report-race, comparison-input, independent-admission and
   accessibility coverage. A build/browser/full-suite concurrent run exceeded one
@@ -114,3 +114,12 @@ These commits are local only. The original unfinished Thesis planning note is
 intentionally not staged into this redesign; the private backup and working-tree
 copy remain available. The Python repository was tested but not modified by this
 UI/audit increment.
+
+Final service cleanup: the isolated test database was stopped. An existing
+TradeHub local preview was already listening on port 4180 before this increment's
+launch attempt; that process was left intact, and used for the source-updated
+browser checks. No additional preview server was left running by this work.
+
+Sector Rotation also suppresses unrelated saved Friday-report banners and errors,
+so historical report provenance cannot be mistaken for its separate data source.
+A regression test covers this boundary.

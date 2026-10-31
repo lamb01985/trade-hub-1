@@ -148,7 +148,7 @@ any deployment or credential action. No Alpha activation is performed here.
 
 ## Validation and UI scope
 
-- Frontend: complete suite 254 passed / 37 files in the final validation; includes
+- Frontend: complete suite 255 passed / 37 files in the final validation; includes
   relay/operator/preview/security/gateway, contrast, Company race/identity, drawer
   navigation and all legacy destination mappings.
 - Python: complete suite **437 passed**, none skipped, isolated PostgreSQL;

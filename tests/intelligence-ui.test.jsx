@@ -8,7 +8,7 @@ import { adaptPythonReport } from '../src/lib/reportContract.js'
 import { INTELLIGENCE_VIEWS, intelligenceFromSearch } from '../src/lib/intelligenceNavigation.js'
 import { pythonReport } from './reportFixture.js'
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.history.replaceState(null, '', '/') })
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); window.history.replaceState(null, '', '/') })
 function report() { return adaptPythonReport(pythonReport(), new Date('2026-10-26T12:00:00Z')) }
 it('navigates all four views without a page reload and labels Friday context', async () => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ok:true,status:200,json:async()=>report()}))
@@ -38,4 +38,8 @@ it('supports scoped deep links without changing ordinary workspace defaults',()=
  expect(intelligenceFromSearch('?intelligence=map')).toBe('map')
  expect(intelligenceFromSearch('?intelligence=unknown')).toBe(null)
  expect(intelligenceFromSearch('')).toBe(null)
+})
+
+it('keeps saved Friday sample provenance separate from Sector Rotation',async()=>{
+ vi.stubEnv('VITE_LOCAL_SERVICE_PREVIEW','true');vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,status:200,json:async()=>report()}));render(<MarketIntelligence/>);await screen.findByText('FRIDAY-CLOSE SNAPSHOT · LOCAL SAMPLE · NOT LIVE');fireEvent.click(screen.getByRole('button',{name:'Sector Rotation'}));expect(screen.getByText(/Sector rotation unavailable:/)).toBeInTheDocument();expect(screen.queryByText('FRIDAY-CLOSE SNAPSHOT · LOCAL SAMPLE · NOT LIVE')).toBeNull()
 })
