@@ -1,3 +1,4 @@
+import { THEME } from '../lib/theme.js'
 import { useMemo, useEffect, useState } from 'react'
 import { useLocalStorage } from '../hooks/useStore.js'
 import { LIME, RED, YELLOW, MONO, SANS, BORDER, todayStr, getSession, SESSION_LABELS, SESSION_TIPS, fmtD, fmtU } from '../constants.js'
@@ -164,14 +165,14 @@ function DecisionTreeSVG() {
         return (
           <g key={i}>
             {/* Decision box */}
-            <rect x="0" y={y} width={DW} height={DH} rx="6" fill="#0c1212" stroke="#2a3a32" strokeWidth="1.5" />
-            <text x={DW / 2} y={y + DH / 2 + 5} textAnchor="middle" fill="#e8e8e8" fontSize="13" fontWeight="600">{d.q}</text>
+            <rect x="0" y={y} width={DW} height={DH} rx="6" fill={THEME.colors.positiveSurface} stroke={THEME.colors.positiveSurface} strokeWidth="1.5" />
+            <text x={DW / 2} y={y + DH / 2 + 5} textAnchor="middle" fill={THEME.colors.text} fontSize="13" fontWeight="600">{d.q}</text>
 
             {/* Stop box on the right */}
-            <rect x={RX} y={stopY} width={SW} height={SH} rx="4" fill="#150505" stroke={`${RED}66`} strokeWidth="1.2" />
+            <rect x={RX} y={stopY} width={SW} height={SH} rx="4" fill={THEME.colors.negativeSurface} stroke={`${RED}66`} strokeWidth="1.2" />
             <text x={RX + SW / 2} y={stopY + 20} textAnchor="middle" fill={RED} fontSize="10" fontWeight="700" letterSpacing="0.08em">{d.cont === 'YES' ? 'NO →' : 'YES →'}</text>
             <foreignObject x={RX + 8} y={stopY + 24} width={SW - 16} height={SH - 26}>
-              <div style={{ fontSize: 11, fontFamily: MONO, color: '#cc7a7a', lineHeight: 1.4, textAlign: 'center' }}>{d.stop}</div>
+              <div style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.negative, lineHeight: 1.4, textAlign: 'center' }}>{d.stop}</div>
             </foreignObject>
 
             {/* Horizontal arrow from decision → stop */}
@@ -191,9 +192,9 @@ function DecisionTreeSVG() {
       })}
 
       {/* Final EXECUTE box */}
-      <rect x="0" y={finalY} width={DW} height="80" rx="6" fill="#0a1208" stroke={LIME} strokeWidth="2" />
+      <rect x="0" y={finalY} width={DW} height="80" rx="6" fill={THEME.colors.positiveSurface} stroke={LIME} strokeWidth="2" />
       <text x={DW / 2} y={finalY + 30} textAnchor="middle" fill={LIME} fontSize="16" fontWeight="900" letterSpacing="0.14em">▼ EXECUTE</text>
-      <text x={DW / 2} y={finalY + 55} textAnchor="middle" fill="#88aa70" fontSize="11">Go to broker. Buy at ask. Set stop immediately.</text>
+      <text x={DW / 2} y={finalY + 55} textAnchor="middle" fill={THEME.colors.positive} fontSize="11">Go to broker. Buy at ask. Set stop immediately.</text>
     </svg>
   )
 }
@@ -252,38 +253,38 @@ export default function Playbook({ trades, settings, lockedOut, prep }) {
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div className="pb-root" style={{ fontFamily: SANS, color: '#d0d0d0', maxWidth: 820, margin: '0 auto', paddingBottom: 80 }}>
+    <div className="pb-root" style={{ fontFamily: SANS, color: THEME.colors.text, maxWidth: 820, margin: '0 auto', paddingBottom: 80 }}>
       <style>{`
-        .pb-h1 { font-family: ${MONO}; font-weight: 900; font-size: 28px; letter-spacing: -0.02em; color: #e8e8e8; margin: 0; }
-        .pb-h2 { font-family: ${MONO}; font-weight: 800; font-size: 18px; letter-spacing: 0.18em; color: #aaa; text-transform: uppercase; margin: 0 0 6px; }
-        .pb-sub { font-family: ${MONO}; font-size: 12px; color: #555; letter-spacing: 0.06em; margin: 0 0 28px; }
+        .pb-h1 { font-family: ${MONO}; font-weight: 900; font-size: 28px; letter-spacing: -0.02em; color: ${THEME.colors.text}; margin: 0; }
+        .pb-h2 { font-family: ${MONO}; font-weight: 800; font-size: 18px; letter-spacing: 0.18em; color: ${THEME.colors.secondary}; text-transform: uppercase; margin: 0 0 6px; }
+        .pb-sub { font-family: ${MONO}; font-size: 12px; color: ${THEME.colors.border}; letter-spacing: 0.06em; margin: 0 0 28px; }
         .pb-section { margin: 64px 0; }
         .pb-rule { display: flex; gap: 16px; align-items: baseline; padding: 14px 18px; border-left: 3px solid transparent; transition: background 0.2s; }
-        .pb-rule:hover { background: #0a0a0a; }
-        .pb-rule.hard { border-color: #FF4D4D55; }
-        .pb-rule.filter { border-color: #FFD16655; }
-        .pb-rule-n { font-family: ${MONO}; font-weight: 900; color: #444; min-width: 28px; font-size: 14px; }
-        .pb-rule-t { font-family: ${MONO}; color: #cfcfcf; font-size: 14px; line-height: 1.6; }
-        .pb-block { padding: 18px 0 22px 24px; border-left: 1px solid #1e1e1e; position: relative; }
-        .pb-block::before { content: ''; position: absolute; left: -5px; top: 24px; width: 9px; height: 9px; border-radius: 50%; background: #2a2a2a; border: 2px solid #0a0a0a; }
-        .pb-time { font-family: ${MONO}; font-weight: 800; font-size: 11px; color: #888; letter-spacing: 0.14em; margin-bottom: 10px; }
+        .pb-rule:hover { background: ${THEME.colors.background}; }
+        .pb-rule.hard { border-color: ${THEME.colors.negative + '55'}; }
+        .pb-rule.filter { border-color: ${THEME.colors.caution + '55'}; }
+        .pb-rule-n { font-family: ${MONO}; font-weight: 900; color: ${THEME.colors.border}; min-width: 28px; font-size: 14px; }
+        .pb-rule-t { font-family: ${MONO}; color: ${THEME.colors.text}; font-size: 14px; line-height: 1.6; }
+        .pb-block { padding: 18px 0 22px 24px; border-left: 1px solid ${THEME.colors.surface}; position: relative; }
+        .pb-block::before { content: ''; position: absolute; left: -5px; top: 24px; width: 9px; height: 9px; border-radius: 50%; background: ${THEME.colors.border}; border: 2px solid ${THEME.colors.background}; }
+        .pb-time { font-family: ${MONO}; font-weight: 800; font-size: 11px; color: ${THEME.colors.secondary}; letter-spacing: 0.14em; margin-bottom: 10px; }
         .pb-step { display: flex; align-items: flex-start; gap: 10px; padding: 6px 0; cursor: pointer; }
-        .pb-step:hover .pb-step-t { color: #e8e8e8; }
-        .pb-cb { width: 14px; height: 14px; border-radius: 3px; border: 1px solid #444; flex-shrink: 0; margin-top: 3px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+        .pb-step:hover .pb-step-t { color: ${THEME.colors.text}; }
+        .pb-cb { width: 14px; height: 14px; border-radius: 3px; border: 1px solid ${THEME.colors.border}; flex-shrink: 0; margin-top: 3px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
         .pb-cb.on { background: ${LIME}; border-color: ${LIME}; }
-        .pb-cb.on::after { content: '✓'; color: #000; font-size: 10px; font-weight: 900; }
-        .pb-step-t { font-family: ${MONO}; font-size: 13px; color: #888; line-height: 1.6; transition: color 0.15s; }
-        .pb-step.done .pb-step-t { color: #444; text-decoration: line-through; }
-        .pb-quote { font-family: ${SANS}; font-style: italic; font-size: 20px; line-height: 1.65; color: #c8c8c8; text-align: center; padding: 30px 28px; border: 1px solid ${LIME}33; border-radius: 6px; background: linear-gradient(180deg, #0a0e08 0%, #0a0a0a 100%); }
-        .pb-question { font-family: ${SANS}; font-size: 22px; line-height: 1.6; color: #e8e8e8; text-align: center; padding: 44px 32px; border: 1px solid ${LIME}55; border-radius: 8px; background: #0a0f08; box-shadow: 0 0 32px ${LIME}11; }
+        .pb-cb.on::after { content: '✓'; color: ${THEME.colors.background}; font-size: 10px; font-weight: 900; }
+        .pb-step-t { font-family: ${MONO}; font-size: 13px; color: ${THEME.colors.secondary}; line-height: 1.6; transition: color 0.15s; }
+        .pb-step.done .pb-step-t { color: ${THEME.colors.border}; text-decoration: line-through; }
+        .pb-quote { font-family: ${SANS}; font-style: italic; font-size: 20px; line-height: 1.65; color: ${THEME.colors.secondary}; text-align: center; padding: 30px 28px; border: 1px solid ${LIME}33; border-radius: 6px; background: linear-gradient(180deg, ${THEME.colors.positiveSurface} 0%, ${THEME.colors.background} 100%); }
+        .pb-question { font-family: ${SANS}; font-size: 22px; line-height: 1.6; color: ${THEME.colors.text}; text-align: center; padding: 44px 32px; border: 1px solid ${LIME}55; border-radius: 8px; background: ${THEME.colors.positiveSurface}; box-shadow: 0 0 32px ${LIME}11; }
         .pb-question em { color: ${LIME}; font-style: normal; font-weight: 700; }
         .pb-ref-col { padding: 14px 0; }
-        .pb-ref-col h4 { font-family: ${MONO}; font-size: 10px; letter-spacing: 0.18em; color: #666; font-weight: 700; margin: 0 0 14px; text-transform: uppercase; }
+        .pb-ref-col h4 { font-family: ${MONO}; font-size: 10px; letter-spacing: 0.18em; color: ${THEME.colors.secondary}; font-weight: 700; margin: 0 0 14px; text-transform: uppercase; }
         .pb-ref-row { display: flex; justify-content: space-between; padding: 5px 0; font-family: ${MONO}; font-size: 12px; }
-        .pb-ref-l { color: #cfcfcf; }
-        .pb-ref-r { color: #666; }
-        .pb-emergency { display: grid; gap: 6px; padding: 22px 24px; border-top: 1px solid #2a0a0a; background: #0a0606; border-radius: 6px; margin-top: 64px; }
-        .pb-emer-line { font-family: ${MONO}; font-size: 12px; color: #aa5555; letter-spacing: 0.04em; }
+        .pb-ref-l { color: ${THEME.colors.text}; }
+        .pb-ref-r { color: ${THEME.colors.secondary}; }
+        .pb-emergency { display: grid; gap: 6px; padding: 22px 24px; border-top: 1px solid ${THEME.colors.negativeSurface}; background: ${THEME.colors.negativeSurface}; border-radius: 6px; margin-top: 64px; }
+        .pb-emer-line { font-family: ${MONO}; font-size: 12px; color: ${THEME.colors.negative}; letter-spacing: 0.04em; }
         .pb-emer-line strong { color: ${RED}; font-weight: 700; }
         @media (max-width: 720px) {
           .pb-ref-grid { grid-template-columns: 1fr !important; gap: 28px !important; }
@@ -292,7 +293,7 @@ export default function Playbook({ trades, settings, lockedOut, prep }) {
       `}</style>
 
       {/* ── Sub-tab switcher ────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 36, borderBottom: '1px solid #161616' }}>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 36, borderBottom: `1px solid ${THEME.colors.surface}` }}>
         {SUBTABS.map(t => {
           const active = subTab === t.id
           return (
@@ -303,7 +304,7 @@ export default function Playbook({ trades, settings, lockedOut, prep }) {
                 background: 'transparent',
                 border: 'none',
                 borderBottom: active ? `2px solid ${LIME}` : '2px solid transparent',
-                color: active ? LIME : '#555',
+                color: active ? LIME : THEME.colors.secondary,
                 fontFamily: MONO,
                 fontSize: 11,
                 fontWeight: active ? 700 : 500,
@@ -323,19 +324,19 @@ export default function Playbook({ trades, settings, lockedOut, prep }) {
       {/* ── PROCESS sub-tab: status + process timeline + quick reference ───── */}
       {subTab === 'process' && (
         <>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16, padding: '14px 18px', background: '#0c0c0c', border: `1px solid ${BORDER}`, borderRadius: 5, marginBottom: 40 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16, padding: '14px 18px', background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 5, marginBottom: 40 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-              <span style={{ fontFamily: MONO, fontSize: 11, color: '#888', letterSpacing: '0.04em' }}>{dateLabel}</span>
+              <span style={{ fontFamily: MONO, fontSize: 11, color: THEME.colors.secondary, letterSpacing: '0.04em' }}>{dateLabel}</span>
               <span style={{ fontFamily: MONO, fontSize: 10, color: LIME, letterSpacing: '0.14em', border: `1px solid ${LIME}33`, borderRadius: 3, padding: '2px 8px' }}>{sessionLabel}</span>
             </div>
             <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap', fontFamily: MONO, fontSize: 11 }}>
-              <span style={{ color: '#666' }}>Trades: <strong style={{ color: maxTrades && tt.length >= maxTrades ? RED : '#e8e8e8' }}>{tt.length}{maxTrades ? `/${maxTrades}` : ''}</strong></span>
-              <span style={{ color: '#666' }}>P&L: <strong style={{ color: todayPnl >= 0 ? LIME : RED }}>{fmtD(todayPnl)}</strong></span>
-              <span style={{ color: '#666' }}>Loss remaining: <strong style={{ color: lossRemaining === 0 && settings.dailyLossLimit > 0 ? RED : '#e8e8e8' }}>{settings.dailyLossLimit > 0 ? fmtU(lossRemaining) : '—'}</strong></span>
+              <span style={{ color: THEME.colors.secondary }}>Trades: <strong style={{ color: maxTrades && tt.length >= maxTrades ? RED : THEME.colors.text }}>{tt.length}{maxTrades ? `/${maxTrades}` : ''}</strong></span>
+              <span style={{ color: THEME.colors.secondary }}>P&L: <strong style={{ color: todayPnl >= 0 ? LIME : RED }}>{fmtD(todayPnl)}</strong></span>
+              <span style={{ color: THEME.colors.secondary }}>Loss remaining: <strong style={{ color: lossRemaining === 0 && settings.dailyLossLimit > 0 ? RED : THEME.colors.text }}>{settings.dailyLossLimit > 0 ? fmtU(lossRemaining) : '—'}</strong></span>
               {lockedOut && <span style={{ color: RED, fontWeight: 700, letterSpacing: '0.1em' }}>LOCKED</span>}
             </div>
           </div>
-          <div style={{ fontFamily: MONO, fontSize: 12, color: '#666', marginBottom: 56, padding: '0 4px', lineHeight: 1.6, fontStyle: 'italic' }}>
+          <div style={{ fontFamily: MONO, fontSize: 12, color: THEME.colors.secondary, marginBottom: 56, padding: '0 4px', lineHeight: 1.6, fontStyle: 'italic' }}>
             Right now: {rightNow}
           </div>
 
@@ -344,8 +345,8 @@ export default function Playbook({ trades, settings, lockedOut, prep }) {
             <p className="pb-sub">Follow this in order. Every day.</p>
 
             <div style={{ marginBottom: 18, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontFamily: MONO, fontSize: 11, color: '#888' }}>Morning routine: <strong style={{ color: morningDone === morningTotal && morningTotal > 0 ? LIME : '#e8e8e8' }}>{morningDone}/{morningTotal}</strong> complete</span>
-              <div style={{ width: 200, height: 4, background: '#1a1a1a', borderRadius: 2, overflow: 'hidden' }}>
+              <span style={{ fontFamily: MONO, fontSize: 11, color: THEME.colors.secondary }}>Morning routine: <strong style={{ color: morningDone === morningTotal && morningTotal > 0 ? LIME : THEME.colors.text }}>{morningDone}/{morningTotal}</strong> complete</span>
+              <div style={{ width: 200, height: 4, background: THEME.colors.surface, borderRadius: 2, overflow: 'hidden' }}>
                 <div style={{ height: '100%', width: `${morningTotal > 0 ? (morningDone / morningTotal) * 100 : 0}%`, background: morningDone === morningTotal && morningTotal > 0 ? LIME : YELLOW, transition: 'width 0.3s' }} />
               </div>
             </div>
@@ -353,7 +354,7 @@ export default function Playbook({ trades, settings, lockedOut, prep }) {
             <div>
               {PROCESS_BLOCKS.map((block, bi) => (
                 <div key={bi} className="pb-block">
-                  <div className="pb-time" style={{ color: block.morning ? LIME : '#888' }}>{block.time}</div>
+                  <div className="pb-time" style={{ color: block.morning ? LIME : THEME.colors.secondary }}>{block.time}</div>
                   {block.steps.map((step, si) => {
                     const key = `${bi}_${si}`
                     const done = !!checks[key]
@@ -410,13 +411,13 @@ export default function Playbook({ trades, settings, lockedOut, prep }) {
               Am I taking this because the <em>SYSTEM</em> says to,<br />
               or because I <em>WANT</em> to?<br />
               <br />
-              <span style={{ fontSize: 16, color: '#999' }}>If the answer is "because I want to" — you don't take it.</span>
+              <span style={{ fontSize: 16, color: THEME.colors.secondary }}>If the answer is "because I want to" — you don't take it.</span>
             </div>
           </section>
 
           <section className="pb-section">
             <div className="pb-quote">"{quote}"</div>
-            <div style={{ textAlign: 'center', fontFamily: MONO, fontSize: 10, color: '#444', marginTop: 12, letterSpacing: '0.16em' }}>{day.toUpperCase()}</div>
+            <div style={{ textAlign: 'center', fontFamily: MONO, fontSize: 10, color: THEME.colors.secondary, marginTop: 12, letterSpacing: '0.16em' }}>{day.toUpperCase()}</div>
           </section>
 
           <div className="pb-emergency">

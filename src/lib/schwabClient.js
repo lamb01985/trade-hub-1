@@ -1,9 +1,10 @@
+import { THEME } from './theme.js'
 // Pure client-side Schwab helpers. No network calls, no secrets, no tokens.
 // Everything that talks to Schwab now goes through /api/schwab/* via the
 // useSchwab hook. This file keeps the constants and transforms the UI relies
 // on, so we don't pull them through the hook for no reason.
 
-export const SCHWAB_BLUE = '#3B82F6'
+export const SCHWAB_BLUE = THEME.colors.brokerSurface
 
 // Schwab's web Trade page (no documented deep-link params, user enters legs).
 export const SCHWAB_TRADE_URL = 'https://client.schwab.com/app/trade/tom/#/trade'

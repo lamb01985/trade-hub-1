@@ -1,3 +1,4 @@
+import { THEME } from '../lib/theme.js'
 import { isLocalServicePreview } from '../lib/localPreview.js'
 import { useMemo, useState, useEffect } from 'react'
 import { Card, SLabel, Heading, Pill, Btn } from './ui.jsx'
@@ -31,7 +32,7 @@ function EventBadge({ event, compact = false }) {
     <div style={{ background: `${color}15`, border: `1px solid ${color}55`, borderRadius: 3, padding: compact ? '4px 6px' : '6px 9px', display: 'flex', flexDirection: 'column', gap: 2 }}>
       <div style={{ fontSize: 9, fontFamily: MONO, color, fontWeight: 700, letterSpacing: '0.04em', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{text}</div>
       {!compact && (
-        <div style={{ fontSize: 8, fontFamily: MONO, color: '#666' }}>
+        <div style={{ fontSize: 8, fontFamily: MONO, color: THEME.colors.secondary }}>
           {event.time ? `${event.time} CT` : ''}
           {event.est ? ` · est ${event.est}` : ''}
         </div>
@@ -56,22 +57,22 @@ function WeekView({ events }) {
         const past = isPast(dateStr)
         return (
           <div key={dateStr} style={{
-            background: today ? '#0a1208' : PANEL,
+            background: today ? THEME.colors.positiveSurface : PANEL,
             border: `1px solid ${today ? LIME + '55' : BORDER}`,
             borderRadius: 5, padding: '12px 12px', minHeight: 220,
             opacity: past ? 0.45 : 1,
           }}>
             <div style={{ display: 'flex', flexDirection: 'column', marginBottom: 10 }}>
-              <span style={{ fontSize: 9, fontFamily: MONO, color: today ? LIME : '#555', textTransform: 'uppercase', letterSpacing: '0.14em' }}>
+              <span style={{ fontSize: 9, fontFamily: MONO, color: today ? LIME : THEME.colors.secondary, textTransform: 'uppercase', letterSpacing: '0.14em' }}>
                 {d.toLocaleDateString('en-US', { weekday: 'short' })}
               </span>
-              <span style={{ fontSize: 18, fontFamily: MONO, fontWeight: 900, color: today ? LIME : '#aaa' }}>
+              <span style={{ fontSize: 18, fontFamily: MONO, fontWeight: 900, color: today ? LIME : THEME.colors.secondary }}>
                 {d.getDate()}
               </span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
               {dayEvents.length === 0 ? (
-                <span style={{ fontSize: 9, fontFamily: MONO, color: '#2a2a2a' }}>—</span>
+                <span style={{ fontSize: 9, fontFamily: MONO, color: THEME.colors.secondary }}>—</span>
               ) : (
                 dayEvents.map((e, i) => <EventBadge key={i} event={e} />)
               )}
@@ -93,7 +94,7 @@ function ListView({ events }) {
     return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]))
   }, [events])
 
-  if (!grouped.length) return <div style={{ fontSize: 11, fontFamily: MONO, color: '#444' }}>No events in the next 14 days.</div>
+  if (!grouped.length) return <div style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary }}>No events in the next 14 days.</div>
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -102,21 +103,21 @@ function ListView({ events }) {
         const today = isToday(dateStr)
         return (
           <div key={dateStr} style={{ background: PANEL, border: `1px solid ${today ? LIME + '44' : BORDER}`, borderRadius: 5, overflow: 'hidden' }}>
-            <div style={{ padding: '10px 16px', background: today ? '#0a1208' : '#0a0a0a', borderBottom: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: 11, fontFamily: MONO, fontWeight: 700, color: today ? LIME : '#aaa', letterSpacing: '0.04em' }}>{fmtDateLong(d)}</span>
+            <div style={{ padding: '10px 16px', background: today ? THEME.colors.positiveSurface : THEME.colors.background, borderBottom: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 11, fontFamily: MONO, fontWeight: 700, color: today ? LIME : THEME.colors.secondary, letterSpacing: '0.04em' }}>{fmtDateLong(d)}</span>
               {today && <span style={{ fontSize: 8, color: LIME, fontFamily: MONO, letterSpacing: '0.14em', border: `1px solid ${LIME}55`, borderRadius: 3, padding: '1px 6px' }}>TODAY</span>}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               {dayEvents.map((e, i) => {
                 const color = colorForEvent(e)
                 return (
-                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '70px 90px 1fr 130px', gap: 12, padding: '11px 16px', borderTop: i > 0 ? '1px solid #0d0d0d' : 'none', alignItems: 'center' }}>
-                    <span style={{ fontSize: 11, fontFamily: MONO, color: '#888', fontWeight: 700 }}>{e.time || '—'} CT</span>
+                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '70px 90px 1fr 130px', gap: 12, padding: '11px 16px', borderTop: i > 0 ? `1px solid ${THEME.colors.surface}` : 'none', alignItems: 'center' }}>
+                    <span style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary, fontWeight: 700 }}>{e.time || '—'} CT</span>
                     <span style={{ fontSize: 9, fontFamily: MONO, color, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
                       {e.type === 'opex' && e.tripleWitching ? 'TRIPLE WITCH' : e.type === 'opex' ? 'OPEX' : e.type === 'fomc' ? 'FOMC' : e.type === 'earnings' ? 'EARNINGS' : e.impact?.toUpperCase()}
                     </span>
-                    <span style={{ fontSize: 12, fontFamily: MONO, color: '#e8e8e8' }}>{e.name}</span>
-                    <span style={{ fontSize: 10, fontFamily: MONO, color: '#666', textAlign: 'right' }}>
+                    <span style={{ fontSize: 12, fontFamily: MONO, color: THEME.colors.text }}>{e.name}</span>
+                    <span style={{ fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary, textAlign: 'right' }}>
                       {e.ticker && e.bmo ? e.bmo : ''}{e.est ? ` · est ${e.est}` : ''}{e.details ? e.details : ''}
                     </span>
                   </div>
@@ -146,12 +147,12 @@ function MonthView({ events, selectedDate, onSelectDate }) {
     <div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 6 }}>
         {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => (
-          <div key={d} style={{ fontSize: 9, fontFamily: MONO, color: '#444', textAlign: 'center', letterSpacing: '0.14em', textTransform: 'uppercase' }}>{d}</div>
+          <div key={d} style={{ fontSize: 9, fontFamily: MONO, color: THEME.colors.secondary, textAlign: 'center', letterSpacing: '0.14em', textTransform: 'uppercase' }}>{d}</div>
         ))}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
         {cells.map((d, i) => {
-          if (!d) return <div key={i} style={{ minHeight: 64, background: '#070707', borderRadius: 3 }} />
+          if (!d) return <div key={i} style={{ minHeight: 64, background: THEME.colors.surface, borderRadius: 3 }} />
           const dateStr = ymd(d)
           const dayEvents = eventsOn(events, dateStr)
           const dots = [...new Set(dayEvents.map(e => colorForEvent(e)))].slice(0, 5)
@@ -160,13 +161,13 @@ function MonthView({ events, selectedDate, onSelectDate }) {
           const isWeekend = d.getDay() === 0 || d.getDay() === 6
           return (
             <button key={i} onClick={() => onSelectDate(dateStr === selectedDate ? null : dateStr)} style={{
-              background: selected ? '#0d1408' : today ? '#0a1208' : isWeekend ? '#080808' : PANEL,
+              background: selected ? THEME.colors.positiveSurface : today ? THEME.colors.positiveSurface : isWeekend ? THEME.colors.background : PANEL,
               border: `1px solid ${selected ? LIME : today ? LIME + '55' : BORDER}`,
               borderRadius: 3, padding: '8px 8px', minHeight: 64, cursor: 'pointer',
               display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
               fontFamily: MONO, textAlign: 'left',
             }}>
-              <span style={{ fontSize: 11, fontWeight: today ? 900 : 600, color: today ? LIME : isWeekend ? '#444' : '#aaa' }}>{d.getDate()}</span>
+              <span style={{ fontSize: 11, fontWeight: today ? 900 : 600, color: today ? LIME : isWeekend ? THEME.colors.secondary : THEME.colors.secondary }}>{d.getDate()}</span>
               <div style={{ display: 'flex', gap: 3 }}>
                 {dots.map((c, j) => <div key={j} style={{ width: 5, height: 5, borderRadius: '50%', background: c }} />)}
               </div>
@@ -235,15 +236,15 @@ function SmartWarnings({ events }) {
 
 function OpexEducation({ onDismiss }) {
   return (
-    <div style={{ background: '#0a0d12', border: `1px solid ${BLUE}33`, borderRadius: 5, padding: '16px 20px' }}>
+    <div style={{ background: THEME.colors.surface, border: `1px solid ${BLUE}33`, borderRadius: 5, padding: '16px 20px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
         <SLabel style={{ marginBottom: 0 }}>What is OPEX?</SLabel>
-        <button onClick={onDismiss} style={{ background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', fontFamily: MONO, fontSize: 10, letterSpacing: '0.1em' }}>DISMISS ✕</button>
+        <button onClick={onDismiss} style={{ background: 'transparent', border: 'none', color: THEME.colors.secondary, cursor: 'pointer', fontFamily: MONO, fontSize: 10, letterSpacing: '0.1em' }}>DISMISS ✕</button>
       </div>
-      <div style={{ fontSize: 11, fontFamily: MONO, color: '#888', lineHeight: 1.8 }}>
-        Options Expiration (OPEX) occurs every Friday. <strong style={{ color: '#aaa' }}>Weekly OPEX</strong> affects 0DTE options directly — your contracts expire today.
+      <div style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary, lineHeight: 1.8 }}>
+        Options Expiration (OPEX) occurs every Friday. <strong style={{ color: THEME.colors.secondary }}>Weekly OPEX</strong> affects 0DTE options directly — your contracts expire today.
         <br /><br />
-        <strong style={{ color: '#aaa' }}>Monthly OPEX</strong> (3rd Friday) is larger — more contracts expire, more hedging activity, higher volatility.
+        <strong style={{ color: THEME.colors.secondary }}>Monthly OPEX</strong> (3rd Friday) is larger — more contracts expire, more hedging activity, higher volatility.
         <br /><br />
         <strong style={{ color: ORANGE }}>Triple Witching</strong> (quarterly) = stocks, index futures, AND options all expire simultaneously. Highest volume and most volatile day of the quarter.
         <br /><br />
@@ -258,15 +259,15 @@ function OpexEducation({ onDismiss }) {
 function SectorHeatTile({ row, onClick }) {
   const c = tierColor(row.tier)
   const isStrong = row.tier === 'strong-in' || row.tier === 'strong-out'
-  const bg = row.tier === 'strong-in' ? '#0a1408' : row.tier === 'mod-in' ? '#0a0e08' : row.tier === 'strong-out' ? '#150505' : row.tier === 'mod-out' ? '#110808' : '#0a0a0a'
+  const bg = row.tier === 'strong-in' ? THEME.colors.positiveSurface : row.tier === 'mod-in' ? THEME.colors.positiveSurface : row.tier === 'strong-out' ? THEME.colors.negativeSurface : row.tier === 'mod-out' ? THEME.colors.negativeSurface : THEME.colors.background
   const todayPct = row.metrics?.todayChangePct
   return (
     <div onClick={onClick} style={{ background: bg, border: `1px solid ${c}55`, borderRadius: 4, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 4, cursor: 'pointer', minHeight: 86 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <span style={{ fontSize: 11, fontFamily: MONO, fontWeight: 900, color: '#e8e8e8', letterSpacing: '0.04em' }}>{row.short}</span>
-        <span style={{ fontSize: 9, fontFamily: MONO, color: '#555' }}>{row.etf}</span>
+        <span style={{ fontSize: 11, fontFamily: MONO, fontWeight: 900, color: THEME.colors.text, letterSpacing: '0.04em' }}>{row.short}</span>
+        <span style={{ fontSize: 9, fontFamily: MONO, color: THEME.colors.secondary }}>{row.etf}</span>
       </div>
-      <div style={{ fontSize: 14, fontFamily: MONO, fontWeight: 700, color: todayPct == null ? '#666' : todayPct >= 0 ? LIME : RED }}>
+      <div style={{ fontSize: 14, fontFamily: MONO, fontWeight: 700, color: todayPct == null ? THEME.colors.secondary : todayPct >= 0 ? LIME : RED }}>
         {todayPct == null ? '—' : `${todayPct >= 0 ? '+' : ''}${todayPct.toFixed(2)}%`}
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -321,7 +322,7 @@ function SectorRotationView({ apiKey }) {
         <SLabel style={{ marginBottom: 0 }}>Sector Rotation Heat Map</SLabel>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {data?.fetchedAt && (
-            <span style={{ fontSize: 10, fontFamily: MONO, color: '#444' }}>
+            <span style={{ fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary }}>
               {isWeekend ? 'Weekend — showing Friday close · ' : ''}Updated {new Date(data.fetchedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
             </span>
           )}
@@ -329,7 +330,7 @@ function SectorRotationView({ apiKey }) {
         </div>
       </div>
 
-      {error && <div style={{ background: '#150505', border: `1px solid ${RED}55`, borderRadius: 4, padding: '12px 16px', fontSize: 11, fontFamily: MONO, color: RED }}>{error}</div>}
+      {error && <div style={{ background: THEME.colors.negativeSurface, border: `1px solid ${RED}55`, borderRadius: 4, padding: '12px 16px', fontSize: 11, fontFamily: MONO, color: RED }}>{error}</div>}
 
       {data?.rows?.length ? (
         <>
@@ -338,36 +339,36 @@ function SectorRotationView({ apiKey }) {
             {data.rows.map(r => <SectorHeatTile key={r.etf} row={r} onClick={() => {}} />)}
             {data.spy && (() => {
               const pct = data.spy.todayChangePct
-              const c = pct == null ? '#666' : pct >= 0 ? LIME : RED
+              const c = pct == null ? THEME.colors.secondary : pct >= 0 ? LIME : RED
               return (
-                <div style={{ background: '#0a0a0a', border: '1px solid #1a2a1a', borderRadius: 4, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 4, minHeight: 86 }}>
+                <div style={{ background: THEME.colors.background, border: `1px solid ${THEME.colors.positiveSurface}`, borderRadius: 4, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 4, minHeight: 86 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                    <span style={{ fontSize: 11, fontFamily: MONO, fontWeight: 900, color: '#aaa', letterSpacing: '0.04em' }}>SPY</span>
-                    <span style={{ fontSize: 9, fontFamily: MONO, color: '#444' }}>BENCH</span>
+                    <span style={{ fontSize: 11, fontFamily: MONO, fontWeight: 900, color: THEME.colors.secondary, letterSpacing: '0.04em' }}>SPY</span>
+                    <span style={{ fontSize: 9, fontFamily: MONO, color: THEME.colors.secondary }}>BENCH</span>
                   </div>
                   <div style={{ fontSize: 14, fontFamily: MONO, fontWeight: 700, color: c }}>{pct == null ? '—' : `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`}</div>
-                  <div style={{ fontSize: 10, fontFamily: MONO, color: '#444' }}>5d {data.spy.fiveDayReturn != null ? `${data.spy.fiveDayReturn >= 0 ? '+' : ''}${data.spy.fiveDayReturn.toFixed(1)}%` : '—'}</div>
+                  <div style={{ fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary }}>5d {data.spy.fiveDayReturn != null ? `${data.spy.fiveDayReturn >= 0 ? '+' : ''}${data.spy.fiveDayReturn.toFixed(1)}%` : '—'}</div>
                 </div>
               )
             })()}
           </div>
 
           {/* Ranked table */}
-          <div style={{ background: '#090909', border: `1px solid ${BORDER}`, borderRadius: 5, overflow: 'hidden' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 60px 70px 70px 80px 60px 60px 80px', gap: 8, padding: '9px 14px', borderBottom: '1px solid #111', background: '#0a0a0a' }}>
-              {['Sector', 'ETF', 'Today', '5-Day', 'RS / SPY', 'RVOL', 'Score', 'Flow'].map(h => <span key={h} style={{ fontSize: 9, letterSpacing: '0.1em', color: '#333', textTransform: 'uppercase', fontFamily: MONO }}>{h}</span>)}
+          <div style={{ background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 5, overflow: 'hidden' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 60px 70px 70px 80px 60px 60px 80px', gap: 8, padding: '9px 14px', borderBottom: `1px solid ${THEME.colors.surface}`, background: THEME.colors.background }}>
+              {['Sector', 'ETF', 'Today', '5-Day', 'RS / SPY', 'RVOL', 'Score', 'Flow'].map(h => <span key={h} style={{ fontSize: 9, letterSpacing: '0.1em', color: THEME.colors.secondary, textTransform: 'uppercase', fontFamily: MONO }}>{h}</span>)}
             </div>
             {data.rows.map(r => {
               const m = r.metrics
               const c = tierColor(r.tier)
               return (
-                <div key={r.etf} style={{ display: 'grid', gridTemplateColumns: '1.4fr 60px 70px 70px 80px 60px 60px 80px', gap: 8, padding: '10px 14px', alignItems: 'center', fontFamily: MONO, fontSize: 11, borderBottom: '1px solid #0d0d0d', borderLeft: `3px solid ${c}` }}>
-                  <span style={{ color: '#e8e8e8', fontWeight: 700 }}>{r.name}</span>
-                  <span style={{ color: '#888' }}>{r.etf}</span>
-                  <span style={{ color: m?.todayChangePct == null ? '#444' : m.todayChangePct >= 0 ? LIME : RED, fontWeight: 700 }}>{m?.todayChangePct == null ? '—' : `${m.todayChangePct >= 0 ? '+' : ''}${m.todayChangePct.toFixed(2)}%`}</span>
-                  <span style={{ color: m?.fiveDayReturn == null ? '#444' : m.fiveDayReturn >= 0 ? LIME : RED }}>{m?.fiveDayReturn == null ? '—' : `${m.fiveDayReturn >= 0 ? '+' : ''}${m.fiveDayReturn.toFixed(1)}%`}</span>
-                  <span style={{ color: m?.rsToday == null ? '#444' : m.rsToday > 1 ? LIME : RED }}>{m?.rsToday == null ? '—' : m.rsToday.toFixed(2)}</span>
-                  <span style={{ color: m?.rvol == null ? '#444' : m.rvol > 1.5 ? LIME : m.rvol > 1 ? YELLOW : '#888' }}>{m?.rvol == null ? '—' : `${m.rvol.toFixed(2)}x`}</span>
+                <div key={r.etf} style={{ display: 'grid', gridTemplateColumns: '1.4fr 60px 70px 70px 80px 60px 60px 80px', gap: 8, padding: '10px 14px', alignItems: 'center', fontFamily: MONO, fontSize: 11, borderBottom: `1px solid ${THEME.colors.surface}`, borderLeft: `3px solid ${c}` }}>
+                  <span style={{ color: THEME.colors.text, fontWeight: 700 }}>{r.name}</span>
+                  <span style={{ color: THEME.colors.secondary }}>{r.etf}</span>
+                  <span style={{ color: m?.todayChangePct == null ? THEME.colors.secondary : m.todayChangePct >= 0 ? LIME : RED, fontWeight: 700 }}>{m?.todayChangePct == null ? '—' : `${m.todayChangePct >= 0 ? '+' : ''}${m.todayChangePct.toFixed(2)}%`}</span>
+                  <span style={{ color: m?.fiveDayReturn == null ? THEME.colors.secondary : m.fiveDayReturn >= 0 ? LIME : RED }}>{m?.fiveDayReturn == null ? '—' : `${m.fiveDayReturn >= 0 ? '+' : ''}${m.fiveDayReturn.toFixed(1)}%`}</span>
+                  <span style={{ color: m?.rsToday == null ? THEME.colors.secondary : m.rsToday > 1 ? LIME : RED }}>{m?.rsToday == null ? '—' : m.rsToday.toFixed(2)}</span>
+                  <span style={{ color: m?.rvol == null ? THEME.colors.secondary : m.rvol > 1.5 ? LIME : m.rvol > 1 ? YELLOW : THEME.colors.secondary }}>{m?.rvol == null ? '—' : `${m.rvol.toFixed(2)}x`}</span>
                   <span style={{ color: c, fontWeight: 900 }}>{r.score >= 0 ? '+' : ''}{r.score}</span>
                   <span style={{ color: c, fontWeight: 700, letterSpacing: '0.08em' }}>{r.arrow}</span>
                 </div>
@@ -381,20 +382,20 @@ function SectorRotationView({ apiKey }) {
             {top.length === 2 && (
               <div style={{ fontSize: 11, fontFamily: MONO, color: LIME, lineHeight: 1.7 }}>
                 <strong style={{ color: LIME }}>MONEY FLOWING INTO:</strong> {top.map(t => t.name).join(', ')}<br />
-                <span style={{ color: '#7a9a6a' }}>Bias: long setups have tailwind in these names. Tickers: {SECTORS.filter(s => top.map(t => t.etf).includes(s.etf)).map(s => s.etf).join(', ')}.</span>
+                <span style={{ color: THEME.colors.positive }}>Bias: long setups have tailwind in these names. Tickers: {SECTORS.filter(s => top.map(t => t.etf).includes(s.etf)).map(s => s.etf).join(', ')}.</span>
               </div>
             )}
             {bottom.length === 2 && bottom[0].score < 0 && (
               <div style={{ fontSize: 11, fontFamily: MONO, color: RED, lineHeight: 1.7 }}>
                 <strong style={{ color: RED }}>MONEY FLOWING OUT OF:</strong> {bottom.map(t => t.name).join(', ')}<br />
-                <span style={{ color: '#9a6a6a' }}>Bias: put setups favored. Check Short Thesis tab for candidates.</span>
+                <span style={{ color: THEME.colors.negative }}>Bias: put setups favored. Check Short Thesis tab for candidates.</span>
               </div>
             )}
           </div>
         </>
       ) : (
         !loading && !error && (
-          <div style={{ fontSize: 11, fontFamily: MONO, color: '#444', padding: '20px 0' }}>No data loaded yet.</div>
+          <div style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary, padding: '20px 0' }}>No data loaded yet.</div>
         )
       )}
     </div>
@@ -481,28 +482,28 @@ export default function CalendarTab({ putTheses = {}, apiKey }) {
 
       {isLocalServicePreview() && <p role="status" style={{color:YELLOW,fontSize:11}}>Local review: sector rotation needs server-side Massive access and is unavailable here. Calendar dates still render; Nasdaq earnings use a public proxy, not fixtures.</p>}
       {nasdaqStatus === 'partial' && <p role="status" style={{color:YELLOW,fontSize:11}}>Earnings coverage incomplete: {nasdaqCoverage.successful} of {nasdaqCoverage.requested} dates succeeded; {nasdaqCoverage.failed} failed. Visible earnings do not represent full coverage.</p>}
-      {nasdaqStatus === 'loading' && <p role="status" style={{color:'#aaa',fontSize:11}}>Loading public earnings feed...</p>}
+      {nasdaqStatus === 'loading' && <p role="status" style={{color:THEME.colors.secondary,fontSize:11}}>Loading public earnings feed...</p>}
       {nasdaqStatus === 'error' && (
-        <div style={{ fontSize: 10, fontFamily: MONO, color: YELLOW, background: '#1a1208', border: `1px solid ${YELLOW}44`, borderRadius: 4, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+        <div style={{ fontSize: 10, fontFamily: MONO, color: YELLOW, background: THEME.colors.negativeSurface, border: `1px solid ${YELLOW}44`, borderRadius: 4, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
           <span>Earnings feed unavailable: {nasdaqError || 'proxy error'}. Other calendar events still shown. Tracking: {MAJOR_TICKERS.join(', ')}, plus any company over ${MIN_EARNINGS_MARKET_CAP / 1e9}B.</span>
           <Btn small variant="ghost" onClick={() => { setNasdaqStatus('idle'); setTimeout(() => window.location.reload(), 0) }}>Retry</Btn>
         </div>
       )}
       {nasdaqStatus === 'empty' && (
-        <div style={{ fontSize: 10, fontFamily: MONO, color: '#666', background: '#0c0c0c', border: `1px solid ${BORDER}`, borderRadius: 4, padding: '8px 12px' }}>
+        <div style={{ fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary, background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 4, padding: '8px 12px' }}>
           No tracked earnings in the next 14 days. Tracking: {MAJOR_TICKERS.join(', ')}, plus any company over ${MIN_EARNINGS_MARKET_CAP / 1e9}B.
         </div>
       )}
 
       {/* Top-level sub-tab switcher */}
-      <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid #161616' }}>
+      <div style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${THEME.colors.surface}` }}>
         {TOP_TABS.map(t => {
           const active = topTab === t.id
           return (
             <button key={t.id} onClick={() => setTopTab(t.id)} style={{
               background: 'transparent', border: 'none',
               borderBottom: active ? `2px solid ${LIME}` : '2px solid transparent',
-              color: active ? LIME : '#555',
+              color: active ? LIME : THEME.colors.secondary,
               fontFamily: MONO, fontSize: 11, fontWeight: active ? 700 : 500,
               letterSpacing: '0.18em', padding: '10px 18px', cursor: 'pointer',
               marginBottom: -1, transition: 'color 0.15s, border-color 0.15s',
@@ -517,7 +518,7 @@ export default function CalendarTab({ putTheses = {}, apiKey }) {
       {/* ── EARNINGS sub-tab ─────────────────────────────────────────────── */}
       {topTab === 'earnings' && (
         earningsOnly.length === 0
-          ? <div style={{ fontSize: 11, fontFamily: MONO, color: '#444', padding: '20px 0' }}>{nasdaqStatus === 'loading' || nasdaqStatus === 'idle' ? 'Loading earnings coverage...' : nasdaqStatus === 'error' ? 'Earnings unavailable. An empty display does not mean there are no earnings.' : nasdaqStatus === 'partial' ? 'Earnings coverage is incomplete. No tracked rows were returned for the dates that succeeded.' : 'No tracked earnings returned for the covered dates.'}</div>
+          ? <div style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary, padding: '20px 0' }}>{nasdaqStatus === 'loading' || nasdaqStatus === 'idle' ? 'Loading earnings coverage...' : nasdaqStatus === 'error' ? 'Earnings unavailable. An empty display does not mean there are no earnings.' : nasdaqStatus === 'partial' ? 'Earnings coverage is incomplete. No tracked rows were returned for the dates that succeeded.' : 'No tracked earnings returned for the covered dates.'}</div>
           : <ListView events={earningsOnly} />
       )}
 
@@ -538,7 +539,7 @@ export default function CalendarTab({ putTheses = {}, apiKey }) {
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {flagged.map((e, i) => (
-              <div key={i} style={{ background: '#150505', border: `1px solid ${RED}55`, borderRadius: 4, padding: '10px 14px', fontSize: 11, fontFamily: MONO, color: '#cc7a7a', lineHeight: 1.55 }}>
+              <div key={i} style={{ background: THEME.colors.negativeSurface, border: `1px solid ${RED}55`, borderRadius: 4, padding: '10px 14px', fontSize: 11, fontFamily: MONO, color: THEME.colors.negative, lineHeight: 1.55 }}>
                 ⚠ <strong style={{ color: RED }}>{e.ticker}</strong> earnings {parseYmd(e.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} {e.bmo || ''} — active put thesis. IV spike incoming. Buy puts BEFORE if thesis confirmed.
               </div>
             ))}
@@ -561,9 +562,9 @@ export default function CalendarTab({ putTheses = {}, apiKey }) {
                 {dayDetail.map((e, i) => {
                   const color = colorForEvent(e)
                   return (
-                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '70px 1fr 100px', gap: 10, padding: '8px 12px', background: '#0a0a0a', border: `1px solid ${color}33`, borderRadius: 3 }}>
-                      <span style={{ fontSize: 11, fontFamily: MONO, color: '#aaa' }}>{e.time || '—'} CT</span>
-                      <span style={{ fontSize: 12, fontFamily: MONO, color: '#e8e8e8' }}>{e.name}</span>
+                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '70px 1fr 100px', gap: 10, padding: '8px 12px', background: THEME.colors.background, border: `1px solid ${color}33`, borderRadius: 3 }}>
+                      <span style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary }}>{e.time || '—'} CT</span>
+                      <span style={{ fontSize: 12, fontFamily: MONO, color: THEME.colors.text }}>{e.name}</span>
                       <span style={{ fontSize: 10, fontFamily: MONO, color, textAlign: 'right', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{e.type}</span>
                     </div>
                   )

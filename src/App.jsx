@@ -1,3 +1,6 @@
+import { Brand } from './components/Brand.jsx'
+import { BRAND } from './lib/brand.js'
+import { THEME } from './lib/theme.js'
 import UnifiedMarketContext from './components/UnifiedMarketContext.jsx'
 import { useMarketData } from './hooks/useMarketData.js'
 import { lazy, Suspense, useState, useEffect, useMemo, useRef } from 'react'
@@ -56,7 +59,7 @@ const MarketIntelligence = lazy(() => import('./components/intelligence/MarketIn
 
 const TABS = [
   { id: 'plan', label: 'Plan', desc: 'Pre-market game plan' },
-  { id: 'trade', label: 'Trade', desc: 'Live session workspace', accent: true },
+  { id: 'trade', label: BRAND.trading, desc: 'Live session workspace', accent: true },
   { id: 'review', label: 'Review', desc: 'Post-market log' },
 ]
 
@@ -104,8 +107,8 @@ export default function App() {
   const capabilities = useMarketData('capabilities')
   const [mode, setMode] = useState('legacy')
   if (import.meta.env.VITE_LOCAL_SERVICE_PREVIEW === 'true') return <LegacyApp />
-  if (!capabilities.modeKnown) return <p role="status">Market mode is unavailable or being verified. Reload to retry.</p>
-  if (capabilities.previewOnly && !capabilities.unifiedEnabled) return <p role="status">Protected preview is not activated.</p>
+  if (!capabilities.modeKnown) return <main style={{padding:24}}><Brand /><p role="status">Market mode is unavailable or being verified. Reload to retry.</p></main>
+  if (capabilities.previewOnly && !capabilities.unifiedEnabled) return <main style={{padding:24}}><Brand /><p role="status">Protected preview is not activated.</p></main>
   if ((mode === 'unified' || capabilities.previewOnly) && capabilities.unifiedEnabled) return <UnifiedMarketContext capabilities={capabilities.envelope} ready={capabilities.ready} onLegacy={capabilities.previewOnly ? null : () => setMode('legacy')} />
   return <>{capabilities.unifiedEnabled && <button onClick={() => setMode('unified')}>Switch to Unified ETF context (read-only)</button>}<LegacyApp /></>
 }
@@ -532,21 +535,21 @@ function LegacyApp() {
   }) + ' CT' : 'timestamp unavailable'
 
   return (
-    <div style={{ minHeight: '100vh', background: DARK, fontFamily: MONO }}>
+    <div style={{ minHeight: '100vh', background: DARK, fontFamily: SANS }}>
       {/* Header */}
-      <div style={{ borderBottom: `1px solid ${BORDER}`, position: 'sticky', top: 0, zIndex: 100, background: '#0a0a0a' }}>
+      <div style={{ borderBottom: `1px solid ${BORDER}`, position: 'sticky', top: 0, zIndex: 100, background: THEME.colors.background }}>
         <div style={{ maxWidth: 960, margin: '0 auto', padding: '0 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 48 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ fontSize: 15, fontWeight: 900, color: '#e8e8e8', fontFamily: MONO, letterSpacing: '-0.03em' }}>TRADE HUB</div>
+            <div style={{ fontSize: 15, fontWeight: 900, color: THEME.colors.text, fontFamily: MONO, letterSpacing: '-0.03em' }}><Brand /></div>
             {liveData.price ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div title={`${priceStatus.label}. REST transport ${liveData.connected ? 'ready' : 'unavailable'}; connection does not establish price freshness.`} style={{ width: 6, height: 6, borderRadius: '50%', background: priceStatus.fresh ? LIME : YELLOW }} />
-                <span style={{ fontSize: 13, fontFamily: MONO, fontWeight: 700, color: '#888' }}>{prep.ticker || 'QQQ'}</span>
+                <span style={{ fontSize: 13, fontFamily: MONO, fontWeight: 700, color: THEME.colors.secondary }}>{prep.ticker || 'QQQ'}</span>
                 <span style={{ fontSize: 16, fontFamily: MONO, fontWeight: 900, color: priceStatus.fresh ? LIME : YELLOW }}>${liveData.price?.toFixed(2)}</span>
-                <span style={{ fontSize: 9, color: priceStatus.fresh ? '#aaa' : YELLOW }} title={liveData.priceSource || 'Massive'}>{priceStatus.label}<br />{tradeSession(liveData.priceTimestamp)}: {priceTime}</span>
+                <span style={{ fontSize: 9, color: priceStatus.fresh ? THEME.colors.secondary : YELLOW }} title={liveData.priceSource || 'Massive'}>{priceStatus.label}<br />{tradeSession(liveData.priceTimestamp)}: {priceTime}</span>
               </div>
             ) : (
-              <span style={{ fontSize: 10, fontFamily: MONO, color: '#444', letterSpacing: '0.08em' }}>
+              <span style={{ fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary, letterSpacing: '0.08em' }}>
                 {apiKey ? 'connecting...' : 'no live data'}
               </span>
             )}
@@ -581,7 +584,7 @@ function LegacyApp() {
               )
             })()}
             {schwab.isConnected && schwab.dayTrades > 0 && (() => {
-              const c = schwab.dayTrades >= 3 ? RED : schwab.dayTrades >= 2 ? YELLOW : '#888'
+              const c = schwab.dayTrades >= 3 ? RED : schwab.dayTrades >= 2 ? YELLOW : THEME.colors.secondary
               return (
                 <span title="Pattern Day Trader count, round-trip option trades today" style={{ fontSize: 9, color: c, fontFamily: MONO, border: `1px solid ${c}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.1em' }}>
                   PDT: {schwab.dayTrades}/3{schwab.dayTrades >= 3 ? ' NO MORE' : ''}
@@ -589,7 +592,7 @@ function LegacyApp() {
               )
             })()}
             {mtfAlignment.score > 0 && (() => {
-              const c = mtfAlignment.score >= 85 ? LIME : mtfAlignment.score >= 70 ? LIME : mtfAlignment.score >= 55 ? YELLOW : mtfAlignment.score >= 40 ? '#F97316' : RED
+              const c = mtfAlignment.score >= 85 ? LIME : mtfAlignment.score >= 70 ? LIME : mtfAlignment.score >= 55 ? YELLOW : mtfAlignment.score >= 40 ? THEME.colors.orange : RED
               return (
                 <button onClick={() => { setActiveTab('trade'); setTradeSubTab('chart') }} title={`${mtfAlignment.label}, jump to Trade / Chart`} style={{ fontSize: 9, color: c, fontFamily: MONO, background: 'transparent', border: `1px solid ${c}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.1em', cursor: 'pointer' }}>ALIGN: {mtfAlignment.score} →</button>
               )
@@ -609,7 +612,7 @@ function LegacyApp() {
                   background: 'transparent',
                   border: 'none',
                   borderBottom: isActive ? `2px solid ${LIME}` : '2px solid transparent',
-                  color: isActive ? (tab.accent ? LIME : '#e8e8e8') : '#484848',
+                  color: isActive ? (tab.accent ? LIME : THEME.colors.text) : THEME.colors.secondary,
                   fontFamily: MONO,
                   fontSize: 10,
                   fontWeight: isActive ? 700 : 400,
@@ -630,7 +633,7 @@ function LegacyApp() {
                     <span style={{ marginLeft: 5, width: 5, height: 5, borderRadius: '50%', background: LIME, display: 'inline-block', boxShadow: `0 0 6px ${LIME}`, verticalAlign: 'middle' }} />
                   )}
                 </span>
-                <span style={{ fontSize: 8, color: isActive ? '#555' : '#333', letterSpacing: '0.06em', textTransform: 'none', fontWeight: 400 }}>{tab.desc}</span>
+                <span style={{ fontSize: 8, color: isActive ? THEME.colors.secondary : THEME.colors.secondary, letterSpacing: '0.06em', textTransform: 'none', fontWeight: 400 }}>{tab.desc}</span>
               </button>
             )
           })}
@@ -638,7 +641,7 @@ function LegacyApp() {
       </div>
 
       {!priceStatus.fresh && (
-        <div role="status" style={{ background: '#211a08', borderBottom: `1px solid ${YELLOW}66`, color: YELLOW }}>
+        <div role="status" style={{ background: THEME.colors.cautionSurface, borderBottom: `1px solid ${YELLOW}66`, color: YELLOW }}>
           <div style={{ maxWidth: 960, margin: '0 auto', padding: '10px 20px', fontSize: 12, lineHeight: 1.6 }}>
             <strong>{priceStatus.label}.</strong> Massive stocks coverage is 3 a.m. to 7 p.m. CT. BOATS overnight prices are not connected.
             {liveData.price != null ? ` Displayed $${liveData.price.toFixed(2)} is a recorded ${tradeSession(liveData.priceTimestamp).toLowerCase()} (${priceTime}), not a verified current price.` : ' No verified current trade is available.'}
@@ -649,11 +652,11 @@ function LegacyApp() {
 
       {/* High-impact event banner, visible on every tab */}
       {todayHighImpact.length > 0 && (
-        <div style={{ background: '#110d04', borderBottom: `1px solid ${YELLOW}33` }}>
+        <div style={{ background: THEME.colors.cautionSurface, borderBottom: `1px solid ${YELLOW}33` }}>
           <div style={{ maxWidth: 960, margin: '0 auto', padding: '7px 20px', display: 'flex', alignItems: 'center', gap: 10, fontFamily: MONO }}>
             <span style={{ fontSize: 11, color: YELLOW }}>⚠</span>
             <span style={{ fontSize: 10, color: YELLOW, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>High Impact Today:</span>
-            <span style={{ fontSize: 10, color: '#c8a030', flex: 1 }}>
+            <span style={{ fontSize: 10, color: THEME.colors.caution, flex: 1 }}>
               {todayHighImpact.map(e => `${e.name}${e.time ? ` at ${e.time} CT` : ''}`).join(' · ')}
             </span>
             <button onClick={() => { setActiveTab('plan'); setPlanSubTab('calendar') }} style={{ background: 'transparent', border: `1px solid ${YELLOW}44`, color: YELLOW, fontFamily: MONO, fontSize: 9, padding: '3px 9px', borderRadius: 3, cursor: 'pointer', letterSpacing: '0.1em', textTransform: 'uppercase' }}>View Calendar →</button>
@@ -665,10 +668,10 @@ function LegacyApp() {
         @keyframes hdrpulse { 0%,100%{opacity:1}50%{opacity:0.5} }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
-        input::placeholder, textarea::placeholder { color: #1e1e1e !important; }
-        select option { background: #111; color: #e8e8e8; }
+        input::placeholder, textarea::placeholder { color: ${THEME.colors.secondary} !important; }
+        select option { background: ${THEME.colors.background}; color: ${THEME.colors.text}; }
         ::-webkit-scrollbar { width: 3px; height: 3px; }
-        ::-webkit-scrollbar-thumb { background: #1e1e1e; }
+        ::-webkit-scrollbar-thumb { background: ${THEME.colors.surface}; }
         button { transition: opacity 0.15s; }
         button:hover { opacity: 0.85; }
       `}</style>
@@ -1053,15 +1056,15 @@ function LegacyApp() {
       </div>
 
       {/* Footer */}
-      <div style={{ borderTop: `1px solid #111`, padding: '16px 20px', textAlign: 'center' }}>
+      <div style={{ borderTop: `1px solid ${THEME.colors.background}`, padding: '16px 20px', textAlign: 'center' }}>
         <button
           onClick={() => setShowGlossary(true)}
-          style={{ background: 'none', border: 'none', color: '#2a2a2a', fontFamily: MONO, fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer', textDecoration: 'underline', textDecorationColor: '#222' }}
+          style={{ background: 'none', border: 'none', color: THEME.colors.secondary, fontFamily: MONO, fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer', textDecoration: 'underline', textDecorationColor: THEME.colors.surface }}
         >
           Glossary
         </button>
-        <span style={{ color: '#1a1a1a', fontSize: 9, fontFamily: MONO, margin: '0 10px' }}>·</span>
-        <span style={{ color: '#1a1a1a', fontSize: 9, fontFamily: MONO, letterSpacing: '0.1em' }}>Trade Hub — personal use only</span>
+        <span style={{ color: THEME.colors.secondary, fontSize: 9, fontFamily: MONO, margin: '0 10px' }}>·</span>
+        <span style={{ color: THEME.colors.secondary, fontSize: 9, fontFamily: MONO, letterSpacing: '0.1em' }}>{BRAND.name} — personal use only</span>
       </div>
 
       {showGlossary && <GlossaryModal onClose={() => setShowGlossary(false)} />}
@@ -1069,7 +1072,7 @@ function LegacyApp() {
       {/* Floating action button — visible on every tab */}
       <button onClick={() => openQuickLog(null)} title="Log a trade" style={{
         position: 'fixed', bottom: 22, right: 22, width: 56, height: 56, borderRadius: '50%',
-        background: LIME, color: '#000', border: 'none', fontSize: 26, fontWeight: 900,
+        background: LIME, color: THEME.colors.background, border: 'none', fontSize: 26, fontWeight: 900,
         cursor: 'pointer', boxShadow: '0 6px 20px rgba(209,255,121,0.35), 0 2px 6px rgba(0,0,0,0.5)',
         zIndex: 150, fontFamily: MONO,
       }}>+</button>
@@ -1083,7 +1086,7 @@ function LegacyApp() {
       />
 
       {schwabToast && (
-        <div style={{ position: 'fixed', bottom: 90, right: 22, background: SCHWAB_BLUE, color: '#fff', fontFamily: MONO, fontSize: 12, fontWeight: 700, padding: '12px 18px', borderRadius: 6, boxShadow: '0 6px 24px rgba(59,130,246,0.4)', zIndex: 200, letterSpacing: '0.04em' }}>
+        <div style={{ position: 'fixed', bottom: 90, right: 22, background: SCHWAB_BLUE, color: THEME.colors.text, fontFamily: MONO, fontSize: 12, fontWeight: 700, padding: '12px 18px', borderRadius: 6, boxShadow: '0 6px 24px rgba(59,130,246,0.4)', zIndex: 200, letterSpacing: '0.04em' }}>
           {schwabToast}
         </div>
       )}
@@ -1126,26 +1129,26 @@ function ApiHealthIndicator() {
           padding: 28, zIndex: 260,
         }}>
           <div onClick={e => e.stopPropagation()} style={{
-            background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 6,
+            background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 6,
             width: '100%', maxWidth: 420, padding: 16, fontFamily: MONO,
             display: 'flex', flexDirection: 'column', gap: 10,
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <div style={{ fontSize: 10, color: '#666', letterSpacing: '0.14em', textTransform: 'uppercase' }}>API health</div>
-                <div style={{ fontSize: 14, color: '#e8e8e8', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ fontSize: 10, color: THEME.colors.secondary, letterSpacing: '0.14em', textTransform: 'uppercase' }}>API health</div>
+                <div style={{ fontSize: 14, color: THEME.colors.text, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ width: 10, height: 10, borderRadius: 5, background: color }} />
                   {snap.status === 'red' ? 'Degraded' : snap.status === 'yellow' ? 'Wobbly' : 'All good'}
                 </div>
               </div>
-              <button onClick={() => setOpen(false)} style={{ background: 'transparent', border: 'none', color: '#aaa', fontSize: 16, cursor: 'pointer' }}>✕</button>
+              <button onClick={() => setOpen(false)} style={{ background: 'transparent', border: 'none', color: THEME.colors.secondary, fontSize: 16, cursor: 'pointer' }}>✕</button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
               <Stat label="OK" value={snap.successes} color={LIME} />
-              <Stat label="Errors" value={snap.failures} color={snap.failures > 0 ? RED : '#aaa'} />
-              <Stat label="Rate-limit" value={snap.rateLimits} color={snap.rateLimits > 0 ? YELLOW : '#aaa'} />
+              <Stat label="Errors" value={snap.failures} color={snap.failures > 0 ? RED : THEME.colors.secondary} />
+              <Stat label="Rate-limit" value={snap.rateLimits} color={snap.rateLimits > 0 ? YELLOW : THEME.colors.secondary} />
             </div>
-            <div style={{ fontSize: 10, color: '#666', fontFamily: MONO, letterSpacing: '0.06em' }}>
+            <div style={{ fontSize: 10, color: THEME.colors.secondary, fontFamily: MONO, letterSpacing: '0.06em' }}>
               Rolling 5-minute window. Polygon requests served from in-memory cache don't count.
             </div>
 
@@ -1155,17 +1158,17 @@ function ApiHealthIndicator() {
                 user's plan tier. */}
             {snap.unavailableEndpoints?.length > 0 && (
               <div>
-                <div style={{ fontSize: 10, color: '#666', fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 6 }}>
+                <div style={{ fontSize: 10, color: THEME.colors.secondary, fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 6 }}>
                   Polygon plan limits
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {snap.unavailableEndpoints.map((u, i) => (
                     <div key={i} style={{
-                      background: '#161005', border: `1px solid ${YELLOW}33`, borderRadius: 3,
-                      padding: '6px 8px', fontSize: 10, fontFamily: MONO, color: '#caa860', lineHeight: 1.5,
+                      background: THEME.colors.cautionSurface, border: `1px solid ${YELLOW}33`, borderRadius: 3,
+                      padding: '6px 8px', fontSize: 10, fontFamily: MONO, color: THEME.colors.caution, lineHeight: 1.5,
                     }}>
                       <div style={{ wordBreak: 'break-all', color: YELLOW, fontWeight: 700 }}>{u.pattern}</div>
-                      {u.hint && <div style={{ color: '#9a8b54', marginTop: 2 }}>{u.hint}</div>}
+                      {u.hint && <div style={{ color: THEME.colors.caution, marginTop: 2 }}>{u.hint}</div>}
                     </div>
                   ))}
                 </div>
@@ -1175,9 +1178,9 @@ function ApiHealthIndicator() {
               </div>
             )}
             <div>
-              <div style={{ fontSize: 10, color: '#666', fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 6 }}>Recent errors</div>
+              <div style={{ fontSize: 10, color: THEME.colors.secondary, fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 6 }}>Recent errors</div>
               {(!snap.recentErrors || snap.recentErrors.length === 0) ? (
-                <div style={{ fontSize: 11, color: '#666' }}>No errors recorded.</div>
+                <div style={{ fontSize: 11, color: THEME.colors.secondary }}>No errors recorded.</div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {snap.recentErrors.map((e, i) => {
@@ -1187,12 +1190,12 @@ function ApiHealthIndicator() {
                     const tag = isRate ? 'RATE-LIMIT' : isUnavail ? 'PLAN LIMIT' : 'ERROR'
                     return (
                       <div key={i} style={{
-                        background: '#0a0606', border: `1px solid ${BORDER}`, borderRadius: 3,
-                        padding: '5px 8px', fontSize: 10, fontFamily: MONO, color: '#aaa', lineHeight: 1.5,
+                        background: THEME.colors.negativeSurface, border: `1px solid ${BORDER}`, borderRadius: 3,
+                        padding: '5px 8px', fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary, lineHeight: 1.5,
                       }}>
                         <span style={{ color: tagColor, fontWeight: 700 }}>{tag}</span>
-                        <span style={{ color: '#666', marginLeft: 8 }}>{new Date(e.ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
-                        <div style={{ color: '#888', fontSize: 10, marginTop: 2, wordBreak: 'break-all' }}>
+                        <span style={{ color: THEME.colors.secondary, marginLeft: 8 }}>{new Date(e.ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                        <div style={{ color: THEME.colors.secondary, fontSize: 10, marginTop: 2, wordBreak: 'break-all' }}>
                           {e.detail?.url || e.detail?.message || '—'}
                           {e.detail?.status ? ` · status ${e.detail.status}` : ''}
                           {e.detail?.hint ? ` · ${e.detail.hint}` : ''}
@@ -1210,10 +1213,10 @@ function ApiHealthIndicator() {
   )
 }
 
-function Stat({ label, value, color = '#e8e8e8' }) {
+function Stat({ label, value, color = THEME.colors.text }) {
   return (
-    <div style={{ padding: 8, background: '#0a0606', borderRadius: 3 }}>
-      <div style={{ fontSize: 9, color: '#666', fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
+    <div style={{ padding: 8, background: THEME.colors.negativeSurface, borderRadius: 3 }}>
+      <div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
       <div style={{ fontSize: 14, color, fontFamily: MONO, fontWeight: 700 }}>{value}</div>
     </div>
   )
@@ -1235,20 +1238,20 @@ function NotificationOverlay() {
         const accent = t.kind === 'trigger' ? RED : t.kind === 'warn' ? YELLOW : LIME
         return (
           <div key={t.id} style={{
-            background: '#0a0a0a', border: `1px solid ${accent}55`, borderLeft: `3px solid ${accent}`,
+            background: THEME.colors.background, border: `1px solid ${accent}55`, borderLeft: `3px solid ${accent}`,
             borderRadius: 5, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6,
             boxShadow: '0 6px 24px rgba(0,0,0,0.5)',
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-              <div style={{ fontSize: 12, fontFamily: MONO, fontWeight: 800, color: '#e8e8e8', lineHeight: 1.3 }}>{t.title}</div>
-              <button onClick={() => dismiss(t.id)} style={{ background: 'transparent', border: 'none', color: '#666', fontFamily: MONO, fontSize: 12, cursor: 'pointer' }}>✕</button>
+              <div style={{ fontSize: 12, fontFamily: MONO, fontWeight: 800, color: THEME.colors.text, lineHeight: 1.3 }}>{t.title}</div>
+              <button onClick={() => dismiss(t.id)} style={{ background: 'transparent', border: 'none', color: THEME.colors.secondary, fontFamily: MONO, fontSize: 12, cursor: 'pointer' }}>✕</button>
             </div>
             {t.body && (
-              <div style={{ fontSize: 11, fontFamily: MONO, color: '#aaa', lineHeight: 1.5 }}>{t.body}</div>
+              <div style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary, lineHeight: 1.5 }}>{t.body}</div>
             )}
             {t.action && (
               <button onClick={() => { try { t.action.onClick?.() } catch {}; dismiss(t.id) }} style={{
-                alignSelf: 'flex-start', background: accent, color: '#000', border: 'none',
+                alignSelf: 'flex-start', background: accent, color: THEME.colors.background, border: 'none',
                 padding: '5px 10px', borderRadius: 3, fontFamily: MONO, fontSize: 10,
                 letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 800, cursor: 'pointer',
               }}>{t.action.label}</button>
@@ -1267,25 +1270,25 @@ function PreMarketSummarySection({ liveData, ticker }) {
   const pm = liveData?.preMarket
   const prevDay = liveData?.prevDay
   const cardStyle = { background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 6, padding: '16px 20px' }
-  const labelStyle = { fontSize: 10, fontFamily: MONO, color: '#666', letterSpacing: '0.14em', textTransform: 'uppercase' }
+  const labelStyle = { fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary, letterSpacing: '0.14em', textTransform: 'uppercase' }
 
   if (!pm?.active) {
     return (
       <div style={cardStyle}>
         <div style={{ ...labelStyle, marginBottom: 8 }}>Overnight & Pre-Market</div>
-        <div style={{ fontSize: 11, fontFamily: MONO, color: '#555' }}>
+        <div style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary }}>
           No pre-market data yet for {ticker}. Live data activates after the 4:00 ET pre-market open with your Massive API key connected.
         </div>
       </div>
     )
   }
 
-  const gapColor = pm.gapPct == null ? '#888' : pm.gapPct > 0 ? LIME : pm.gapPct < 0 ? RED : '#888'
+  const gapColor = pm.gapPct == null ? THEME.colors.secondary : pm.gapPct > 0 ? LIME : pm.gapPct < 0 ? RED : THEME.colors.secondary
   const gapLabel = pm.gap == null ? '—'
     : `${pm.gap >= 0 ? '+' : '-'}$${Math.abs(pm.gap).toFixed(2)} (${pm.gapPct >= 0 ? '+' : ''}${pm.gapPct.toFixed(2)}%)`
   const trendColor = pm.trend === 'trending up' ? LIME : pm.trend === 'trending down' ? RED : YELLOW
 
-  const Stat = ({ label, value, color = '#e8e8e8' }) => (
+  const Stat = ({ label, value, color = THEME.colors.text }) => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
       <span style={labelStyle}>{label}</span>
       <span style={{ fontSize: 15, fontFamily: MONO, color, fontWeight: 800 }}>{value}</span>
@@ -1327,7 +1330,7 @@ function SubNav({ tabs, active, onChange }) {
               background: 'transparent',
               border: 'none',
               borderBottom: isActive ? `2px solid ${LIME}` : '2px solid transparent',
-              color: isActive ? LIME : '#666',
+              color: isActive ? LIME : THEME.colors.secondary,
               fontFamily: MONO,
               fontSize: 10,
               fontWeight: isActive ? 700 : 500,

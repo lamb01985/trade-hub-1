@@ -1,3 +1,4 @@
+import { THEME } from './theme.js'
 // Sector rotation tracker. Pulls each SPDR sector ETF + SPY benchmark from
 // Polygon snapshot/agg endpoints and scores each sector on momentum, 5-day
 // trend, relative strength vs SPY, and volume confirmation.
@@ -163,12 +164,12 @@ export function flowLabel(score) {
 
 export function tierColor(tier) {
   switch (tier) {
-    case 'strong-in': return '#D1FF79'    // bright lime
-    case 'mod-in':    return '#86A45A'    // dim lime
-    case 'neutral':   return '#444'
-    case 'mod-out':   return '#8A4040'    // dim red
-    case 'strong-out':return '#FF4D4D'    // bright red
-    default: return '#444'
+    case 'strong-in': return THEME.colors.accent    // bright lime
+    case 'mod-in':    return THEME.colors.positive    // dim lime
+    case 'neutral':   return THEME.colors.border
+    case 'mod-out':   return THEME.colors.negative    // dim red
+    case 'strong-out':return THEME.colors.negative    // bright red
+    default: return THEME.colors.border
   }
 }
 

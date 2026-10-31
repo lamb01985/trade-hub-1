@@ -1,3 +1,4 @@
+import { THEME } from '../lib/theme.js'
 // ─────────────────────────────────────────────────────────────────────────────
 // BacktestResults.jsx — UI for a single setup's backtest output.
 //
@@ -12,12 +13,12 @@
 import { useMemo, useState } from 'react'
 import { LIME, RED, YELLOW, MONO, BORDER, PANEL, DARK, f2 } from '../constants.js'
 
-const FG = '#e8e8e8'
-const MUTED = '#666'
+const FG = THEME.colors.text
+const MUTED = THEME.colors.secondary
 
 function Stat({ label, value, color = FG }) {
   return (
-    <div style={{ padding: 8, background: '#0a0a0a', borderRadius: 3 }}>
+    <div style={{ padding: 8, background: THEME.colors.background, borderRadius: 3 }}>
       <div style={{ fontSize: 9, color: MUTED, fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
       <div style={{ fontSize: 13, color, fontFamily: MONO, fontWeight: 700 }}>{value}</div>
     </div>
@@ -47,7 +48,7 @@ function EquityCurve({ trades, width = 280, height = 56 }) {
   if (!points) return null
   const ok = points.ends.final >= 0
   return (
-    <div style={{ background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 3, padding: 8 }}>
+    <div style={{ background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 3, padding: 8 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
         <div style={{ fontSize: 9, color: MUTED, fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Equity curve (cumulative pnl %)</div>
         <div style={{ fontSize: 10, color: ok ? LIME : RED, fontFamily: MONO, fontWeight: 700 }}>
@@ -55,7 +56,7 @@ function EquityCurve({ trades, width = 280, height = 56 }) {
         </div>
       </div>
       <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={{ display: 'block' }}>
-        <line x1="0" y1={points.zeroY} x2={width} y2={points.zeroY} stroke="#222" strokeDasharray="2 2" strokeWidth="0.5" />
+        <line x1="0" y1={points.zeroY} x2={width} y2={points.zeroY} stroke={THEME.colors.surface} strokeDasharray="2 2" strokeWidth="0.5" />
         <path d={points.d} fill="none" stroke={ok ? LIME : RED} strokeWidth="1.2" />
       </svg>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: MUTED, fontFamily: MONO, marginTop: 4 }}>
@@ -71,10 +72,10 @@ function TradeList({ trades }) {
   const [open, setOpen] = useState(false)
   if (!trades?.length) return null
   return (
-    <div style={{ background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 3 }}>
+    <div style={{ background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 3 }}>
       <button onClick={() => setOpen(o => !o)} style={{
         width: '100%', background: 'transparent', border: 'none', textAlign: 'left',
-        color: '#aaa', fontFamily: MONO, fontSize: 10, padding: '8px 10px',
+        color: THEME.colors.secondary, fontFamily: MONO, fontSize: 10, padding: '8px 10px',
         letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       }}>
@@ -88,7 +89,7 @@ function TradeList({ trades }) {
             gridTemplateColumns: '95px 60px 50px 60px 60px 60px 70px 90px',
             gap: 6,
             padding: '6px 10px',
-            background: '#0a0606',
+            background: THEME.colors.negativeSurface,
             borderBottom: `1px solid ${BORDER}`,
             fontSize: 9, color: MUTED, fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase',
           }}>
@@ -103,8 +104,8 @@ function TradeList({ trades }) {
                 gap: 6,
                 padding: '5px 10px',
                 fontFamily: MONO, fontSize: 10,
-                color: '#aaa',
-                borderBottom: i === trades.length - 1 ? 'none' : '1px solid #131313',
+                color: THEME.colors.secondary,
+                borderBottom: i === trades.length - 1 ? 'none' : `1px solid ${THEME.colors.surface}`,
               }}>
                 <span>{t.entryDate || '—'}</span>
                 <span style={{ color: FG, fontWeight: 700 }}>{t.ticker || '—'}</span>
@@ -137,8 +138,8 @@ export default function BacktestResults({ result }) {
         <Stat label="Avg loss" value={`${(result.avgLoss || 0).toFixed(1)}%`} color={RED} />
         <Stat label="EV / trade" value={`${ev >= 0 ? '+' : ''}${ev.toFixed(2)}%`} color={ev > 0 ? LIME : RED} />
         <Stat label="Max DD" value={`${(result.maxDrawdown || 0).toFixed(1)}%`} color={YELLOW} />
-        <Stat label="Sharpe" value={(result.sharpe || 0).toFixed(2)} color={(result.sharpe || 0) >= 1 ? LIME : '#aaa'} />
-        <Stat label="Last run" value={result.lastRunAt ? new Date(result.lastRunAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'} color="#aaa" />
+        <Stat label="Sharpe" value={(result.sharpe || 0).toFixed(2)} color={(result.sharpe || 0) >= 1 ? LIME : THEME.colors.secondary} />
+        <Stat label="Last run" value={result.lastRunAt ? new Date(result.lastRunAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'} color={THEME.colors.secondary} />
       </div>
       <EquityCurve trades={result.trades} />
       <TradeList trades={result.trades} />
@@ -153,7 +154,7 @@ export default function BacktestResults({ result }) {
           AND some portion of the universe was skipped during the run. */}
       {result.universeSize != null && (result.tickersSkipped?.length || 0) > 0 && (
         <div style={{
-          background: '#0a0606', border: `1px solid ${YELLOW}33`, borderRadius: 3,
+          background: THEME.colors.negativeSurface, border: `1px solid ${YELLOW}33`, borderRadius: 3,
           padding: '8px 10px', fontSize: 10, color: YELLOW, fontFamily: MONO, lineHeight: 1.5,
         }}>
           Data quality: {result.tickersWithData?.length || 0} of {result.universeSize} tickers contributed

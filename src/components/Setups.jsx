@@ -1,3 +1,4 @@
+import { THEME } from '../lib/theme.js'
 // ─────────────────────────────────────────────────────────────────────────────
 // Setups.jsx — Plan / Setups tab.
 //
@@ -18,8 +19,8 @@ import SetupCard from './SetupCard.jsx'
 import SetupBuilder from './SetupBuilder.jsx'
 import SetupTemplatesLibrary from './SetupTemplatesLibrary.jsx'
 
-const FG = '#e8e8e8'
-const MUTED = '#666'
+const FG = THEME.colors.text
+const MUTED = THEME.colors.secondary
 
 const FILTERS = [
   { id: 'all', label: 'All' },
@@ -168,7 +169,7 @@ export default function Setups({
           </div>
         </div>
         <button onClick={handleNew} style={{
-          background: LIME, color: '#000', border: 'none', padding: '10px 16px',
+          background: LIME, color: THEME.colors.background, border: 'none', padding: '10px 16px',
           borderRadius: 4, fontFamily: MONO, fontSize: 11, fontWeight: 800,
           letterSpacing: '0.14em', textTransform: 'uppercase', cursor: 'pointer',
         }}>+ New setup</button>
@@ -179,7 +180,7 @@ export default function Setups({
           {FILTERS.map(f => (
             <button key={f.id} onClick={() => setFilter(f.id)} style={{
               background: filter === f.id ? LIME : 'transparent',
-              color: filter === f.id ? '#000' : '#aaa',
+              color: filter === f.id ? THEME.colors.background : THEME.colors.secondary,
               border: `1px solid ${filter === f.id ? LIME : BORDER}`,
               padding: '5px 10px', borderRadius: 3, fontFamily: MONO,
               fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase',
@@ -189,7 +190,7 @@ export default function Setups({
         </div>
         <div style={{ flex: 1 }} />
         <select value={sort} onChange={e => setSort(e.target.value)} style={{
-          background: DARK, color: '#aaa', border: `1px solid ${BORDER}`,
+          background: DARK, color: THEME.colors.secondary, border: `1px solid ${BORDER}`,
           padding: '5px 10px', borderRadius: 3, fontFamily: MONO, fontSize: 10,
           letterSpacing: '0.04em',
         }}>
@@ -266,7 +267,7 @@ function NewSetupChooser({ onPickTemplate, onPickScratch, onCancel }) {
       padding: 28, zIndex: 230,
     }}>
       <div style={{
-        background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 6,
+        background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 6,
         width: '100%', maxWidth: 520, padding: 22, display: 'flex',
         flexDirection: 'column', gap: 14, fontFamily: MONO,
       }}>
@@ -275,15 +276,15 @@ function NewSetupChooser({ onPickTemplate, onPickScratch, onCancel }) {
             <div style={{ fontSize: 10, color: MUTED, letterSpacing: '0.16em', textTransform: 'uppercase' }}>New setup</div>
             <div style={{ fontSize: 16, color: FG, fontWeight: 800 }}>How do you want to start?</div>
           </div>
-          <button onClick={onCancel} style={{ background: 'transparent', border: 'none', color: '#aaa', fontSize: 16, cursor: 'pointer' }}>✕</button>
+          <button onClick={onCancel} style={{ background: 'transparent', border: 'none', color: THEME.colors.secondary, fontSize: 16, cursor: 'pointer' }}>✕</button>
         </div>
         <button onClick={onPickTemplate} style={{
-          background: '#0c1408', border: `1px solid ${LIME}55`, borderRadius: 5,
+          background: THEME.colors.positiveSurface, border: `1px solid ${LIME}55`, borderRadius: 5,
           padding: 14, textAlign: 'left', cursor: 'pointer', fontFamily: MONO, color: FG,
           display: 'flex', flexDirection: 'column', gap: 4,
         }}>
           <div style={{ fontSize: 13, fontWeight: 800, color: LIME, letterSpacing: '0.04em' }}>Start from a template →</div>
-          <div style={{ fontSize: 11, color: '#aaa', lineHeight: 1.5 }}>15 documented setups across long swing, short swing, income, and intraday. Backtest before cloning.</div>
+          <div style={{ fontSize: 11, color: THEME.colors.secondary, lineHeight: 1.5 }}>15 documented setups across long swing, short swing, income, and intraday. Backtest before cloning.</div>
         </button>
         <button onClick={onPickScratch} style={{
           background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: 5,
@@ -291,7 +292,7 @@ function NewSetupChooser({ onPickTemplate, onPickScratch, onCancel }) {
           display: 'flex', flexDirection: 'column', gap: 4,
         }}>
           <div style={{ fontSize: 13, fontWeight: 800 }}>Build from scratch →</div>
-          <div style={{ fontSize: 11, color: '#aaa', lineHeight: 1.5 }}>Empty SetupBuilder. Pick your own universe, conditions, and trade plan.</div>
+          <div style={{ fontSize: 11, color: THEME.colors.secondary, lineHeight: 1.5 }}>Empty SetupBuilder. Pick your own universe, conditions, and trade plan.</div>
         </button>
       </div>
     </div>

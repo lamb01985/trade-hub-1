@@ -1,3 +1,4 @@
+import { THEME } from '../lib/theme.js'
 // ── ORB Tab ───────────────────────────────────────────────────────────────────
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { Card, SLabel, Heading, Tile, Fld, Sel, Btn, Pill, CheckRow, Tip } from './ui.jsx'
@@ -193,9 +194,9 @@ export function ORBTab({ settings, onSendToCalc, prepFill, liveData, savedPreps 
   const ladder = range ? [
     { l: '3:1 Target', p: t3, c: LIME },
     { l: '2:1 Target', p: t2, c: LIME },
-    { l: '1:1 Target', p: t1, c: '#aaa' },
-    { l: 'OR High', p: oh, c: '#555' },
-    { l: 'OR Low', p: ol, c: '#555' },
+    { l: '1:1 Target', p: t1, c: THEME.colors.secondary },
+    { l: 'OR High', p: oh, c: THEME.colors.border },
+    { l: 'OR Low', p: ol, c: THEME.colors.border },
     { l: 'Stop', p: stop, c: RED },
   ].filter(r => r.p != null).sort((a, b) => b.p - a.p) : []
 
@@ -208,22 +209,22 @@ export function ORBTab({ settings, onSendToCalc, prepFill, liveData, savedPreps 
       {/* Helper or sanity-fail banner. The red banner replaces the green one
           and visually dominates whenever OR values look wrong for ticker. */}
       {sanityFail ? (
-        <div style={{ background: '#1a0505', border: `1px solid ${RED}88`, borderRadius: 5, padding: '14px 18px' }}>
+        <div style={{ background: THEME.colors.negativeSurface, border: `1px solid ${RED}88`, borderRadius: 5, padding: '14px 18px' }}>
           <div style={{ fontSize: 12, color: RED, fontFamily: MONO, fontWeight: 700, letterSpacing: '0.08em', marginBottom: 4 }}>
             WARNING: opening range values look incorrect for {ticker || 'this ticker'}
           </div>
-          <div style={{ fontSize: 11, color: '#cc8888', fontFamily: MONO, lineHeight: 1.7 }}>
+          <div style={{ fontSize: 11, color: THEME.colors.negative, fontFamily: MONO, lineHeight: 1.7 }}>
             Current price ${f2(liveData?.price)}, OR HIGH ${orbH || '—'}, OR LOW ${orbL || '—'}. Difference exceeds {(SANITY_THRESHOLD * 100).toFixed(0)}%. Verify inputs before trading. Trading actions are disabled until resolved.
           </div>
         </div>
       ) : (
-        <div style={{ background: '#080d08', border: '1px solid #152015', borderRadius: 5, padding: '12px 16px' }}>
-          <div style={{ fontSize: 11, color: '#3a5030', fontFamily: MONO, lineHeight: 1.8 }}>
+        <div style={{ background: THEME.colors.positiveSurface, border: `1px solid ${THEME.colors.positiveSurface}`, borderRadius: 5, padding: '12px 16px' }}>
+          <div style={{ fontSize: 11, color: THEME.colors.positive, fontFamily: MONO, lineHeight: 1.8 }}>
             <span style={{ color: LIME }}>ORB uses underlying ({(ticker || 'QQQ').toUpperCase()}) prices.</span> Use IV tab to check contract pricing before entering.
           </div>
         </div>
       )}
-      {prepFill && !sanityFail && <div style={{ fontSize: 11, fontFamily: MONO, color: YELLOW, background: '#0f0d04', border: '1px solid #252010', borderRadius: 4, padding: '10px 16px' }}>Levels pre-loaded from Prep. Verify against live chart.</div>}
+      {prepFill && !sanityFail && <div style={{ fontSize: 11, fontFamily: MONO, color: YELLOW, background: THEME.colors.surface, border: `1px solid ${THEME.colors.surface}`, borderRadius: 4, padding: '10px 16px' }}>Levels pre-loaded from Prep. Verify against live chart.</div>}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12 }}>
         <Fld label="Ticker" value={ticker} onChange={setTicker} type="text" placeholder="QQQ" mono />
         <div>
@@ -236,7 +237,7 @@ export function ORBTab({ settings, onSendToCalc, prepFill, liveData, savedPreps 
             const label = loadingTicker ? 'Loading...' : stampDate
               ? `${isPriorDay ? 'Stale, last updated' : 'Updated'} ${stampDate.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`
               : 'No timestamp'
-            return <div style={{ fontSize: 9, fontFamily: MONO, color: isPriorDay ? RED : '#555', marginTop: 4 }}>{label}</div>
+            return <div style={{ fontSize: 9, fontFamily: MONO, color: isPriorDay ? RED : THEME.colors.secondary, marginTop: 4 }}>{label}</div>
           })()}
         </div>
         <div>
@@ -249,7 +250,7 @@ export function ORBTab({ settings, onSendToCalc, prepFill, liveData, savedPreps 
             const label = loadingTicker ? 'Loading...' : stampDate
               ? `${isPriorDay ? 'Stale, last updated' : 'Updated'} ${stampDate.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`
               : 'No timestamp'
-            return <div style={{ fontSize: 9, fontFamily: MONO, color: isPriorDay ? RED : '#555', marginTop: 4 }}>{label}</div>
+            return <div style={{ fontSize: 9, fontFamily: MONO, color: isPriorDay ? RED : THEME.colors.secondary, marginTop: 4 }}>{label}</div>
           })()}
         </div>
         <Sel label="Direction" value={dir} onChange={setDir} options={[{ value: 'long', label: '↑ Long — Buy Call' }, { value: 'short', label: '↓ Short — Buy Put' }]} />
@@ -283,7 +284,7 @@ export function ORBTab({ settings, onSendToCalc, prepFill, liveData, savedPreps 
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
             <button onClick={refetchFromChart} disabled={!canFetch} style={{
               background: 'transparent', border: `1px solid ${BORDER}`,
-              color: canFetch ? '#aaa' : '#444',
+              color: canFetch ? THEME.colors.secondary : THEME.colors.secondary,
               fontFamily: MONO, fontSize: 10, padding: '5px 12px', borderRadius: 3,
               cursor: canFetch ? 'pointer' : 'not-allowed', letterSpacing: '0.1em', textTransform: 'uppercase',
             }}>Refetch from chart</button>
@@ -298,14 +299,14 @@ export function ORBTab({ settings, onSendToCalc, prepFill, liveData, savedPreps 
         const tone = state === 'CONFIRMED'
           ? (cur?.direction === 'LONG' ? 'long' : cur?.direction === 'SHORT' ? 'short' : 'neutral')
           : state === 'PENDING' ? 'pending' : 'watching'
-        const color = tone === 'long' ? LIME : tone === 'short' ? RED : tone === 'pending' ? YELLOW : '#888'
-        const bg = tone === 'long' ? '#071208' : tone === 'short' ? '#150505' : tone === 'pending' ? '#100d04' : '#0a0a0a'
+        const color = tone === 'long' ? LIME : tone === 'short' ? RED : tone === 'pending' ? YELLOW : THEME.colors.secondary
+        const bg = tone === 'long' ? THEME.colors.positiveSurface : tone === 'short' ? THEME.colors.negativeSurface : tone === 'pending' ? THEME.colors.surface : THEME.colors.background
         const border = tone === 'long' ? `${LIME}55` : tone === 'short' ? `${RED}55` : tone === 'pending' ? `${YELLOW}55` : BORDER
         const directionGlyph = cur?.direction === 'LONG' ? '▲' : cur?.direction === 'SHORT' ? '▼' : '•'
         return (
           <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 5, padding: '14px 18px' }}>
             {orbStale && (
-              <div style={{ marginBottom: 12, padding: '8px 12px', background: '#150505', border: `1px solid ${RED}55`, borderRadius: 4, fontSize: 10, fontFamily: MONO, color: RED, letterSpacing: '0.06em' }}>
+              <div style={{ marginBottom: 12, padding: '8px 12px', background: THEME.colors.negativeSurface, border: `1px solid ${RED}55`, borderRadius: 4, fontSize: 10, fontFamily: MONO, color: RED, letterSpacing: '0.06em' }}>
                 STALE LEVELS: live price ${f2(livePriceForSanity)} sits more than one OR range from both boundaries. The loaded OR may be from a prior session. Use Refetch from chart above.
               </div>
             )}
@@ -313,13 +314,13 @@ export function ORBTab({ settings, onSendToCalc, prepFill, liveData, savedPreps 
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{
                   fontSize: 10, fontFamily: MONO, fontWeight: 800, letterSpacing: '0.14em',
-                  color: state === 'CONFIRMED' ? '#000' : color,
+                  color: state === 'CONFIRMED' ? THEME.colors.background : color,
                   background: state === 'CONFIRMED' ? color : 'transparent',
                   border: `1px solid ${color}`,
                   padding: '3px 8px', borderRadius: 3,
                 }}>{state}</span>
                 {cur?.signal && (
-                  <span style={{ fontSize: 12, fontFamily: MONO, fontWeight: 700, color: '#e8e8e8', letterSpacing: '0.04em' }}>
+                  <span style={{ fontSize: 12, fontFamily: MONO, fontWeight: 700, color: THEME.colors.text, letterSpacing: '0.04em' }}>
                     {cur.signal.replace(/_/g, ' ')}
                   </span>
                 )}
@@ -335,30 +336,30 @@ export function ORBTab({ settings, onSendToCalc, prepFill, liveData, savedPreps 
             </div>
             {state === 'CONFIRMED' && (
               <>
-                <div style={{ fontSize: 11, fontFamily: MONO, color: '#aaa', lineHeight: 1.6, marginBottom: 8 }}>{cur.explanation}</div>
-                <div style={{ display: 'flex', gap: 14, fontSize: 10, fontFamily: MONO, color: '#888', flexWrap: 'wrap' }}>
-                  <span><span style={{ color: '#555' }}>Boundary:</span> <strong style={{ color: '#bbb' }}>{cur.boundary}</strong></span>
+                <div style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary, lineHeight: 1.6, marginBottom: 8 }}>{cur.explanation}</div>
+                <div style={{ display: 'flex', gap: 14, fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary, flexWrap: 'wrap' }}>
+                  <span><span style={{ color: THEME.colors.secondary }}>Boundary:</span> <strong style={{ color: THEME.colors.secondary }}>{cur.boundary}</strong></span>
                   {cur.event?.boundaryPrice != null && (
-                    <span><span style={{ color: '#555' }}>Level:</span> <strong style={{ color: '#bbb' }}>${f2(cur.event.boundaryPrice)}</strong></span>
+                    <span><span style={{ color: THEME.colors.secondary }}>Level:</span> <strong style={{ color: THEME.colors.secondary }}>${f2(cur.event.boundaryPrice)}</strong></span>
                   )}
                   {cur.price != null && (
-                    <span><span style={{ color: '#555' }}>Trigger close:</span> <strong style={{ color }}>${f2(cur.price)}</strong></span>
+                    <span><span style={{ color: THEME.colors.secondary }}>Trigger close:</span> <strong style={{ color }}>${f2(cur.price)}</strong></span>
                   )}
                 </div>
               </>
             )}
             {state === 'PENDING' && (
               <>
-                <div style={{ fontSize: 11, fontFamily: MONO, color: '#aaa', lineHeight: 1.6, marginBottom: 8 }}>{cur.waitingFor}</div>
-                <div style={{ display: 'flex', gap: 14, fontSize: 10, fontFamily: MONO, color: '#888', flexWrap: 'wrap' }}>
-                  <span><span style={{ color: '#555' }}>Boundary:</span> <strong style={{ color: '#bbb' }}>{cur.boundary} ${f2(cur.boundaryPrice)}</strong></span>
-                  <span><span style={{ color: '#555' }}>Break close:</span> <strong style={{ color: YELLOW }}>${f2(cur.triggerPrice)}</strong></span>
-                  <span><span style={{ color: '#555' }}>Window remaining:</span> <strong style={{ color: YELLOW }}>{cur.windowRemaining} {cur.windowRemaining === 1 ? 'bar' : 'bars'} (5m)</strong></span>
+                <div style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary, lineHeight: 1.6, marginBottom: 8 }}>{cur.waitingFor}</div>
+                <div style={{ display: 'flex', gap: 14, fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary, flexWrap: 'wrap' }}>
+                  <span><span style={{ color: THEME.colors.secondary }}>Boundary:</span> <strong style={{ color: THEME.colors.secondary }}>{cur.boundary} ${f2(cur.boundaryPrice)}</strong></span>
+                  <span><span style={{ color: THEME.colors.secondary }}>Break close:</span> <strong style={{ color: YELLOW }}>${f2(cur.triggerPrice)}</strong></span>
+                  <span><span style={{ color: THEME.colors.secondary }}>Window remaining:</span> <strong style={{ color: YELLOW }}>{cur.windowRemaining} {cur.windowRemaining === 1 ? 'bar' : 'bars'} (5m)</strong></span>
                 </div>
               </>
             )}
             {state === 'WATCHING' && (
-              <div style={{ fontSize: 11, fontFamily: MONO, color: '#888', lineHeight: 1.6 }}>
+              <div style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary, lineHeight: 1.6 }}>
                 No qualifying bar close yet. Engine waits for a full 5m bar to close beyond OR High or OR Low, or for an inside-range wick-and-reclaim of either boundary.
               </div>
             )}
@@ -382,8 +383,8 @@ export function ORBTab({ settings, onSendToCalc, prepFill, liveData, savedPreps 
             {livePrice && (() => {
               const isAbove = livePrice > oh
               const isBelow = livePrice < ol
-              const bg = isAbove ? '#071208' : isBelow ? '#120708' : '#0a0a0a'
-              const borderC = isAbove ? LIME : isBelow ? RED : '#1a1a1a'
+              const bg = isAbove ? THEME.colors.positiveSurface : isBelow ? THEME.colors.negativeSurface : THEME.colors.background
+              const borderC = isAbove ? LIME : isBelow ? RED : THEME.colors.surface
               const color = isAbove ? LIME : isBelow ? RED : YELLOW
               const msg = isAbove ? '▲ ABOVE OR HIGH — breakout' : isBelow ? '▼ BELOW OR LOW — breakdown' : '◆ INSIDE RANGE — wait'
               return (
@@ -396,7 +397,7 @@ export function ORBTab({ settings, onSendToCalc, prepFill, liveData, savedPreps 
               const isNear = livePrice && Math.abs(livePrice - row.p) < 0.15
               const isCrossed = livePrice && ((row.l.includes('High') && livePrice > row.p) || (row.l.includes('Low') && livePrice < row.p))
               return (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: i < ladder.length - 1 ? '1px solid #0f0f0f' : 'none', background: isNear ? '#1a1a0a' : 'transparent' }}>
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: i < ladder.length - 1 ? `1px solid ${THEME.colors.surface}` : 'none', background: isNear ? THEME.colors.surface : 'transparent' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     {isNear && <div style={{ width: 6, height: 6, borderRadius: '50%', background: LIME, boxShadow: `0 0 6px ${LIME}` }} />}
                     <span style={{ fontSize: 9, color: isCrossed ? LIME : row.c, fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: isCrossed ? 700 : 400 }}>{row.l}</span>
@@ -409,10 +410,10 @@ export function ORBTab({ settings, onSendToCalc, prepFill, liveData, savedPreps 
           <Card>
             <SLabel>Underlying Price Targets</SLabel>
             {[{ l: '1:1 — Move stop to BE on option', p: t1, note: 'Check if option ~doubled' }, { l: '2:1 — Primary target', p: t2, rr: rr2, note: 'Your option target corresponds here' }, { l: '3:1 — Extension runner', p: t3, note: 'Trail stop on option if 2:1 hit' }].map((row, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: i < 2 ? '1px solid #111' : 'none' }}>
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: i < 2 ? `1px solid ${THEME.colors.surface}` : 'none' }}>
                 <div>
-                  <div style={{ fontSize: 12, fontFamily: MONO, color: '#666' }}>{row.l}</div>
-                  <div style={{ fontSize: 10, fontFamily: MONO, color: '#2a2a2a', marginTop: 2 }}>{row.note}</div>
+                  <div style={{ fontSize: 12, fontFamily: MONO, color: THEME.colors.secondary }}>{row.l}</div>
+                  <div style={{ fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary, marginTop: 2 }}>{row.note}</div>
                 </div>
                 <div style={{ display: 'flex', gap: 18, alignItems: 'center' }}>
                   <span style={{ fontSize: 14, fontFamily: MONO, color: isLong ? LIME : RED, fontWeight: 700 }}>${f2(row.p)}</span>
@@ -427,10 +428,10 @@ export function ORBTab({ settings, onSendToCalc, prepFill, liveData, savedPreps 
         <SLabel>ORB Pre-Entry Checklist</SLabel>
         {rules.map((rule, i) => <CheckRow key={i} text={rule} required={true} checked={!!checks[i]} onToggle={() => setChecks(c => ({ ...c, [i]: !c[i] }))} />)}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
-          <div style={{ flex: 1, height: 4, background: '#111', borderRadius: 2, overflow: 'hidden' }}>
+          <div style={{ flex: 1, height: 4, background: THEME.colors.background, borderRadius: 2, overflow: 'hidden' }}>
             <div style={{ height: '100%', width: `${(done / rules.length) * 100}%`, background: allOk ? LIME : YELLOW, transition: 'width 0.25s' }} />
           </div>
-          <span style={{ fontSize: 10, fontFamily: MONO, color: allOk ? LIME : '#555' }}>{done}/{rules.length}</span>
+          <span style={{ fontSize: 10, fontFamily: MONO, color: allOk ? LIME : THEME.colors.secondary }}>{done}/{rules.length}</span>
         </div>
       </Card>
       {range && <Btn disabled={!allOk} onClick={() => onSendToCalc({ ticker, optType: isLong ? 'call' : 'put', setupType: 'ORB' })}>{allOk ? 'Send to Calculator →' : `Complete ${rules.length - done} remaining checks`}</Btn>}
@@ -472,13 +473,13 @@ export function IVAnalyzerTab({ instrument, ticker = 'QQQ', onSendToPrep, onSend
   const beU = result && !isNaN(mpp) ? (optType === 'call' ? K + mpp : K - mpp) : null
   const em = !isNaN(S) && !isNaN(T) && !isNaN(sigma) ? S * sigma * Math.sqrt(T) : null
 
-  let money = '', mc = '#888'
+  let money = '', mc = THEME.colors.secondary
   if (!isNaN(S) && !isNaN(K)) {
     const d = ((S - K) / K) * 100
     if (optType === 'call') { if (S > K * 1.005) { money = `ITM +${f2(Math.abs(d))}%`; mc = LIME } else if (S < K * 0.995) { money = `OTM ${f2(Math.abs(d))}%`; mc = YELLOW } else { money = 'ATM'; mc = BLUE } }
     else { if (S < K * 0.995) { money = `ITM +${f2(Math.abs(d))}%`; mc = LIME } else if (S > K * 1.005) { money = `OTM ${f2(Math.abs(d))}%`; mc = YELLOW } else { money = 'ATM'; mc = BLUE } }
   }
-  let fairColor = '#888', fairLabel = ''
+  let fairColor = THEME.colors.secondary, fairLabel = ''
   if (result && !isNaN(mpp)) {
     const pct = ((mpp - result.price) / result.price) * 100
     if (pct > 20) { fairColor = RED; fairLabel = `${f2(pct)}% ABOVE FAIR — Overpriced` }
@@ -512,28 +513,28 @@ export function IVAnalyzerTab({ instrument, ticker = 'QQQ', onSendToPrep, onSend
       </Card>
       {result && (
         <>
-          <div style={{ background: '#0a0a0a', border: `1px solid ${PURPLE}33`, borderRadius: 5, padding: '22px 26px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ background: THEME.colors.background, border: `1px solid ${PURPLE}33`, borderRadius: 5, padding: '22px 26px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <SLabel>Theoretical Fair Value (Black-Scholes)</SLabel>
               <div style={{ fontSize: 48, fontWeight: 900, fontFamily: MONO, color: PURPLE, lineHeight: 1, letterSpacing: '-0.03em' }}>${f2(result.price)}</div>
               {!isNaN(mpp) && (
                 <div style={{ marginTop: 10 }}>
-                  <div style={{ fontSize: 11, color: '#444', fontFamily: MONO, marginBottom: 4 }}>You're paying: <span style={{ color: '#e8e8e8', fontWeight: 700 }}>${f2(mpp)}</span> / contract = <span style={{ color: '#aaa' }}>${f2(mpp * n * 100)} total</span></div>
+                  <div style={{ fontSize: 11, color: THEME.colors.secondary, fontFamily: MONO, marginBottom: 4 }}>You're paying: <span style={{ color: THEME.colors.text, fontWeight: 700 }}>${f2(mpp)}</span> / contract = <span style={{ color: THEME.colors.secondary }}>${f2(mpp * n * 100)} total</span></div>
                   <div style={{ fontSize: 13, fontFamily: MONO, color: fairColor, fontWeight: 700 }}>{fairLabel}</div>
                 </div>
               )}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, textAlign: 'right' }}>
-              {money && <div><div style={{ fontSize: 9, color: '#2a2a2a', letterSpacing: '0.1em', fontFamily: MONO, textTransform: 'uppercase' }}>Moneyness</div><div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: mc }}>{money}</div></div>}
-              {ivCtx && <div><div style={{ fontSize: 9, color: '#2a2a2a', letterSpacing: '0.1em', fontFamily: MONO, textTransform: 'uppercase' }}>IV Level</div><div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: ivCtx.color }}>{ivCtx.label}</div></div>}
-              <div><div style={{ fontSize: 9, color: '#2a2a2a', letterSpacing: '0.1em', fontFamily: MONO, textTransform: 'uppercase' }}>Daily Theta</div><div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: RED }}>-${f2(Math.abs(result.theta), 3)}/day</div></div>
+              {money && <div><div style={{ fontSize: 9, color: THEME.colors.secondary, letterSpacing: '0.1em', fontFamily: MONO, textTransform: 'uppercase' }}>Moneyness</div><div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: mc }}>{money}</div></div>}
+              {ivCtx && <div><div style={{ fontSize: 9, color: THEME.colors.secondary, letterSpacing: '0.1em', fontFamily: MONO, textTransform: 'uppercase' }}>IV Level</div><div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: ivCtx.color }}>{ivCtx.label}</div></div>}
+              <div><div style={{ fontSize: 9, color: THEME.colors.secondary, letterSpacing: '0.1em', fontFamily: MONO, textTransform: 'uppercase' }}>Daily Theta</div><div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: RED }}>-${f2(Math.abs(result.theta), 3)}/day</div></div>
             </div>
           </div>
           {ivCtx && <div style={{ background: PANEL, border: `1px solid ${ivCtx.color}22`, borderRadius: 5, padding: '14px 18px', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
             <div style={{ fontSize: 20, color: ivCtx.color, fontFamily: MONO, flexShrink: 0 }}>◉</div>
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, fontFamily: MONO, color: ivCtx.color, letterSpacing: '0.06em', marginBottom: 5 }}>IV {f2(parseFloat(iv))}% — {ivCtx.label}</div>
-              <div style={{ fontSize: 11, color: '#555', fontFamily: MONO, lineHeight: 1.7 }}>{ivCtx.detail}</div>
+              <div style={{ fontSize: 11, color: THEME.colors.secondary, fontFamily: MONO, lineHeight: 1.7 }}>{ivCtx.detail}</div>
             </div>
           </div>}
 
@@ -543,7 +544,7 @@ export function IVAnalyzerTab({ instrument, ticker = 'QQQ', onSendToPrep, onSend
             const valid = !isNaN(rank) && rank >= 0 && rank <= 100
             let label, color, msg
             if (!valid) {
-              label = 'Enter IV Rank'; color = '#888'
+              label = 'Enter IV Rank'; color = THEME.colors.secondary
               msg = 'IV Rank tells you how today\'s IV compares to the last 52 weeks. Your broker shows it on each option chain.'
             } else if (rank >= 50) {
               label = 'EXPENSIVE'; color = RED
@@ -562,31 +563,31 @@ export function IVAnalyzerTab({ instrument, ticker = 'QQQ', onSendToPrep, onSend
                   <span style={{ fontSize: 10, fontFamily: MONO, fontWeight: 700, color }}>{label}{valid ? ` · ${f2(rank)}%` : ''}</span>
                 </div>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 10 }}>
-                  <input type="number" min="0" max="100" value={ivRank} onChange={e => setIvRank(e.target.value)} placeholder="e.g. 32" style={{ width: 120, background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 4, color: '#e8e8e8', fontFamily: MONO, fontSize: 13, padding: '8px 10px', outline: 'none' }} />
-                  <span style={{ fontSize: 10, fontFamily: MONO, color: '#555' }}>0–100 (from your broker's option chain)</span>
+                  <input type="number" min="0" max="100" value={ivRank} onChange={e => setIvRank(e.target.value)} placeholder="e.g. 32" style={{ width: 120, background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 4, color: THEME.colors.text, fontFamily: MONO, fontSize: 13, padding: '8px 10px', outline: 'none' }} />
+                  <span style={{ fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary }}>0–100 (from your broker's option chain)</span>
                 </div>
-                <div style={{ fontSize: 11, fontFamily: MONO, color: valid ? color : '#666', lineHeight: 1.6 }}>{msg}</div>
+                <div style={{ fontSize: 11, fontFamily: MONO, color: valid ? color : THEME.colors.secondary, lineHeight: 1.6 }}>{msg}</div>
               </Card>
             )
           })()}
           {(beU || em) && <Card>
             <SLabel>Key Levels</SLabel>
-            {beU && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #0f0f0f' }}><div><div style={{ fontSize: 11, fontFamily: MONO, color: '#555' }}>Break-even at expiry (underlying)</div><div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, marginTop: 2 }}>QQQ must reach here for profit at expiry</div></div><div style={{ fontSize: 15, fontFamily: MONO, fontWeight: 700, color: YELLOW }}>${f2(beU)}</div></div>}
-            {em && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}><div><div style={{ fontSize: 11, fontFamily: MONO, color: '#555' }}>Expected 1σ move (underlying)</div><div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, marginTop: 2 }}>Market pricing {f2((em / S) * 100)}% move from ${f2(S)}</div></div><div style={{ fontSize: 15, fontFamily: MONO, fontWeight: 700, color: BLUE }}>±${f2(em)}</div></div>}
+            {beU && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1px solid ${THEME.colors.surface}` }}><div><div style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary }}>Break-even at expiry (underlying)</div><div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, marginTop: 2 }}>QQQ must reach here for profit at expiry</div></div><div style={{ fontSize: 15, fontFamily: MONO, fontWeight: 700, color: YELLOW }}>${f2(beU)}</div></div>}
+            {em && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}><div><div style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary }}>Expected 1σ move (underlying)</div><div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, marginTop: 2 }}>Market pricing {f2((em / S) * 100)}% move from ${f2(S)}</div></div><div style={{ fontSize: 15, fontFamily: MONO, fontWeight: 700, color: BLUE }}>±${f2(em)}</div></div>}
           </Card>}
           {optRR && <Card style={{ border: `1px solid ${rrColor(optRR.rr)}33` }}>
             <SLabel style={{ display: 'flex', alignItems: 'center' }}>R:R on This Contract<Tip tip="Risk to Reward ratio — how much you make vs. how much you risk per trade. At 2:1 you make $2 for every $1 risked, meaning you only need to be right 34% of the time to be net profitable. Never take a trade below 2:1." /></SLabel>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 14 }}>
-              {[{ l: 'Entry', v: '$' + f2(parseFloat(mp)), c: '#e8e8e8' }, { l: 'Stop', v: '$' + f2(parseFloat(stopP)), c: RED }, { l: 'Target', v: '$' + f2(parseFloat(targetP)), c: LIME }, { l: 'R:R', v: '1:' + f2(optRR.rr), c: rrColor(optRR.rr) }].map(row => (
-                <div key={row.l}><div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>{row.l}</div><div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: row.c }}>{row.v}</div></div>
+              {[{ l: 'Entry', v: '$' + f2(parseFloat(mp)), c: THEME.colors.text }, { l: 'Stop', v: '$' + f2(parseFloat(stopP)), c: RED }, { l: 'Target', v: '$' + f2(parseFloat(targetP)), c: LIME }, { l: 'R:R', v: '1:' + f2(optRR.rr), c: rrColor(optRR.rr) }].map(row => (
+                <div key={row.l}><div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>{row.l}</div><div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: row.c }}>{row.v}</div></div>
               ))}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-              <div style={{ background: '#0a0505', border: '1px solid #1e0808', borderRadius: 4, padding: '10px 12px' }}><div style={{ fontSize: 9, color: '#3a1a1a', fontFamily: MONO, textTransform: 'uppercase', marginBottom: 3 }}>$ Risk ({n}c)</div><div style={{ fontSize: 17, fontFamily: MONO, fontWeight: 700, color: RED }}>-${f2(optRR.dollarRisk)}</div></div>
-              <div style={{ background: '#060d04', border: '1px solid #152010', borderRadius: 4, padding: '10px 12px' }}><div style={{ fontSize: 9, color: '#1a3a1a', fontFamily: MONO, textTransform: 'uppercase', marginBottom: 3 }}>$ Reward ({n}c)</div><div style={{ fontSize: 17, fontFamily: MONO, fontWeight: 700, color: LIME }}>+${f2(optRR.dollarReward)}</div></div>
-              <div style={{ background: '#080808', border: '1px solid #1a1a1a', borderRadius: 4, padding: '10px 12px' }}><div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, textTransform: 'uppercase', marginBottom: 3 }}>Total Cost</div><div style={{ fontSize: 17, fontFamily: MONO, fontWeight: 700, color: '#777' }}>{fmtU(optRR.totalCost)}</div></div>
+              <div style={{ background: THEME.colors.negativeSurface, border: `1px solid ${THEME.colors.negativeSurface}`, borderRadius: 4, padding: '10px 12px' }}><div style={{ fontSize: 9, color: THEME.colors.negativeSurface, fontFamily: MONO, textTransform: 'uppercase', marginBottom: 3 }}>$ Risk ({n}c)</div><div style={{ fontSize: 17, fontFamily: MONO, fontWeight: 700, color: RED }}>-${f2(optRR.dollarRisk)}</div></div>
+              <div style={{ background: THEME.colors.positiveSurface, border: `1px solid ${THEME.colors.positiveSurface}`, borderRadius: 4, padding: '10px 12px' }}><div style={{ fontSize: 9, color: THEME.colors.positiveSurface, fontFamily: MONO, textTransform: 'uppercase', marginBottom: 3 }}>$ Reward ({n}c)</div><div style={{ fontSize: 17, fontFamily: MONO, fontWeight: 700, color: LIME }}>+${f2(optRR.dollarReward)}</div></div>
+              <div style={{ background: THEME.colors.background, border: `1px solid ${THEME.colors.surface}`, borderRadius: 4, padding: '10px 12px' }}><div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, textTransform: 'uppercase', marginBottom: 3 }}>Total Cost</div><div style={{ fontSize: 17, fontFamily: MONO, fontWeight: 700, color: THEME.colors.secondary }}>{fmtU(optRR.totalCost)}</div></div>
             </div>
-            {optRR.rr < 2 && <div style={{ marginTop: 12, fontSize: 11, fontFamily: MONO, color: RED, padding: '10px 14px', background: '#100505', borderRadius: 4, border: '1px solid #2a0a0a' }}>R:R below 2:1. Per your rules, this does not qualify. Do not enter.</div>}
+            {optRR.rr < 2 && <div style={{ marginTop: 12, fontSize: 11, fontFamily: MONO, color: RED, padding: '10px 14px', background: THEME.colors.negativeSurface, borderRadius: 4, border: `1px solid ${THEME.colors.negativeSurface}` }}>R:R below 2:1. Per your rules, this does not qualify. Do not enter.</div>}
           </Card>}
           <div>
             <SLabel>The Greeks</SLabel>
@@ -597,10 +598,10 @@ export function IVAnalyzerTab({ instrument, ticker = 'QQQ', onSendToPrep, onSend
                 { l: 'Vega / 1% IV', v: '$' + f2(result.vega, 3), c: BLUE, d: `Option moves $${f2(result.vega, 2)} per 1% IV change.` },
                 { l: 'Gamma', v: f2(result.gamma, 4), c: YELLOW, d: `Delta accelerates by ${f2(result.gamma, 4)} per $1 move.` },
               ].map(g => (
-                <div key={g.l} style={{ background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 4, padding: '12px 14px' }}>
-                  <div style={{ fontSize: 9, color: '#2a2a2a', letterSpacing: '0.14em', fontFamily: MONO, textTransform: 'uppercase', marginBottom: 4 }}>{g.l}</div>
+                <div key={g.l} style={{ background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 4, padding: '12px 14px' }}>
+                  <div style={{ fontSize: 9, color: THEME.colors.secondary, letterSpacing: '0.14em', fontFamily: MONO, textTransform: 'uppercase', marginBottom: 4 }}>{g.l}</div>
                   <div style={{ fontSize: 20, fontWeight: 700, fontFamily: MONO, color: g.c, marginBottom: 4 }}>{g.v}</div>
-                  <div style={{ fontSize: 10, color: '#333', fontFamily: MONO, lineHeight: 1.5 }}>{g.d}</div>
+                  <div style={{ fontSize: 10, color: THEME.colors.secondary, fontFamily: MONO, lineHeight: 1.5 }}>{g.d}</div>
                 </div>
               ))}
             </div>
@@ -679,30 +680,30 @@ export function CalculatorTab({ prefill, onLogTrade, checklistPassed, lockedOut,
   const calc = isStock ? calcStock : calcOpts
   const blocked = lockedOut || maxTradesReached
   const valid = calc !== null
-  const color = valid ? rrColor(calc.rr) : '#333'
+  const color = valid ? rrColor(calc.rr) : THEME.colors.border
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <div><SLabel>{isStock ? 'Stock/ETF Trade Entry' : 'Options-First Trade Entry'}</SLabel><Heading>R:R Calculator</Heading></div>
-      <div style={{ background: '#0a0d08', border: '1px solid #1a2a18', borderRadius: 5, padding: '12px 16px' }}>
-        <div style={{ fontSize: 10, color: '#3a5030', fontFamily: MONO, lineHeight: 1.8 }}>
+      <div style={{ background: THEME.colors.positiveSurface, border: `1px solid ${THEME.colors.positiveSurface}`, borderRadius: 5, padding: '12px 16px' }}>
+        <div style={{ fontSize: 10, color: THEME.colors.positive, fontFamily: MONO, lineHeight: 1.8 }}>
           {isStock
             ? <><span style={{ color: LIME, fontWeight: 700 }}>Stock mode:</span> Entry, stop, and target are share prices. Dollar amounts = price difference × shares.</>
             : <><span style={{ color: LIME, fontWeight: 700 }}>Options mode:</span> Entry, stop, and target are the option contract prices — not QQQ. Amounts auto-calculate at ×100 per contract.</>
           }
         </div>
       </div>
-      {!checklistPassed && <div style={{ background: '#120d00', border: '1px solid #2a1e00', borderRadius: 4, padding: '11px 16px', fontSize: 11, fontFamily: MONO, color: YELLOW }}>Checklist not confirmed. Run the Pre-Trade Checklist first.</div>}
-      {blocked && <div style={{ background: '#150000', border: `1px solid ${RED}33`, borderRadius: 4, padding: '11px 16px', fontSize: 11, fontFamily: MONO, color: RED }}>{lockedOut ? 'Trading locked — daily loss limit reached.' : 'Daily trade limit reached.'}</div>}
-      <div style={{ background: '#0a0a0a', border: `1px solid ${valid ? color + '44' : BORDER}`, borderRadius: 5, padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      {!checklistPassed && <div style={{ background: THEME.colors.negativeSurface, border: `1px solid ${THEME.colors.negativeSurface}`, borderRadius: 4, padding: '11px 16px', fontSize: 11, fontFamily: MONO, color: YELLOW }}>Checklist not confirmed. Run the Pre-Trade Checklist first.</div>}
+      {blocked && <div style={{ background: THEME.colors.negativeSurface, border: `1px solid ${RED}33`, borderRadius: 4, padding: '11px 16px', fontSize: 11, fontFamily: MONO, color: RED }}>{lockedOut ? 'Trading locked — daily loss limit reached.' : 'Daily trade limit reached.'}</div>}
+      <div style={{ background: THEME.colors.background, border: `1px solid ${valid ? color + '44' : BORDER}`, borderRadius: 5, padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <div style={{ fontSize: 9, color: '#333', letterSpacing: '0.14em', fontFamily: MONO, textTransform: 'uppercase', marginBottom: 10 }}>{isStock ? 'Risk : Reward (on share price)' : 'Risk : Reward (on premium)'}</div>
+          <div style={{ fontSize: 9, color: THEME.colors.secondary, letterSpacing: '0.14em', fontFamily: MONO, textTransform: 'uppercase', marginBottom: 10 }}>{isStock ? 'Risk : Reward (on share price)' : 'Risk : Reward (on premium)'}</div>
           <div style={{ fontSize: 48, fontWeight: 900, color, fontFamily: MONO, lineHeight: 1, letterSpacing: '-0.03em' }}>{valid ? '1 : ' + f2(calc.rr) : '— : —'}</div>
           {valid && <div style={{ fontSize: 10, color, fontFamily: MONO, letterSpacing: '0.14em', marginTop: 8, textTransform: 'uppercase' }}>{calc.rr >= 3 ? 'STRONG EDGE' : calc.rr >= 2 ? 'ACCEPTABLE' : 'POOR SETUP — DO NOT TRADE'}</div>}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, textAlign: 'right' }}>
-          {[{ l: 'Break-even Win%', v: valid ? f2(calc.breakEvenWin) + '%' : '—', c: '#aaa' }, { l: 'Total Cost', v: valid ? fmtU(calc.totalCost) : '—', c: '#777' }, { l: 'Max $ Risk', v: valid ? fmtU(calc.dollarRisk) : '—', c: RED }, { l: 'Max $ Reward', v: valid ? fmtU(calc.dollarReward) : '—', c: LIME }].map(row => (
-            <div key={row.l}><div style={{ fontSize: 9, color: '#2a2a2a', letterSpacing: '0.1em', fontFamily: MONO, textTransform: 'uppercase' }}>{row.l}</div><div style={{ fontSize: 15, color: row.c, fontFamily: MONO, fontWeight: 600 }}>{row.v}</div></div>
+          {[{ l: 'Break-even Win%', v: valid ? f2(calc.breakEvenWin) + '%' : '—', c: THEME.colors.secondary }, { l: 'Total Cost', v: valid ? fmtU(calc.totalCost) : '—', c: THEME.colors.secondary }, { l: 'Max $ Risk', v: valid ? fmtU(calc.dollarRisk) : '—', c: RED }, { l: 'Max $ Reward', v: valid ? fmtU(calc.dollarReward) : '—', c: LIME }].map(row => (
+            <div key={row.l}><div style={{ fontSize: 9, color: THEME.colors.secondary, letterSpacing: '0.1em', fontFamily: MONO, textTransform: 'uppercase' }}>{row.l}</div><div style={{ fontSize: 15, color: row.c, fontFamily: MONO, fontWeight: 600 }}>{row.v}</div></div>
           ))}
         </div>
       </div>
@@ -729,11 +730,11 @@ export function CalculatorTab({ prefill, onLogTrade, checklistPassed, lockedOut,
       )}
 
       {/* Price fields */}
-      <div style={{ background: '#080d05', border: '1px solid #1a2a10', borderRadius: 5, padding: '16px 18px' }}>
+      <div style={{ background: THEME.colors.positiveSurface, border: `1px solid ${THEME.colors.positiveSurface}`, borderRadius: 5, padding: '16px 18px' }}>
         {isStock ? (
           <>
-            <div style={{ fontSize: 9, letterSpacing: '0.16em', color: '#3a5030', textTransform: 'uppercase', fontFamily: MONO, marginBottom: 6 }}>Share Prices</div>
-            <div style={{ fontSize: 10, color: '#3a5030', fontFamily: MONO, marginBottom: 14, lineHeight: 1.7 }}>All prices are share prices. Dollar risk/reward = price difference × number of shares.</div>
+            <div style={{ fontSize: 9, letterSpacing: '0.16em', color: THEME.colors.positive, textTransform: 'uppercase', fontFamily: MONO, marginBottom: 6 }}>Share Prices</div>
+            <div style={{ fontSize: 10, color: THEME.colors.positive, fontFamily: MONO, marginBottom: 14, lineHeight: 1.7 }}>All prices are share prices. Dollar risk/reward = price difference × number of shares.</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12, marginBottom: 14 }}>
               <Fld label="Entry (share price)" value={entry} onChange={setEntry} placeholder="512.50" prefix="$" accent />
               <Fld label="Stop (share price)" value={stop} onChange={setStop} placeholder="510.00" prefix="$" accent />
@@ -743,18 +744,18 @@ export function CalculatorTab({ prefill, onLogTrade, checklistPassed, lockedOut,
           </>
         ) : (
           <>
-            <div style={{ fontSize: 9, letterSpacing: '0.16em', color: '#3a5030', textTransform: 'uppercase', fontFamily: MONO, marginBottom: 6 }}>Option Contract Prices (premium per share)</div>
-            <div style={{ fontSize: 10, color: '#3a5030', fontFamily: MONO, marginBottom: 14, lineHeight: 1.7 }}>Entry, stop, target = option's own price. 1 contract = 100 shares. $ amounts = price × 100 × contracts.</div>
+            <div style={{ fontSize: 9, letterSpacing: '0.16em', color: THEME.colors.positive, textTransform: 'uppercase', fontFamily: MONO, marginBottom: 6 }}>Option Contract Prices (premium per share)</div>
+            <div style={{ fontSize: 10, color: THEME.colors.positive, fontFamily: MONO, marginBottom: 14, lineHeight: 1.7 }}>Entry, stop, target = option's own price. 1 contract = 100 shares. $ amounts = price × 100 × contracts.</div>
             {schwabConnected ? (
               <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
                 <Fld label="Expiry" value={expiry} onChange={setExpiry} type="date" />
-                <button onClick={fetchSchwabAsk} disabled={liveAskLoading || !ticker || !strike} style={{ background: liveAskLoading || !ticker || !strike ? '#1a1a1a' : SCHWAB_BLUE, color: liveAskLoading || !ticker || !strike ? '#444' : '#fff', border: 'none', borderRadius: 4, padding: '8px 14px', fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', cursor: liveAskLoading || !ticker || !strike ? 'not-allowed' : 'pointer', alignSelf: 'flex-end' }}>{liveAskLoading ? 'Fetching...' : 'Get Live Ask (Schwab) →'}</button>
+                <button onClick={fetchSchwabAsk} disabled={liveAskLoading || !ticker || !strike} style={{ background: liveAskLoading || !ticker || !strike ? THEME.colors.surface : SCHWAB_BLUE, color: liveAskLoading || !ticker || !strike ? THEME.colors.secondary : THEME.colors.text, border: 'none', borderRadius: 4, padding: '8px 14px', fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', cursor: liveAskLoading || !ticker || !strike ? 'not-allowed' : 'pointer', alignSelf: 'flex-end' }}>{liveAskLoading ? 'Fetching...' : 'Get Live Ask (Schwab) →'}</button>
                 {liveAskError && <span style={{ fontSize: 10, color: RED, fontFamily: MONO }}>{liveAskError}</span>}
                 {askDetail && <span style={{ fontSize: 10, color: SCHWAB_BLUE, fontFamily: MONO }}>Bid ${f2(askDetail.bid)} / Ask ${f2(askDetail.ask)} · spread ${f2(askDetail.spread)}</span>}
               </div>
             ) : (
-              <div style={{ fontSize: 10, color: '#444', fontFamily: MONO, marginBottom: 12, lineHeight: 1.6 }}>
-                Enter ask price from your broker's option chain. <span style={{ color: '#666' }}>(Connect Schwab in Command for one-click live ask.)</span>
+              <div style={{ fontSize: 10, color: THEME.colors.secondary, fontFamily: MONO, marginBottom: 12, lineHeight: 1.6 }}>
+                Enter ask price from your broker's option chain. <span style={{ color: THEME.colors.secondary }}>(Connect Schwab in Command for one-click live ask.)</span>
               </div>
             )}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
@@ -768,15 +769,15 @@ export function CalculatorTab({ prefill, onLogTrade, checklistPassed, lockedOut,
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginTop: 14 }}>
             {isStock ? (
               <>
-                <div style={{ background: '#060606', border: '1px solid #1a1a1a', borderRadius: 4, padding: '10px 12px' }}><div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, textTransform: 'uppercase', marginBottom: 3 }}>Risk / share</div><div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: RED }}>-${f2(calc.risk)}</div></div>
-                <div style={{ background: '#060606', border: '1px solid #1a1a1a', borderRadius: 4, padding: '10px 12px' }}><div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, textTransform: 'uppercase', marginBottom: 3 }}>Reward / share</div><div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: LIME }}>${f2(calc.reward)}</div></div>
-                <div style={{ background: '#060606', border: '1px solid #1a1a1a', borderRadius: 4, padding: '10px 12px' }}><div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, textTransform: 'uppercase', marginBottom: 3 }}>Total cost ({sharesN} shares)</div><div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: '#aaa' }}>{fmtU(calc.totalCost)}</div></div>
+                <div style={{ background: THEME.colors.surface, border: `1px solid ${THEME.colors.surface}`, borderRadius: 4, padding: '10px 12px' }}><div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, textTransform: 'uppercase', marginBottom: 3 }}>Risk / share</div><div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: RED }}>-${f2(calc.risk)}</div></div>
+                <div style={{ background: THEME.colors.surface, border: `1px solid ${THEME.colors.surface}`, borderRadius: 4, padding: '10px 12px' }}><div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, textTransform: 'uppercase', marginBottom: 3 }}>Reward / share</div><div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: LIME }}>${f2(calc.reward)}</div></div>
+                <div style={{ background: THEME.colors.surface, border: `1px solid ${THEME.colors.surface}`, borderRadius: 4, padding: '10px 12px' }}><div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, textTransform: 'uppercase', marginBottom: 3 }}>Total cost ({sharesN} shares)</div><div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: THEME.colors.secondary }}>{fmtU(calc.totalCost)}</div></div>
               </>
             ) : (
               <>
-                <div style={{ background: '#060606', border: '1px solid #1a1a1a', borderRadius: 4, padding: '10px 12px' }}><div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, textTransform: 'uppercase', marginBottom: 3 }}>Risk / contract</div><div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: RED }}>-${f2(calc.risk)} <span style={{ fontSize: 10, color: '#444' }}>= -${f2(calc.risk * 100)}</span></div></div>
-                <div style={{ background: '#060606', border: '1px solid #1a1a1a', borderRadius: 4, padding: '10px 12px' }}><div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, textTransform: 'uppercase', marginBottom: 3 }}>Reward / contract</div><div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: LIME }}>${f2(calc.reward)} <span style={{ fontSize: 10, color: '#444' }}>= ${f2(calc.reward * 100)}</span></div></div>
-                <div style={{ background: '#060606', border: '1px solid #1a1a1a', borderRadius: 4, padding: '10px 12px' }}><div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, textTransform: 'uppercase', marginBottom: 3 }}>Total cost ({contracts}c)</div><div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: '#aaa' }}>{fmtU(calc.totalCost)}</div></div>
+                <div style={{ background: THEME.colors.surface, border: `1px solid ${THEME.colors.surface}`, borderRadius: 4, padding: '10px 12px' }}><div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, textTransform: 'uppercase', marginBottom: 3 }}>Risk / contract</div><div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: RED }}>-${f2(calc.risk)} <span style={{ fontSize: 10, color: THEME.colors.secondary }}>= -${f2(calc.risk * 100)}</span></div></div>
+                <div style={{ background: THEME.colors.surface, border: `1px solid ${THEME.colors.surface}`, borderRadius: 4, padding: '10px 12px' }}><div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, textTransform: 'uppercase', marginBottom: 3 }}>Reward / contract</div><div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: LIME }}>${f2(calc.reward)} <span style={{ fontSize: 10, color: THEME.colors.secondary }}>= ${f2(calc.reward * 100)}</span></div></div>
+                <div style={{ background: THEME.colors.surface, border: `1px solid ${THEME.colors.surface}`, borderRadius: 4, padding: '10px 12px' }}><div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, textTransform: 'uppercase', marginBottom: 3 }}>Total cost ({contracts}c)</div><div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: THEME.colors.secondary }}>{fmtU(calc.totalCost)}</div></div>
               </>
             )}
           </div>
@@ -799,29 +800,29 @@ export function CalculatorTab({ prefill, onLogTrade, checklistPassed, lockedOut,
         const breakeven = !isNaN(K) && !isNaN(e) ? (optType === 'call' ? K + e : K - e) : null
         const expiryDate = (() => { const d = new Date(); d.setDate(d.getDate() + dteN); return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) })()
         return (
-          <div style={{ background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: 5, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ fontSize: 9, fontFamily: MONO, color: '#666', letterSpacing: '0.14em', textTransform: 'uppercase' }}>Multi-Day Trade — {dteN} DTE</div>
+          <div style={{ background: THEME.colors.background, border: `1px solid ${THEME.colors.surface}`, borderRadius: 5, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ fontSize: 9, fontFamily: MONO, color: THEME.colors.secondary, letterSpacing: '0.14em', textTransform: 'uppercase' }}>Multi-Day Trade — {dteN} DTE</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, fontFamily: MONO, fontSize: 11 }}>
               <div>
-                <div style={{ fontSize: 9, color: '#555', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 3 }}>Daily theta</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: RED }}>-${f2(thetaPerContractDollar)} <span style={{ fontSize: 10, color: '#444' }}>per contract / day</span></div>
+                <div style={{ fontSize: 9, color: THEME.colors.secondary, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 3 }}>Daily theta</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: RED }}>-${f2(thetaPerContractDollar)} <span style={{ fontSize: 10, color: THEME.colors.secondary }}>per contract / day</span></div>
               </div>
               <div>
-                <div style={{ fontSize: 9, color: '#555', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 3 }}>Cost to hold {dteN} day{dteN !== 1 ? 's' : ''}</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: RED }}>-${f2(holdCost)} <span style={{ fontSize: 10, color: '#444' }}>({contracts || 1}c)</span></div>
+                <div style={{ fontSize: 9, color: THEME.colors.secondary, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 3 }}>Cost to hold {dteN} day{dteN !== 1 ? 's' : ''}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: RED }}>-${f2(holdCost)} <span style={{ fontSize: 10, color: THEME.colors.secondary }}>({contracts || 1}c)</span></div>
               </div>
               {breakeven != null && (
                 <div>
-                  <div style={{ fontSize: 9, color: '#555', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 3 }}>Break-even by expiry</div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#e8e8e8' }}>${f2(breakeven)} <span style={{ fontSize: 10, color: '#444' }}>by {expiryDate}</span></div>
+                  <div style={{ fontSize: 9, color: THEME.colors.secondary, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 3 }}>Break-even by expiry</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: THEME.colors.text }}>${f2(breakeven)} <span style={{ fontSize: 10, color: THEME.colors.secondary }}>by {expiryDate}</span></div>
                   {S != null && (
-                    <div style={{ fontSize: 10, fontFamily: MONO, color: '#666', marginTop: 3 }}>{optType === 'call' ? 'Underlying needs +' : 'Underlying needs -'}${f2(Math.abs(breakeven - S))} from current</div>
+                    <div style={{ fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary, marginTop: 3 }}>{optType === 'call' ? 'Underlying needs +' : 'Underlying needs -'}${f2(Math.abs(breakeven - S))} from current</div>
                   )}
                 </div>
               )}
             </div>
             {!bsForTheta && (
-              <div style={{ fontSize: 9, fontFamily: MONO, color: '#444', fontStyle: 'italic' }}>Theta estimated linearly. For Black-Scholes theta, set IV in Prep and have live price loaded.</div>
+              <div style={{ fontSize: 9, fontFamily: MONO, color: THEME.colors.secondary, fontStyle: 'italic' }}>Theta estimated linearly. For Black-Scholes theta, set IV in Prep and have live price loaded.</div>
             )}
           </div>
         )
@@ -833,9 +834,9 @@ export function CalculatorTab({ prefill, onLogTrade, checklistPassed, lockedOut,
         const bp = schwabAcctInfo.buyingPower
         const over = cost > bp
         return (
-          <div style={{ background: over ? '#150505' : '#0a1408', border: `1px solid ${over ? RED + '55' : LIME + '44'}`, borderRadius: 4, padding: '10px 14px', fontSize: 11, fontFamily: MONO, color: over ? RED : LIME, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ background: over ? THEME.colors.negativeSurface : THEME.colors.positiveSurface, border: `1px solid ${over ? RED + '55' : LIME + '44'}`, borderRadius: 4, padding: '10px 14px', fontSize: 11, fontFamily: MONO, color: over ? RED : LIME, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>{over ? '⚠ Exceeds buying power' : '✓ Within buying power'}</span>
-            <span style={{ color: '#888' }}>Cost ${cost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · BP ${bp.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            <span style={{ color: THEME.colors.secondary }}>Cost ${cost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · BP ${bp.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
         )
       })()}
@@ -846,7 +847,7 @@ export function CalculatorTab({ prefill, onLogTrade, checklistPassed, lockedOut,
           onLogTrade({ id: uid(), ticker: ticker || '—', instrument: instrument || 'options', optType: isStock ? null : optType, strike: isStock ? null : (parseFloat(strike) || null), dte: isStock ? null : (parseInt(dte) || null), expiry: isStock ? null : expiry, setupType, entry: parseFloat(entry), stop: parseFloat(stop), target: parseFloat(target), contracts: parseInt(contracts) || 1, rr: calc.rr, dollarRisk: calc.dollarRisk, dollarReward: calc.dollarReward, totalCost: calc.totalCost, status: 'open', pnl: null, notes: '', date: new Date().toISOString(), tradeDate: localDateStr(), entryTime: '', exitTime: '' })
         }}>{blocked ? 'Trading Locked' : !valid ? (isStock ? 'Enter share prices above' : 'Enter premium prices above') : 'Log This Trade →'}</Btn>
         {schwabConnected && valid && !isStock && checklistPassed && !blocked && (
-          <button onClick={() => setStageOpen(true)} style={{ background: SCHWAB_BLUE, color: '#fff', border: 'none', borderRadius: 4, padding: '12px 18px', fontFamily: MONO, fontSize: 11, fontWeight: 900, letterSpacing: '0.14em', cursor: 'pointer' }}>
+          <button onClick={() => setStageOpen(true)} style={{ background: SCHWAB_BLUE, color: THEME.colors.text, border: 'none', borderRadius: 4, padding: '12px 18px', fontFamily: MONO, fontSize: 11, fontWeight: 900, letterSpacing: '0.14em', cursor: 'pointer' }}>
             Stage Order →
           </button>
         )}
@@ -866,28 +867,28 @@ export function CalculatorTab({ prefill, onLogTrade, checklistPassed, lockedOut,
         }
         return (
           <div onClick={() => setStageOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-            <div onClick={e => e.stopPropagation()} style={{ background: '#0a0d12', border: `1px solid ${SCHWAB_BLUE}44`, borderRadius: 6, maxWidth: 520, width: '100%', padding: '24px 26px', fontFamily: MONO }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: THEME.colors.surface, border: `1px solid ${SCHWAB_BLUE}44`, borderRadius: 6, maxWidth: 520, width: '100%', padding: '24px 26px', fontFamily: MONO }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
                 <div style={{ fontSize: 14, fontWeight: 900, color: SCHWAB_BLUE, letterSpacing: '0.14em' }}>STAGE ORDER</div>
-                <button onClick={() => setStageOpen(false)} style={{ background: 'transparent', border: 'none', color: '#666', fontSize: 12, cursor: 'pointer', letterSpacing: '0.1em' }}>CLOSE ✕</button>
+                <button onClick={() => setStageOpen(false)} style={{ background: 'transparent', border: 'none', color: THEME.colors.secondary, fontSize: 12, cursor: 'pointer', letterSpacing: '0.1em' }}>CLOSE ✕</button>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
-                <div><span style={{ fontSize: 9, color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Symbol</span><div style={{ fontSize: 14, fontWeight: 700, color: '#e8e8e8', marginTop: 2 }}>{sym || '—'}</div></div>
+                <div><span style={{ fontSize: 9, color: THEME.colors.secondary, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Symbol</span><div style={{ fontSize: 14, fontWeight: 700, color: THEME.colors.text, marginTop: 2 }}>{sym || '—'}</div></div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, fontSize: 11 }}>
-                  <div><div style={{ fontSize: 9, color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>Action</div><div style={{ color: optType === 'put' ? RED : LIME, fontWeight: 700 }}>BUY TO OPEN {(optType || '').toUpperCase()}</div></div>
-                  <div><div style={{ fontSize: 9, color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>Quantity</div><div style={{ color: '#e8e8e8', fontWeight: 700 }}>{qty} contract{qty !== 1 ? 's' : ''}</div></div>
-                  <div><div style={{ fontSize: 9, color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>Limit Price</div><div style={{ color: '#e8e8e8', fontWeight: 700 }}>${f2(limit)}</div></div>
-                  <div><div style={{ fontSize: 9, color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>Total Cost</div><div style={{ color: '#aaa', fontWeight: 700 }}>${totalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div></div>
-                  <div><div style={{ fontSize: 9, color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>Stop</div><div style={{ color: RED, fontWeight: 700 }}>${f2(parseFloat(stop))}</div></div>
-                  <div><div style={{ fontSize: 9, color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>Target</div><div style={{ color: LIME, fontWeight: 700 }}>${f2(parseFloat(target))}</div></div>
+                  <div><div style={{ fontSize: 9, color: THEME.colors.secondary, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>Action</div><div style={{ color: optType === 'put' ? RED : LIME, fontWeight: 700 }}>BUY TO OPEN {(optType || '').toUpperCase()}</div></div>
+                  <div><div style={{ fontSize: 9, color: THEME.colors.secondary, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>Quantity</div><div style={{ color: THEME.colors.text, fontWeight: 700 }}>{qty} contract{qty !== 1 ? 's' : ''}</div></div>
+                  <div><div style={{ fontSize: 9, color: THEME.colors.secondary, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>Limit Price</div><div style={{ color: THEME.colors.text, fontWeight: 700 }}>${f2(limit)}</div></div>
+                  <div><div style={{ fontSize: 9, color: THEME.colors.secondary, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>Total Cost</div><div style={{ color: THEME.colors.secondary, fontWeight: 700 }}>${totalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div></div>
+                  <div><div style={{ fontSize: 9, color: THEME.colors.secondary, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>Stop</div><div style={{ color: RED, fontWeight: 700 }}>${f2(parseFloat(stop))}</div></div>
+                  <div><div style={{ fontSize: 9, color: THEME.colors.secondary, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>Target</div><div style={{ color: LIME, fontWeight: 700 }}>${f2(parseFloat(target))}</div></div>
                 </div>
               </div>
-              <div style={{ background: '#0d0a05', border: `1px solid ${YELLOW}33`, borderRadius: 4, padding: '10px 12px', fontSize: 10, color: '#c8a030', lineHeight: 1.6, marginBottom: 16 }}>
-                ⚠ Trade Hub never auto-submits orders. Copy the symbol, open Schwab, and enter manually. You confirm in Schwab — always.
+              <div style={{ background: THEME.colors.negativeSurface, border: `1px solid ${YELLOW}33`, borderRadius: 4, padding: '10px 12px', fontSize: 10, color: THEME.colors.caution, lineHeight: 1.6, marginBottom: 16 }}>
+                ⚠ EdgeIQ never auto-submits orders. Copy the symbol, open Schwab, and enter manually. You confirm in Schwab — always.
               </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button onClick={copyOcc} style={{ flex: 1, minWidth: 140, background: '#1a1a1a', border: `1px solid ${BORDER}`, color: '#aaa', fontFamily: MONO, fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', padding: '11px', borderRadius: 4, cursor: 'pointer' }}>COPY OCC SYMBOL</button>
-                <button onClick={openSchwab} style={{ flex: 2, minWidth: 200, background: SCHWAB_BLUE, color: '#fff', border: 'none', fontFamily: MONO, fontSize: 11, fontWeight: 900, letterSpacing: '0.14em', padding: '11px', borderRadius: 4, cursor: 'pointer' }}>Open Schwab Trade →</button>
+                <button onClick={copyOcc} style={{ flex: 1, minWidth: 140, background: THEME.colors.surface, border: `1px solid ${BORDER}`, color: THEME.colors.secondary, fontFamily: MONO, fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', padding: '11px', borderRadius: 4, cursor: 'pointer' }}>COPY OCC SYMBOL</button>
+                <button onClick={openSchwab} style={{ flex: 2, minWidth: 200, background: SCHWAB_BLUE, color: THEME.colors.text, border: 'none', fontFamily: MONO, fontSize: 11, fontWeight: 900, letterSpacing: '0.14em', padding: '11px', borderRadius: 4, cursor: 'pointer' }}>Open Schwab Trade →</button>
               </div>
             </div>
           </div>
@@ -937,15 +938,15 @@ export function ChecklistTab({ onPass, instrument, setupQuality, alignmentScore,
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div><SLabel>{isStock ? 'Stock Discipline Gate' : 'Options Discipline Gate'}</SLabel><Heading>Pre-Trade Checklist</Heading></div>
-        <div style={{ textAlign: 'right' }}><div style={{ fontSize: 32, fontWeight: 900, fontFamily: MONO, color: allReq ? LIME : YELLOW, letterSpacing: '-0.03em' }}>{pct}%</div><div style={{ fontSize: 9, color: '#333', fontFamily: MONO, textTransform: 'uppercase' }}>{done}/{items.length}</div></div>
+        <div style={{ textAlign: 'right' }}><div style={{ fontSize: 32, fontWeight: 900, fontFamily: MONO, color: allReq ? LIME : YELLOW, letterSpacing: '-0.03em' }}>{pct}%</div><div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, textTransform: 'uppercase' }}>{done}/{items.length}</div></div>
       </div>
-      <div style={{ background: allReq ? '#070e04' : '#100c04', border: `1px solid ${allReq ? '#162210' : '#231a08'}`, borderRadius: 4, padding: '12px 18px', display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ background: allReq ? THEME.colors.positiveSurface : THEME.colors.negativeSurface, border: `1px solid ${allReq ? THEME.colors.positiveSurface : THEME.colors.negativeSurface}`, borderRadius: 4, padding: '12px 18px', display: 'flex', alignItems: 'center', gap: 12 }}>
         <div style={{ width: 9, height: 9, borderRadius: '50%', background: allReq ? LIME : YELLOW, flexShrink: 0, boxShadow: `0 0 10px ${allReq ? LIME : YELLOW}` }} />
         <span style={{ fontFamily: MONO, fontSize: 12, color: allReq ? LIME : YELLOW, fontWeight: 700, letterSpacing: '0.06em' }}>{allReq ? 'CLEAR TO TRADE — All required rules confirmed.' : 'NOT CLEAR — Complete all required rules first.'}</span>
       </div>
       <Card style={{ padding: 0, overflow: 'hidden' }}>
         {items.map(item => (
-          <div key={item.id} style={{ padding: '0 18px', background: checked[item.id] ? '#0b0e09' : 'transparent' }}>
+          <div key={item.id} style={{ padding: '0 18px', background: checked[item.id] ? THEME.colors.positiveSurface : 'transparent' }}>
             <CheckRow text={item.text} required={item.required} checked={!!checked[item.id]} onToggle={() => setChecked(c => ({ ...c, [item.id]: !c[item.id] }))} />
           </div>
         ))}
@@ -1001,7 +1002,7 @@ export function StatsTab({ trades: allTrades }) {
               title={includePaper ? 'Paper trades are included in these stats' : 'Paper trades are hidden from these stats'}
               style={{
                 background: includePaper ? `${PURPLE}22` : 'transparent',
-                color: includePaper ? PURPLE : '#666',
+                color: includePaper ? PURPLE : THEME.colors.secondary,
                 border: `1px solid ${includePaper ? PURPLE : BORDER}`,
                 borderRadius: 4,
                 padding: '6px 12px',
@@ -1017,9 +1018,9 @@ export function StatsTab({ trades: allTrades }) {
             </button>
           )}
         </div>
-        <div style={{ padding: '40px 24px', background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 5 }}>
-          <div style={{ fontSize: 11, fontFamily: MONO, color: '#2a2a2a', marginBottom: 8 }}>No closed trades yet.</div>
-          <div style={{ fontSize: 10, fontFamily: MONO, color: '#1e1e1e', lineHeight: 1.8 }}>
+        <div style={{ padding: '40px 24px', background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 5 }}>
+          <div style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary, marginBottom: 8 }}>No closed trades yet.</div>
+          <div style={{ fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary, lineHeight: 1.8 }}>
             Stats build automatically as you log trades in the Calculator tab. After 10+ trades you'll see win rate by session, equity curve, expectancy, and calls vs. puts breakdown.
           </div>
         </div>
@@ -1032,9 +1033,9 @@ export function StatsTab({ trades: allTrades }) {
       <div><SLabel>Options Performance</SLabel><Heading>Stats</Heading></div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
         <Tile label="Total P&L" value={fmtD(totalPnl)} color={totalPnl >= 0 ? LIME : RED} />
-        <Tile label="Win Rate" value={winRate != null ? f2(winRate) + '%' : '—'} sub={`${wins.length}W · ${losses.length}L`} color={winRate != null ? (winRate >= 50 ? LIME : RED) : '#555'} />
+        <Tile label="Win Rate" value={winRate != null ? f2(winRate) + '%' : '—'} sub={`${wins.length}W · ${losses.length}L`} color={winRate != null ? (winRate >= 50 ? LIME : RED) : THEME.colors.border} />
         <Tile label="Avg R:R (Actual)" value={avgRR != null ? '1:' + f2(avgRR) : '—'} color={rrColor(avgRR)} />
-        <Tile label="Expectancy / Trade" value={exp != null ? fmtD(exp) : '—'} sub="true edge per trade" color={exp != null ? (exp >= 0 ? LIME : RED) : '#555'} />
+        <Tile label="Expectancy / Trade" value={exp != null ? fmtD(exp) : '—'} sub="true edge per trade" color={exp != null ? (exp >= 0 ? LIME : RED) : THEME.colors.border} />
         <Tile label="Avg Win" value={avgWin != null ? fmtD(avgWin) : '—'} color={LIME} />
         <Tile label="Avg Loss" value={avgLoss != null ? '-$' + f2(avgLoss) : '—'} color={RED} />
       </div>
@@ -1045,9 +1046,9 @@ export function StatsTab({ trades: allTrades }) {
             {[{ lbl: 'Calls', data: calls, color: LIME }, { lbl: 'Puts', data: puts, color: RED }].map(({ lbl, data, color }) => {
               const w = data.filter(t => t.status === 'win'), pnl = data.reduce((a, t) => a + (t.pnl || 0), 0)
               return (
-                <div key={lbl} style={{ background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 4, padding: '12px 14px' }}>
+                <div key={lbl} style={{ background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 4, padding: '12px 14px' }}>
                   <div style={{ fontSize: 12, fontFamily: MONO, fontWeight: 700, color, marginBottom: 8 }}>{lbl} ({data.length})</div>
-                  <div style={{ fontSize: 11, fontFamily: MONO, color: '#555' }}>{data.length ? Math.round((w.length / data.length) * 100) + '% win rate' : 'No closed trades'}</div>
+                  <div style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary }}>{data.length ? Math.round((w.length / data.length) * 100) + '% win rate' : 'No closed trades'}</div>
                   <div style={{ fontSize: 14, fontFamily: MONO, fontWeight: 700, color: pnl >= 0 ? LIME : RED, marginTop: 4 }}>{fmtD(pnl)}</div>
                 </div>
               )
@@ -1060,24 +1061,24 @@ export function StatsTab({ trades: allTrades }) {
           <SLabel>Equity Curve</SLabel>
           <svg width="100%" viewBox={`0 0 ${cW} ${cH + 6}`} style={{ overflow: 'visible' }}>
             <defs><linearGradient id="ecfill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={totalPnl >= 0 ? LIME : RED} stopOpacity="0.12" /><stop offset="100%" stopColor={totalPnl >= 0 ? LIME : RED} stopOpacity="0" /></linearGradient></defs>
-            <line x1="0" y1={cH - ((0 - minV) / rng) * cH} x2={cW} y2={cH - ((0 - minV) / rng) * cH} stroke="#1a1a1a" strokeWidth="1" strokeDasharray="4 3" />
+            <line x1="0" y1={cH - ((0 - minV) / rng) * cH} x2={cW} y2={cH - ((0 - minV) / rng) * cH} stroke={THEME.colors.surface} strokeWidth="1" strokeDasharray="4 3" />
             <polygon points={`0,${cH} ${pts.join(' ')} ${cW},${cH}`} fill="url(#ecfill)" />
             <polyline points={pts.join(' ')} fill="none" stroke={totalPnl >= 0 ? LIME : RED} strokeWidth="2" strokeLinejoin="round" />
           </svg>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#222', fontFamily: MONO, marginTop: 6 }}><span>Trade #1</span><span>Trade #{curve.length}</span></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, marginTop: 6 }}><span>Trade #1</span><span>Trade #{curve.length}</span></div>
         </Card>
       )}
       {closed.length >= 3 && exp != null && (
-        <div style={{ background: exp > 0 ? '#070d04' : '#100505', border: `1px solid ${exp > 0 ? '#132010' : '#200808'}`, borderRadius: 4, padding: '16px 20px' }}>
+        <div style={{ background: exp > 0 ? THEME.colors.positiveSurface : THEME.colors.negativeSurface, border: `1px solid ${exp > 0 ? THEME.colors.positiveSurface : THEME.colors.negativeSurface}`, borderRadius: 4, padding: '16px 20px' }}>
           <SLabel>Edge Assessment</SLabel>
-          <div style={{ fontSize: 12, color: '#666', fontFamily: MONO, lineHeight: 1.9 }}>
+          <div style={{ fontSize: 12, color: THEME.colors.secondary, fontFamily: MONO, lineHeight: 1.9 }}>
             {exp > 0 ? `Positive expectancy of ${fmtD(exp)} per trade. Your system has a real edge.` : `Negative expectancy. At your ${f2(winRate)}% win rate you need at least 1:${f2((100 - winRate) / winRate)} R:R to break even.`}
           </div>
         </div>
       )}
 
       {(() => {
-        const gradeColor = g => g === 'A' ? LIME : g === 'B' ? YELLOW : g === 'C' ? ORANGE : g === 'D' ? RED : '#222'
+        const gradeColor = g => g === 'A' ? LIME : g === 'B' ? YELLOW : g === 'C' ? ORANGE : g === 'D' ? RED : THEME.colors.surface
         // Build the last 30 trading days (skip Sat/Sun)
         const days = []
         const d = new Date()
@@ -1110,7 +1111,7 @@ export function StatsTab({ trades: allTrades }) {
               <SLabel style={{ marginBottom: 0 }}>Discipline Grades — last 30 trading days</SLabel>
               {avgGrade && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 9, color: '#444', fontFamily: MONO }}>Avg</span>
+                  <span style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO }}>Avg</span>
                   <span style={{ fontSize: 16, fontWeight: 900, fontFamily: MONO, color: gradeColor(avgGrade) }}>{avgGrade}</span>
                 </div>
               )}
@@ -1126,18 +1127,18 @@ export function StatsTab({ trades: allTrades }) {
                 return (
                   <div key={d} title={title} style={{
                     aspectRatio: '1 / 1', minHeight: 22, borderRadius: 3,
-                    background: grade ? c + '33' : '#0d0d0d',
-                    border: `1px solid ${grade ? c + '55' : '#1a1a1a'}`,
+                    background: grade ? c + '33' : THEME.colors.background,
+                    border: `1px solid ${grade ? c + '55' : THEME.colors.surface}`,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: 10, fontFamily: MONO, fontWeight: 900,
-                    color: grade ? c : '#222', cursor: 'default',
+                    color: grade ? c : THEME.colors.secondary, cursor: 'default',
                   }}>
                     {grade || '·'}
                   </div>
                 )
               })}
             </div>
-            <div style={{ display: 'flex', gap: 16, marginTop: 12, fontSize: 9, fontFamily: MONO, color: '#333', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 16, marginTop: 12, fontSize: 9, fontFamily: MONO, color: THEME.colors.secondary, flexWrap: 'wrap' }}>
               {[['A', LIME], ['B', YELLOW], ['C', ORANGE], ['D', RED]].map(([g, c]) => (
                 <span key={g} style={{ color: c }}>{g} — {counts[g]} day{counts[g] !== 1 ? 's' : ''}</span>
               ))}
@@ -1219,9 +1220,9 @@ function buildObservation(pd, score) {
 function DataChip({ label, value, color, tip, sub }) {
   return (
     <div>
-      <div style={{ fontSize: 8, color: '#333', fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3, display: 'flex', alignItems: 'center' }}>{label}{tip && <Tip tip={tip} />}</div>
-      <div style={{ fontSize: 12, fontFamily: MONO, fontWeight: 700, color: color || '#888' }}>{value}</div>
-      {sub && <div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, marginTop: 1 }}>{sub}</div>}
+      <div style={{ fontSize: 8, color: THEME.colors.secondary, fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3, display: 'flex', alignItems: 'center' }}>{label}{tip && <Tip tip={tip} />}</div>
+      <div style={{ fontSize: 12, fontFamily: MONO, fontWeight: 700, color: color || THEME.colors.secondary }}>{value}</div>
+      {sub && <div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, marginTop: 1 }}>{sub}</div>}
     </div>
   )
 }
@@ -1422,10 +1423,10 @@ export function WatchlistTab({ apiKey, onSendToPrep, savedPreps, onLoadSavedPrep
   function SkeletonRow({ label }) {
     return (
       <div style={{ background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 5, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 16 }}>
-        <div style={{ fontSize: 10, fontFamily: MONO, color: '#1e1e1e', width: 18 }}>—</div>
-        <div style={{ fontSize: 16, fontWeight: 900, fontFamily: MONO, color: '#1e1e1e', minWidth: 60 }}>{label}</div>
-        <div style={{ flex: 1, height: 8, background: '#161616', borderRadius: 3 }} />
-        <div style={{ width: 40, height: 22, background: '#161616', borderRadius: 3 }} />
+        <div style={{ fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary, width: 18 }}>—</div>
+        <div style={{ fontSize: 16, fontWeight: 900, fontFamily: MONO, color: THEME.colors.secondary, minWidth: 60 }}>{label}</div>
+        <div style={{ flex: 1, height: 8, background: THEME.colors.surface, borderRadius: 3 }} />
+        <div style={{ width: 40, height: 22, background: THEME.colors.surface, borderRadius: 3 }} />
       </div>
     )
   }
@@ -1435,9 +1436,9 @@ export function WatchlistTab({ apiKey, onSendToPrep, savedPreps, onLoadSavedPrep
     if (!pd) {
       return (
         <div style={{ background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 5, padding: '12px 18px', display: 'flex', alignItems: 'center', gap: 16, opacity: 0.4 }}>
-          <div style={{ fontSize: 10, fontFamily: MONO, color: '#333', width: 18 }}>—</div>
-          <div style={{ fontSize: 15, fontWeight: 900, fontFamily: MONO, color: '#333', minWidth: 60 }}>{ticker}</div>
-          <span style={{ fontSize: 10, fontFamily: MONO, color: '#333', flex: 1 }}>
+          <div style={{ fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary, width: 18 }}>—</div>
+          <div style={{ fontSize: 15, fontWeight: 900, fontFamily: MONO, color: THEME.colors.secondary, minWidth: 60 }}>{ticker}</div>
+          <span style={{ fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary, flex: 1 }}>
             {fetchError ? `API error: ${fetchError}` : 'No data — ticker may be invalid or API plan restriction'}
           </span>
         </div>
@@ -1451,22 +1452,22 @@ export function WatchlistTab({ apiKey, onSendToPrep, savedPreps, onLoadSavedPrep
     const closePos = score?.closePos ?? 0.5
     const scoreColor = total >= 70 ? LIME : total >= 45 ? YELLOW : RED
     const closeLbl = closePos > 0.80 ? 'Near HOD' : closePos < 0.20 ? 'Near LOD' : 'Mid Range'
-    const closeLblColor = (closePos > 0.80 || closePos < 0.20) ? '#aaa' : '#444'
-    const volColor = volRatio >= 1.5 ? LIME : volRatio >= 1.0 ? '#777' : '#444'
+    const closeLblColor = (closePos > 0.80 || closePos < 0.20) ? THEME.colors.secondary : THEME.colors.border
+    const volColor = volRatio >= 1.5 ? LIME : volRatio >= 1.0 ? THEME.colors.secondary : THEME.colors.border
     const obs = buildObservation(pd, score)
     const unusualVol = volRatio >= 2.0
     const absVol = dayVol || pd.volume
     return (
       <div style={{ background: PANEL, border: `1px solid ${isTop3 ? LIME + '44' : BORDER}`, borderRadius: 5, overflow: 'hidden' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '14px 18px' }}>
-          <div style={{ fontSize: 10, fontFamily: MONO, color: '#222', width: 18, flexShrink: 0, textAlign: 'right' }}>#{rank}</div>
+          <div style={{ fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary, width: 18, flexShrink: 0, textAlign: 'right' }}>#{rank}</div>
           <div style={{ flexShrink: 0, minWidth: 60 }}>
-            <div style={{ fontSize: 16, fontWeight: 900, fontFamily: MONO, color: total >= 70 ? LIME : total >= 45 ? YELLOW : '#e8e8e8' }}>{ticker}</div>
+            <div style={{ fontSize: 16, fontWeight: 900, fontFamily: MONO, color: total >= 70 ? LIME : total >= 45 ? YELLOW : THEME.colors.text }}>{ticker}</div>
             {unusualVol && <div style={{ fontSize: 8, color: YELLOW, fontFamily: MONO, letterSpacing: '0.08em' }}>⚡ UNUSUAL VOL</div>}
           </div>
           <div style={{ flex: 1, display: 'flex', gap: 18, flexWrap: 'wrap' }}>
             <DataChip label="Prev Range" value={`$${f2(range)} (${f2(rangePct)}%)`} />
-            <DataChip label="% Move" value={`${movePct > 0 ? '+' : ''}${f2(movePct)}%`} color={movePct > 0.3 ? LIME : movePct < -0.3 ? RED : '#888'} />
+            <DataChip label="% Move" value={`${movePct > 0 ? '+' : ''}${f2(movePct)}%`} color={movePct > 0.3 ? LIME : movePct < -0.3 ? RED : THEME.colors.secondary} />
             <DataChip
               label="RVOL"
               value={`${volRatio.toFixed(1)}x avg`}
@@ -1477,15 +1478,15 @@ export function WatchlistTab({ apiKey, onSendToPrep, savedPreps, onLoadSavedPrep
             <DataChip label="Structure" value={closeLbl} color={closeLblColor} />
           </div>
           <div style={{ textAlign: 'right', flexShrink: 0, minWidth: 60 }}>
-            <div style={{ fontSize: 8, color: '#333', fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>Score</div>
+            <div style={{ fontSize: 8, color: THEME.colors.secondary, fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>Score</div>
             <div style={{ fontSize: 22, fontWeight: 900, fontFamily: MONO, color: scoreColor, lineHeight: 1 }}>{total}</div>
-            <div style={{ width: 60, height: 3, background: '#1a1a1a', borderRadius: 2, marginTop: 5 }}>
+            <div style={{ width: 60, height: 3, background: THEME.colors.surface, borderRadius: 2, marginTop: 5 }}>
               <div style={{ height: '100%', width: `${total}%`, background: scoreColor, borderRadius: 2 }} />
             </div>
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '9px 18px', background: '#0a0a0a', borderTop: '1px solid #111' }}>
-          <span style={{ fontSize: 10, fontFamily: MONO, color: '#444', flex: 1 }}>{obs}</span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '9px 18px', background: THEME.colors.background, borderTop: `1px solid ${THEME.colors.surface}` }}>
+          <span style={{ fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary, flex: 1 }}>{obs}</span>
           {savedPreps?.[ticker]
             ? <Btn small variant="lime" onClick={() => onLoadSavedPrep(savedPreps[ticker])}>Load Saved Prep</Btn>
             : <Btn small variant="blue" onClick={() => onSendToPrep({ ticker, priorHigh: String(f2(pd.high)), priorLow: String(f2(pd.low)) })}>→ Prep</Btn>
@@ -1519,27 +1520,27 @@ export function WatchlistTab({ apiKey, onSendToPrep, savedPreps, onLoadSavedPrep
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <div style={{ fontSize: 9, fontFamily: MONO, color: '#555', letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 3 }}>Layer 1 — Auto Universe</div>
-            <div style={{ fontSize: 14, fontWeight: 700, fontFamily: MONO, color: '#e8e8e8', letterSpacing: '-0.01em' }}>Today's Top Setups</div>
+            <div style={{ fontSize: 9, fontFamily: MONO, color: THEME.colors.secondary, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 3 }}>Layer 1 — Auto Universe</div>
+            <div style={{ fontSize: 14, fontWeight: 700, fontFamily: MONO, color: THEME.colors.text, letterSpacing: '-0.01em' }}>Today's Top Setups</div>
           </div>
           <div style={{ textAlign: 'right' }}>
-            {ageLbl(autoScanTime) && autoResults.length > 0 && <div style={{ fontSize: 9, fontFamily: MONO, color: '#2a2a2a' }}>Updated {ageLbl(autoScanTime)}</div>}
-            <div style={{ fontSize: 8, fontFamily: MONO, color: '#1a1a1a', marginTop: 2 }}>Auto-refreshes every 30 min</div>
+            {ageLbl(autoScanTime) && autoResults.length > 0 && <div style={{ fontSize: 9, fontFamily: MONO, color: THEME.colors.secondary }}>Updated {ageLbl(autoScanTime)}</div>}
+            <div style={{ fontSize: 8, fontFamily: MONO, color: THEME.colors.secondary, marginTop: 2 }}>Auto-refreshes every 30 min</div>
           </div>
         </div>
 
         {autoScanning && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Scanning gainers + losers universe...</div>
+            <div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Scanning gainers + losers universe...</div>
             {[...Array(5)].map((_, i) => <SkeletonRow key={i} label="···" />)}
           </div>
         )}
 
         {!autoScanning && autoScanError && autoResults.length === 0 && (
-          <div style={{ background: '#1a0d05', border: '1px solid #3a1a08', borderRadius: 5, padding: '16px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+          <div style={{ background: THEME.colors.negativeSurface, border: `1px solid ${THEME.colors.negativeSurface}`, borderRadius: 5, padding: '16px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <div style={{ fontSize: 10, fontFamily: MONO, color: RED, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Scan failed</div>
-              <div style={{ fontSize: 11, fontFamily: MONO, color: '#888' }}>{autoScanError}. Hit Retry to try again.</div>
+              <div style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary }}>{autoScanError}. Hit Retry to try again.</div>
             </div>
             <Btn small variant="ghost" onClick={runAutoScan}>Retry</Btn>
           </div>
@@ -1547,7 +1548,7 @@ export function WatchlistTab({ apiKey, onSendToPrep, savedPreps, onLoadSavedPrep
 
         {!autoScanning && autoResults.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, letterSpacing: '0.06em' }}>
+            <div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, letterSpacing: '0.06em' }}>
               {autoResults.length} setups ranked from gainers + losers universe · price &gt;$10 · range &gt;2% · vol &gt;1M
             </div>
             {autoResults.map((r, idx) => (
@@ -1567,8 +1568,8 @@ export function WatchlistTab({ apiKey, onSendToPrep, savedPreps, onLoadSavedPrep
         )}
 
         {!autoScanning && !autoScanError && autoResults.length === 0 && (
-          <div style={{ background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 5, padding: '20px 24px', textAlign: 'center' }}>
-            <div style={{ fontSize: 11, fontFamily: MONO, color: '#2a2a2a' }}>
+          <div style={{ background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 5, padding: '20px 24px', textAlign: 'center' }}>
+            <div style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary }}>
               {apiKey ? 'No setups found in today\'s universe. Try scanning again after market open.' : 'Add your Massive API key in Command to enable auto-scanning.'}
             </div>
           </div>
@@ -1576,16 +1577,16 @@ export function WatchlistTab({ apiKey, onSendToPrep, savedPreps, onLoadSavedPrep
       </div>
 
       {/* Divider */}
-      <div style={{ borderTop: `1px solid #111` }} />
+      <div style={{ borderTop: `1px solid ${THEME.colors.background}` }} />
 
       {/* ── LAYER 2: My Watchlist ── */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <div style={{ fontSize: 9, fontFamily: MONO, color: '#555', letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 3 }}>Layer 2 — Manual</div>
-            <div style={{ fontSize: 14, fontWeight: 700, fontFamily: MONO, color: '#e8e8e8', letterSpacing: '-0.01em' }}>My Watchlist</div>
+            <div style={{ fontSize: 9, fontFamily: MONO, color: THEME.colors.secondary, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 3 }}>Layer 2 — Manual</div>
+            <div style={{ fontSize: 14, fontWeight: 700, fontFamily: MONO, color: THEME.colors.text, letterSpacing: '-0.01em' }}>My Watchlist</div>
           </div>
-          {ageLbl(scanTime) && <div style={{ fontSize: 9, fontFamily: MONO, color: '#2a2a2a' }}>Updated {ageLbl(scanTime)}</div>}
+          {ageLbl(scanTime) && <div style={{ fontSize: 9, fontFamily: MONO, color: THEME.colors.secondary }}>Updated {ageLbl(scanTime)}</div>}
         </div>
 
         {/* Ticker pill management */}
@@ -1593,10 +1594,10 @@ export function WatchlistTab({ apiKey, onSendToPrep, savedPreps, onLoadSavedPrep
           <SLabel>Tickers</SLabel>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
             {tickers.map(t => (
-              <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 6, background: autoTickers.has(t) ? '#0a1208' : '#141414', border: `1px solid ${autoTickers.has(t) ? LIME + '33' : BORDER}`, borderRadius: 3, padding: '4px 10px' }}>
-                <span style={{ fontSize: 11, fontFamily: MONO, color: autoTickers.has(t) ? '#5a7a5a' : '#888' }}>{t}</span>
-                {autoTickers.has(t) && <span style={{ fontSize: 7, fontFamily: MONO, color: '#3a5a3a' }}>↑top</span>}
-                <span onClick={() => removeTicker(t)} style={{ fontSize: 9, color: '#3a3a3a', cursor: 'pointer', lineHeight: 1 }}>✕</span>
+              <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 6, background: autoTickers.has(t) ? THEME.colors.positiveSurface : THEME.colors.background, border: `1px solid ${autoTickers.has(t) ? LIME + '33' : BORDER}`, borderRadius: 3, padding: '4px 10px' }}>
+                <span style={{ fontSize: 11, fontFamily: MONO, color: autoTickers.has(t) ? THEME.colors.positive : THEME.colors.secondary }}>{t}</span>
+                {autoTickers.has(t) && <span style={{ fontSize: 7, fontFamily: MONO, color: THEME.colors.positive }}>↑top</span>}
+                <span onClick={() => removeTicker(t)} style={{ fontSize: 9, color: THEME.colors.secondary, cursor: 'pointer', lineHeight: 1 }}>✕</span>
               </div>
             ))}
           </div>
@@ -1606,7 +1607,7 @@ export function WatchlistTab({ apiKey, onSendToPrep, savedPreps, onLoadSavedPrep
               onInput={e => setAddInput(e.target.value.toUpperCase())}
               onKeyDown={e => e.key === 'Enter' && addTicker()}
               placeholder="Add ticker..."
-              style={{ background: '#161616', border: `1px solid ${BORDER}`, borderRadius: 4, color: '#e8e8e8', fontFamily: MONO, fontSize: 12, padding: '7px 12px', outline: 'none', width: 130 }}
+              style={{ background: THEME.colors.surface, border: `1px solid ${BORDER}`, borderRadius: 4, color: THEME.colors.text, fontFamily: MONO, fontSize: 12, padding: '7px 12px', outline: 'none', width: 130 }}
             />
             <Btn small variant="ghost" onClick={addTicker} disabled={!addInput.trim()}>Add</Btn>
           </div>
@@ -1615,7 +1616,7 @@ export function WatchlistTab({ apiKey, onSendToPrep, savedPreps, onLoadSavedPrep
         {/* Scanning skeleton */}
         {scanning && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Scanning {tickers.length} tickers...</div>
+            <div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Scanning {tickers.length} tickers...</div>
             {tickers.filter(t => !autoTickers.has(t)).map(t => <SkeletonRow key={t} label={t} />)}
           </div>
         )}
@@ -1624,14 +1625,14 @@ export function WatchlistTab({ apiKey, onSendToPrep, savedPreps, onLoadSavedPrep
         {!scanning && myResults.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {autoTickers.size > 0 && (
-              <div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, letterSpacing: '0.06em' }}>
+              <div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, letterSpacing: '0.06em' }}>
                 {autoResults.filter(r => tickers.includes(r.ticker)).length > 0
                   ? `${autoResults.filter(r => tickers.includes(r.ticker)).length} watchlist ticker${autoResults.filter(r => tickers.includes(r.ticker)).length > 1 ? 's' : ''} already shown in Top Setups above`
                   : `${myScored} of ${myResults.length} tickers scored`
                 }
               </div>
             )}
-            {scanErrors > 0 && <div style={{ fontSize: 9, color: '#4a3a2a', fontFamily: MONO }}>⚠ {scanErrors} ticker{scanErrors > 1 ? 's' : ''} returned no data</div>}
+            {scanErrors > 0 && <div style={{ fontSize: 9, color: THEME.colors.caution, fontFamily: MONO }}>⚠ {scanErrors} ticker{scanErrors > 1 ? 's' : ''} returned no data</div>}
             {myResults.map(({ ticker, pd, score, fetchError, avgVol }, idx) => (
               <ResultRow
                 key={ticker + idx}
@@ -1649,13 +1650,13 @@ export function WatchlistTab({ apiKey, onSendToPrep, savedPreps, onLoadSavedPrep
         )}
 
         {!scanning && myResults.length === 0 && results.length > 0 && autoTickers.size > 0 && (
-          <div style={{ fontSize: 10, fontFamily: MONO, color: '#2a2a2a', padding: '8px 0' }}>
+          <div style={{ fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary, padding: '8px 0' }}>
             All watchlist tickers are already shown in Today's Top Setups above.
           </div>
         )}
 
         {!scanning && results.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '40px 0', color: '#1e1e1e', fontFamily: MONO, fontSize: 11 }}>
+          <div style={{ textAlign: 'center', padding: '40px 0', color: THEME.colors.secondary, fontFamily: MONO, fontSize: 11 }}>
             {apiKey ? "Hit 'Scan All' to score your watchlist." : 'Add your Massive API key in Command to enable scanning.'}
           </div>
         )}
@@ -1667,7 +1668,7 @@ export function WatchlistTab({ apiKey, onSendToPrep, savedPreps, onLoadSavedPrep
 // ── Prep Tab ──────────────────────────────────────────────────────────────────
 const ROUTINE = [
   { time: '7:30 CT', label: 'Review your Prep notes and AI brief. Know every level before the chart opens. No surprises.' },
-  { time: '8:00 CT', label: 'Trade Hub → Levels tab. Verify PDH/PDL/PDC are loaded. Check pivot levels vs prior day structure.' },
+  { time: '8:00 CT', label: 'EdgeIQ → Levels tab. Verify PDH/PDL/PDC are loaded. Check pivot levels vs prior day structure.' },
   { time: '8:10 CT', label: 'TradingView: pull ticker on 5-min chart. Draw your key levels. Match them to the Level Map.' },
   { time: '8:20 CT', label: 'IV tab: compare current IV to your Prep note. If IV spiked overnight, reduce size or stand aside.' },
   { time: '8:25 CT', label: 'News check: earnings, Fed speakers, CPI, FOMC today? If yes, stand aside or cut size in half.' },
@@ -2275,42 +2276,42 @@ STRUCTURED (parsing block, do not modify the format): output exactly one JSON ob
       </div>
 
       {priceWarning && (
-        <div style={{ background: '#1a1605', border: `1px solid ${YELLOW}`, borderRadius: 4, padding: '10px 16px', fontSize: 11, fontFamily: MONO, color: YELLOW, fontWeight: 700 }}>⚠ {priceWarning}</div>
+        <div style={{ background: THEME.colors.surface, border: `1px solid ${YELLOW}`, borderRadius: 4, padding: '10px 16px', fontSize: 11, fontFamily: MONO, color: YELLOW, fontWeight: 700 }}>⚠ {priceWarning}</div>
       )}
 
       {aiError && (
-        <div style={{ background: '#1a0505', border: '1px solid #3a0808', borderRadius: 4, padding: '10px 16px', fontSize: 11, fontFamily: MONO, color: RED }}>{aiError}</div>
+        <div style={{ background: THEME.colors.negativeSurface, border: `1px solid ${THEME.colors.negativeSurface}`, borderRadius: 4, padding: '10px 16px', fontSize: 11, fontFamily: MONO, color: RED }}>{aiError}</div>
       )}
 
       {loadError && (
-        <div style={{ background: '#1a0505', border: `1px solid ${RED}`, borderRadius: 4, padding: '10px 16px', fontSize: 11, fontFamily: MONO, color: RED, fontWeight: 700 }}>⚠ {loadError}</div>
+        <div style={{ background: THEME.colors.negativeSurface, border: `1px solid ${RED}`, borderRadius: 4, padding: '10px 16px', fontSize: 11, fontFamily: MONO, color: RED, fontWeight: 700 }}>⚠ {loadError}</div>
       )}
 
       {!hasClaudeKey && (
-        <div style={{ background: '#0d100a', border: `1px solid ${LIME}22`, borderRadius: 5, padding: '12px 16px', display: 'flex', gap: 10, alignItems: 'center' }}>
-          <span style={{ fontSize: 11, fontFamily: MONO, color: '#6a8060' }}>
+        <div style={{ background: THEME.colors.positiveSurface, border: `1px solid ${LIME}22`, borderRadius: 5, padding: '12px 16px', display: 'flex', gap: 10, alignItems: 'center' }}>
+          <span style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.positive }}>
             ✦ Verify authenticated server AI in the <strong style={{ color: LIME }}>Command</strong> tab to enable AI game plan generation — gets your thesis, key levels, entry conditions, and ideal setup in one click.
           </span>
         </div>
       )}
 
-      <div style={{ background: '#0d1208', border: '1px solid #1e2a18', borderRadius: 5, padding: '18px 20px' }}>
+      <div style={{ background: THEME.colors.positiveSurface, border: `1px solid ${THEME.colors.positiveSurface}`, borderRadius: 5, padding: '18px 20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
           <SLabel style={{ marginBottom: 0 }}>Tonight's Setup</SLabel>
           {hasLiveData && !dataLoaded && (
-            <span style={{ fontSize: 9, fontFamily: MONO, color: '#555' }}>Live data available — hit "Load Market Data" to auto-fill ↑</span>
+            <span style={{ fontSize: 9, fontFamily: MONO, color: THEME.colors.secondary }}>Live data available — hit "Load Market Data" to auto-fill ↑</span>
           )}
           {dataLoaded && <span style={{ fontSize: 9, fontFamily: MONO, color: LIME }}>✓ PDH/PDL/PP/Strike loaded from Massive</span>}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 12, marginBottom: 14, alignItems: 'end' }}>
           <Fld label="Primary Ticker" value={prep.ticker || ''} onChange={updateTicker} type="text" placeholder="QQQ" mono />
           <div>
-            <div style={{ fontSize: 9, letterSpacing: '0.14em', color: '#3a3a3a', textTransform: 'uppercase', fontFamily: MONO, marginBottom: 6 }}>Instrument</div>
+            <div style={{ fontSize: 9, letterSpacing: '0.14em', color: THEME.colors.secondary, textTransform: 'uppercase', fontFamily: MONO, marginBottom: 6 }}>Instrument</div>
             <div style={{ display: 'flex', border: `1px solid ${BORDER}`, borderRadius: 4, overflow: 'hidden' }}>
               {[{ v: 'options', l: 'Options' }, { v: 'stock', l: 'Stock/ETF' }].map(({ v, l }) => {
                 const active = (prep.instrument || 'options') === v
                 return (
-                  <button key={v} onClick={() => upd('instrument', v)} style={{ flex: 1, background: active ? '#1e1e1e' : 'transparent', color: active ? LIME : '#444', border: 'none', borderRight: v === 'options' ? `1px solid ${BORDER}` : 'none', fontFamily: MONO, fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '9px 14px', cursor: 'pointer', fontWeight: active ? 700 : 400, whiteSpace: 'nowrap' }}>
+                  <button key={v} onClick={() => upd('instrument', v)} style={{ flex: 1, background: active ? THEME.colors.surface : 'transparent', color: active ? LIME : THEME.colors.secondary, border: 'none', borderRight: v === 'options' ? `1px solid ${BORDER}` : 'none', fontFamily: MONO, fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '9px 14px', cursor: 'pointer', fontWeight: active ? 700 : 400, whiteSpace: 'nowrap' }}>
                     {l}
                   </button>
                 )
@@ -2359,18 +2360,18 @@ STRUCTURED (parsing block, do not modify the format): output exactly one JSON ob
             const isPreset = presets.some(p => p.v === current)
             return (
               <div>
-                <div style={{ fontSize: 9, letterSpacing: '0.14em', color: '#3a3a3a', textTransform: 'uppercase', fontFamily: MONO, marginBottom: 6 }}>Planned DTE</div>
+                <div style={{ fontSize: 9, letterSpacing: '0.14em', color: THEME.colors.secondary, textTransform: 'uppercase', fontFamily: MONO, marginBottom: 6 }}>Planned DTE</div>
                 <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
                   {presets.map(p => {
                     const active = current === p.v
                     return (
-                      <button key={p.v} onClick={() => upd('plannedDTE', p.v)} style={{ flex: 1, background: active ? LIME : 'transparent', color: active ? '#000' : '#888', border: `1px solid ${active ? LIME : BORDER}`, borderRadius: 3, padding: '7px 8px', fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', cursor: 'pointer', minWidth: 42 }}>{p.label}</button>
+                      <button key={p.v} onClick={() => upd('plannedDTE', p.v)} style={{ flex: 1, background: active ? LIME : 'transparent', color: active ? THEME.colors.background : THEME.colors.secondary, border: `1px solid ${active ? LIME : BORDER}`, borderRadius: 3, padding: '7px 8px', fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', cursor: 'pointer', minWidth: 42 }}>{p.label}</button>
                     )
                   })}
-                  <button onClick={() => upd('plannedDTE', isPreset ? '' : current || '')} style={{ flex: 1, background: !isPreset && current ? LIME : 'transparent', color: !isPreset && current ? '#000' : '#888', border: `1px solid ${!isPreset && current ? LIME : BORDER}`, borderRadius: 3, padding: '7px 8px', fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', cursor: 'pointer', minWidth: 56 }}>Custom</button>
+                  <button onClick={() => upd('plannedDTE', isPreset ? '' : current || '')} style={{ flex: 1, background: !isPreset && current ? LIME : 'transparent', color: !isPreset && current ? THEME.colors.background : THEME.colors.secondary, border: `1px solid ${!isPreset && current ? LIME : BORDER}`, borderRadius: 3, padding: '7px 8px', fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', cursor: 'pointer', minWidth: 56 }}>Custom</button>
                 </div>
                 {!isPreset && (
-                  <input type="number" value={current} onChange={e => upd('plannedDTE', e.target.value)} placeholder="days" style={{ marginTop: 6, width: '100%', background: '#111', border: `1px solid ${BORDER}`, borderRadius: 3, color: '#bbb', fontFamily: MONO, fontSize: 12, padding: '7px 10px', outline: 'none' }} />
+                  <input type="number" value={current} onChange={e => upd('plannedDTE', e.target.value)} placeholder="days" style={{ marginTop: 6, width: '100%', background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 3, color: THEME.colors.secondary, fontFamily: MONO, fontSize: 12, padding: '7px 10px', outline: 'none' }} />
                 )}
               </div>
             )
@@ -2397,7 +2398,7 @@ STRUCTURED (parsing block, do not modify the format): output exactly one JSON ob
           const pdl = liveData?.prevDay?.low
           const pp = liveData?.pivots?.pp
 
-          const qColor = sq === 'ON LEVEL' ? LIME : sq === 'APPROACHING' ? YELLOW : sq === 'TIGHT RANGE' ? PURPLE : '#888'
+          const qColor = sq === 'ON LEVEL' ? LIME : sq === 'APPROACHING' ? YELLOW : sq === 'TIGHT RANGE' ? PURPLE : THEME.colors.secondary
           const qDesc = sq === 'ON LEVEL' ? 'price is touching a key level: await candle close' : sq === 'APPROACHING' ? 'price is closing in on a level: get ready' : sq === 'TIGHT RANGE' ? 'compressed between two close levels: breakout setup' : sq === 'BETWEEN LEVELS' ? 'no immediate level: wait for price to reach one' : sq === 'MARKET CLOSED' ? 'prep mode: live signals resume at the open, plan against the structure below' : 'live data not loaded'
 
           const plan = (prep.gamePlan || '').trim()
@@ -2415,41 +2416,41 @@ STRUCTURED (parsing block, do not modify the format): output exactly one JSON ob
           const allDone = doneCount === checks.length
 
           return (
-            <div style={{ background: '#0a0d08', border: `1px solid ${qColor}33`, borderRadius: 5, padding: '16px 18px', marginBottom: 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ background: THEME.colors.positiveSurface, border: `1px solid ${qColor}33`, borderRadius: 5, padding: '16px 18px', marginBottom: 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <SLabel style={{ marginBottom: 0 }}>Setup Quality</SLabel>
-                <span style={{ fontSize: 9, fontFamily: MONO, color: '#444', letterSpacing: '0.1em', textTransform: 'uppercase' }}>live</span>
+                <span style={{ fontSize: 9, fontFamily: MONO, color: THEME.colors.secondary, letterSpacing: '0.1em', textTransform: 'uppercase' }}>live</span>
               </div>
 
               {/* Quality badge */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                 <div style={{ background: `${qColor}11`, border: `1px solid ${qColor}55`, borderRadius: 4, padding: '8px 14px', minWidth: 150 }}>
-                  <div style={{ fontSize: 9, color: '#555', fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>Quality</div>
+                  <div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>Quality</div>
                   <div style={{ fontSize: 14, fontFamily: MONO, fontWeight: 900, color: qColor, letterSpacing: '0.04em' }}>{sq || 'NO DATA'}</div>
                 </div>
-                <div style={{ fontSize: 11, fontFamily: MONO, color: '#777', lineHeight: 1.5, flex: 1 }}>{qDesc}</div>
+                <div style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary, lineHeight: 1.5, flex: 1 }}>{qDesc}</div>
               </div>
 
               {/* Key context */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-                <div style={{ background: '#080808', border: '1px solid #161616', borderRadius: 4, padding: '10px 12px' }}>
-                  <div style={{ fontSize: 9, color: '#444', fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>vs VWAP</div>
-                  <div style={{ fontSize: 13, fontFamily: MONO, fontWeight: 700, color: sq === 'MARKET CLOSED' || vwapDelta == null ? '#444' : vwapDelta >= 0 ? LIME : RED }}>
+                <div style={{ background: THEME.colors.background, border: `1px solid ${THEME.colors.surface}`, borderRadius: 4, padding: '10px 12px' }}>
+                  <div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>vs VWAP</div>
+                  <div style={{ fontSize: 13, fontFamily: MONO, fontWeight: 700, color: sq === 'MARKET CLOSED' || vwapDelta == null ? THEME.colors.secondary : vwapDelta >= 0 ? LIME : RED }}>
                     {sq === 'MARKET CLOSED' ? 'Session closed' : vwapDelta == null ? '—' : vwapDelta >= 0 ? `Above +$${f2(vwapDelta)}` : `Below -$${f2(Math.abs(vwapDelta))}`}
                   </div>
                 </div>
-                <div style={{ background: '#080808', border: '1px solid #161616', borderRadius: 4, padding: '10px 12px' }}>
-                  <div style={{ fontSize: 9, color: '#444', fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>Nearest Level</div>
-                  <div style={{ fontSize: 13, fontFamily: MONO, fontWeight: 700, color: nearest ? '#e8e8e8' : '#444' }}>
+                <div style={{ background: THEME.colors.background, border: `1px solid ${THEME.colors.surface}`, borderRadius: 4, padding: '10px 12px' }}>
+                  <div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>Nearest Level</div>
+                  <div style={{ fontSize: 13, fontFamily: MONO, fontWeight: 700, color: nearest ? THEME.colors.text : THEME.colors.secondary }}>
                     {nearest ? `${nearest.label} $${f2(nearest.price)}` : '—'}
                   </div>
                   {nearest && (
-                    <div style={{ fontSize: 9, fontFamily: MONO, color: '#555', marginTop: 2 }}>{nearest.dir === 'above' ? '↑' : '↓'} ${f2(nearest.dist)} away</div>
+                    <div style={{ fontSize: 9, fontFamily: MONO, color: THEME.colors.secondary, marginTop: 2 }}>{nearest.dir === 'above' ? '↑' : '↓'} ${f2(nearest.dist)} away</div>
                   )}
                 </div>
-                <div style={{ background: '#080808', border: '1px solid #161616', borderRadius: 4, padding: '10px 12px' }}>
-                  <div style={{ fontSize: 9, color: '#444', fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>Active Levels</div>
-                  <div style={{ fontSize: 13, fontFamily: MONO, fontWeight: 700, color: activeCount > 0 ? '#e8e8e8' : '#444' }}>
+                <div style={{ background: THEME.colors.background, border: `1px solid ${THEME.colors.surface}`, borderRadius: 4, padding: '10px 12px' }}>
+                  <div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>Active Levels</div>
+                  <div style={{ fontSize: 13, fontFamily: MONO, fontWeight: 700, color: activeCount > 0 ? THEME.colors.text : THEME.colors.secondary }}>
                     {activeCount > 0 ? `${activeCount} loaded` : '—'}
                   </div>
                 </div>
@@ -2457,16 +2458,16 @@ STRUCTURED (parsing block, do not modify the format): output exactly one JSON ob
 
               {/* Tomorrow's structure */}
               <div>
-                <div style={{ fontSize: 9, color: '#444', fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 6 }}>Tomorrow's Structure</div>
+                <div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 6 }}>Tomorrow's Structure</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
                   {[
                     { l: 'PDH — resistance', v: pdh, c: RED },
-                    { l: 'PP — pivot', v: pp, c: '#888' },
+                    { l: 'PP — pivot', v: pp, c: THEME.colors.secondary },
                     { l: 'PDL — support', v: pdl, c: BLUE },
                   ].map(({ l, v, c }) => (
-                    <div key={l} style={{ background: '#080808', border: `1px solid ${v != null ? c + '22' : '#161616'}`, borderRadius: 4, padding: '8px 12px' }}>
-                      <div style={{ fontSize: 9, color: '#555', fontFamily: MONO, letterSpacing: '0.05em', marginBottom: 3 }}>{l}</div>
-                      <div style={{ fontSize: 13, fontFamily: MONO, fontWeight: 700, color: v != null ? c : '#333' }}>{v != null ? `$${f2(v)}` : '—'}</div>
+                    <div key={l} style={{ background: THEME.colors.background, border: `1px solid ${v != null ? c + '22' : THEME.colors.surface}`, borderRadius: 4, padding: '8px 12px' }}>
+                      <div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, letterSpacing: '0.05em', marginBottom: 3 }}>{l}</div>
+                      <div style={{ fontSize: 13, fontFamily: MONO, fontWeight: 700, color: v != null ? c : THEME.colors.secondary }}>{v != null ? `$${f2(v)}` : '—'}</div>
                     </div>
                   ))}
                 </div>
@@ -2475,23 +2476,23 @@ STRUCTURED (parsing block, do not modify the format): output exactly one JSON ob
               {/* Readiness checklist */}
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <span style={{ fontSize: 9, color: '#444', fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Prep Readiness</span>
-                  <span style={{ fontSize: 10, fontFamily: MONO, color: allDone ? LIME : '#666' }}>{doneCount}/{checks.length} complete</span>
+                  <span style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Prep Readiness</span>
+                  <span style={{ fontSize: 10, fontFamily: MONO, color: allDone ? LIME : THEME.colors.secondary }}>{doneCount}/{checks.length} complete</span>
                 </div>
-                <div style={{ height: 3, background: '#1a1a1a', borderRadius: 2, overflow: 'hidden', marginBottom: 10 }}>
+                <div style={{ height: 3, background: THEME.colors.surface, borderRadius: 2, overflow: 'hidden', marginBottom: 10 }}>
                   <div style={{ height: '100%', width: `${(doneCount / checks.length) * 100}%`, background: allDone ? LIME : YELLOW, transition: 'width 0.3s' }} />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {checks.map((c, i) => (
                     <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontFamily: MONO, fontSize: 11 }}>
                       <span style={{ color: c.done ? LIME : RED, fontWeight: 700, minWidth: 14 }}>{c.done ? '✓' : '✗'}</span>
-                      <span style={{ color: c.done ? '#aaa' : '#666' }}>{c.label}</span>
-                      {!c.done && <span style={{ color: '#3a3a3a', fontSize: 10 }}>— {c.nudge}</span>}
+                      <span style={{ color: c.done ? THEME.colors.secondary : THEME.colors.secondary }}>{c.label}</span>
+                      {!c.done && <span style={{ color: THEME.colors.secondary, fontSize: 10 }}>— {c.nudge}</span>}
                     </div>
                   ))}
                 </div>
                 {allDone && (
-                  <div style={{ marginTop: 12, padding: '10px 14px', background: '#071208', border: `1px solid ${LIME}55`, borderRadius: 4, textAlign: 'center' }}>
+                  <div style={{ marginTop: 12, padding: '10px 14px', background: THEME.colors.positiveSurface, border: `1px solid ${LIME}55`, borderRadius: 4, textAlign: 'center' }}>
                     <span style={{ fontSize: 12, fontFamily: MONO, fontWeight: 900, color: LIME, letterSpacing: '0.12em' }}>READY FOR {nextSessionDayName().toUpperCase()}</span>
                   </div>
                 )}
@@ -2501,31 +2502,31 @@ STRUCTURED (parsing block, do not modify the format): output exactly one JSON ob
         })()}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <label style={{ fontSize: 9, letterSpacing: '0.14em', color: '#666', textTransform: 'uppercase', fontFamily: MONO }}>
+            <label style={{ fontSize: 9, letterSpacing: '0.14em', color: THEME.colors.secondary, textTransform: 'uppercase', fontFamily: MONO }}>
               Game Plan {aiLoading && <span style={{ color: LIME }}>— AI Writing...</span>}
             </label>
-            {prep.gamePlan && !aiLoading && <span style={{ fontSize: 9, color: '#444', fontFamily: MONO }}>edit freely</span>}
+            {prep.gamePlan && !aiLoading && <span style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO }}>edit freely</span>}
           </div>
           <textarea
             value={prep.gamePlan || ''}
             onInput={e => upd('gamePlan', e.target.value)}
             placeholder={aiLoading ? 'Claude is analyzing your levels and writing your brief...' : hasClaudeKey ? 'Hit "Generate AI Brief" for an auto-generated plan, or write your own.' : 'Setup, strike, entry trigger, stop, target. What would make you stand aside?'}
-            style={{ background: '#111', border: `1px solid ${prep.gamePlan ? '#2a3825' : BORDER}`, borderRadius: 4, color: '#bbb', fontFamily: MONO, fontSize: 12, padding: '14px 16px', resize: 'vertical', minHeight: prep.gamePlan ? 220 : 80, outline: 'none', lineHeight: 1.85, width: '100%', opacity: aiLoading ? 0.6 : 1 }}
+            style={{ background: THEME.colors.background, border: `1px solid ${prep.gamePlan ? THEME.colors.positiveSurface : BORDER}`, borderRadius: 4, color: THEME.colors.secondary, fontFamily: MONO, fontSize: 12, padding: '14px 16px', resize: 'vertical', minHeight: prep.gamePlan ? 220 : 80, outline: 'none', lineHeight: 1.85, width: '100%', opacity: aiLoading ? 0.6 : 1 }}
           />
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <label style={{ fontSize: 9, letterSpacing: '0.14em', color: '#666', textTransform: 'uppercase', fontFamily: MONO }}>What to Avoid Tomorrow</label>
+          <label style={{ fontSize: 9, letterSpacing: '0.14em', color: THEME.colors.secondary, textTransform: 'uppercase', fontFamily: MONO }}>What to Avoid Tomorrow</label>
           <textarea value={prep.avoidNotes || ''} onInput={e => upd('avoidNotes', e.target.value)} placeholder="What traps will you stay out of?"
-            style={{ background: '#111', border: `1px solid ${BORDER}`, borderRadius: 4, color: '#888', fontFamily: MONO, fontSize: 12, padding: '12px 14px', resize: 'vertical', minHeight: 52, outline: 'none', lineHeight: 1.7, width: '100%' }} />
+            style={{ background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 4, color: THEME.colors.secondary, fontFamily: MONO, fontSize: 12, padding: '12px 14px', resize: 'vertical', minHeight: 52, outline: 'none', lineHeight: 1.7, width: '100%' }} />
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginTop: 10 }}>
-          <label style={{ fontSize: 9, letterSpacing: '0.14em', color: '#666', textTransform: 'uppercase', fontFamily: MONO }}>Market Events Tomorrow</label>
+          <label style={{ fontSize: 9, letterSpacing: '0.14em', color: THEME.colors.secondary, textTransform: 'uppercase', fontFamily: MONO }}>Market Events Tomorrow</label>
           <input
             type="text"
             value={prep.marketEvents || ''}
             onInput={e => upd('marketEvents', e.target.value)}
             placeholder="CPI 8:30 CT, FOMC 2pm, NVDA earnings AH..."
-            style={{ background: '#111', border: `1px solid ${BORDER}`, borderRadius: 4, color: '#888', fontFamily: MONO, fontSize: 12, padding: '9px 12px', outline: 'none', width: '100%' }}
+            style={{ background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 4, color: THEME.colors.secondary, fontFamily: MONO, fontSize: 12, padding: '9px 12px', outline: 'none', width: '100%' }}
             onFocus={e => { e.target.style.borderColor = YELLOW }}
             onBlur={e => { e.target.style.borderColor = BORDER }}
           />
@@ -2533,12 +2534,12 @@ STRUCTURED (parsing block, do not modify the format): output exactly one JSON ob
       </div>
 
       {prep.ticker && prep.orbHigh && prep.orbLow && (
-        <div style={{ background: '#0d1208', border: '1px solid #253520', borderRadius: 5, padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ background: THEME.colors.positiveSurface, border: `1px solid ${THEME.colors.positiveSurface}`, borderRadius: 5, padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <div style={{ fontSize: 12, fontFamily: MONO, fontWeight: 700, color: '#ccc', marginBottom: 4 }}>
+            <div style={{ fontSize: 12, fontFamily: MONO, fontWeight: 700, color: THEME.colors.secondary, marginBottom: 4 }}>
               {prep.ticker} — H: ${prep.orbHigh} / L: ${prep.orbLow}{prep.plannedStrike ? ` — Strike: $${prep.plannedStrike}` : ''}
             </div>
-            <div style={{ fontSize: 10, color: '#555', fontFamily: MONO }}>
+            <div style={{ fontSize: 10, color: THEME.colors.secondary, fontFamily: MONO }}>
               At {prep.orPeriod === '5' ? '8:35' : prep.orPeriod === '30' ? '9:00' : '8:45'} CT, load into ORB tab and verify in IV tab.
             </div>
           </div>
@@ -2551,7 +2552,7 @@ STRUCTURED (parsing block, do not modify the format): output exactly one JSON ob
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <SLabel>Saved Preps</SLabel>
-            <span style={{ fontSize: 9, fontFamily: MONO, color: '#333' }}>{Object.keys(savedPreps).length} saved</span>
+            <span style={{ fontSize: 9, fontFamily: MONO, color: THEME.colors.secondary }}>{Object.keys(savedPreps).length} saved</span>
           </div>
           <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4 }}>
             {Object.values(savedPreps).map(saved => {
@@ -2560,15 +2561,15 @@ STRUCTURED (parsing block, do not modify the format): output exactly one JSON ob
               const dateStr = new Date(saved.dateSaved).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
               const isCurrent = prep.ticker === saved.ticker
               return (
-                <div key={saved.ticker} style={{ background: '#0d0d0d', border: `1px solid ${isCurrent ? LIME + '44' : BORDER}`, borderRadius: 5, padding: '14px 16px', minWidth: 200, maxWidth: 200, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div key={saved.ticker} style={{ background: THEME.colors.background, border: `1px solid ${isCurrent ? LIME + '44' : BORDER}`, borderRadius: 5, padding: '14px 16px', minWidth: 200, maxWidth: 200, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div style={{ fontSize: 18, fontWeight: 900, fontFamily: MONO, color: LIME, letterSpacing: '-0.02em' }}>{saved.ticker}</div>
-                    <div style={{ fontSize: 9, color: '#333', fontFamily: MONO, paddingTop: 3 }}>{dateStr}</div>
+                    <div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, paddingTop: 3 }}>{dateStr}</div>
                   </div>
                   {saved.orbHigh && saved.orbLow && (
-                    <div style={{ fontSize: 9, color: '#444', fontFamily: MONO }}>${saved.orbLow} — ${saved.orbHigh}</div>
+                    <div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO }}>${saved.orbLow} — ${saved.orbHigh}</div>
                   )}
-                  <div style={{ fontSize: 10, color: '#2a2a2a', fontFamily: MONO, lineHeight: 1.5, flex: 1, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                  <div style={{ fontSize: 10, color: THEME.colors.secondary, fontFamily: MONO, lineHeight: 1.5, flex: 1, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
                     {preview}
                   </div>
                   <div style={{ display: 'flex', gap: 6 }}>
@@ -2584,43 +2585,43 @@ STRUCTURED (parsing block, do not modify the format): output exactly one JSON ob
 
       <Card style={{ padding: 0, overflow: 'hidden' }}>
         <div style={{ padding: '14px 20px', borderBottom: `1px solid ${BORDER}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div><SLabel>Morning Routine (CT)</SLabel><div style={{ fontSize: 11, color: '#666', fontFamily: MONO }}>Check off as you go.</div></div>
+          <div><SLabel>Morning Routine (CT)</SLabel><div style={{ fontSize: 11, color: THEME.colors.secondary, fontFamily: MONO }}>Check off as you go.</div></div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 80, height: 3, background: '#222', borderRadius: 2, overflow: 'hidden' }}>
+            <div style={{ width: 80, height: 3, background: THEME.colors.surface, borderRadius: 2, overflow: 'hidden' }}>
               <div style={{ height: '100%', width: `${(dc / ROUTINE.length) * 100}%`, background: dc === ROUTINE.length ? LIME : YELLOW, transition: 'width 0.2s' }} />
             </div>
-            <span style={{ fontSize: 10, fontFamily: MONO, color: '#555' }}>{dc}/{ROUTINE.length}</span>
+            <span style={{ fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary }}>{dc}/{ROUTINE.length}</span>
           </div>
         </div>
         {ROUTINE.map((step, i) => {
           const checked = !!rc[i]
           return (
-            <div key={i} onClick={() => setRc(c => ({ ...c, [i]: !c[i] }))} style={{ display: 'flex', cursor: 'pointer', background: checked ? '#0c0f0a' : 'transparent', borderBottom: i < ROUTINE.length - 1 ? `1px solid ${BORDER}` : 'none' }}>
+            <div key={i} onClick={() => setRc(c => ({ ...c, [i]: !c[i] }))} style={{ display: 'flex', cursor: 'pointer', background: checked ? THEME.colors.positiveSurface : 'transparent', borderBottom: i < ROUTINE.length - 1 ? `1px solid ${BORDER}` : 'none' }}>
               <div style={{ minWidth: 130, padding: '12px 14px', borderRight: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center' }}>
-                <span style={{ fontSize: 10, fontFamily: MONO, color: checked ? '#444' : LIME, fontWeight: 700, whiteSpace: 'nowrap' }}>{step.time}</span>
+                <span style={{ fontSize: 10, fontFamily: MONO, color: checked ? THEME.colors.secondary : LIME, fontWeight: 700, whiteSpace: 'nowrap' }}>{step.time}</span>
               </div>
               <div style={{ width: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRight: `1px solid ${BORDER}` }}>
-                <div style={{ width: 14, height: 14, borderRadius: 3, border: `1px solid ${checked ? LIME : '#444'}`, background: checked ? LIME : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {checked && <span style={{ color: '#000', fontSize: 9, fontWeight: 900 }}>✓</span>}
+                <div style={{ width: 14, height: 14, borderRadius: 3, border: `1px solid ${checked ? LIME : THEME.colors.border}`, background: checked ? LIME : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {checked && <span style={{ color: THEME.colors.background, fontSize: 9, fontWeight: 900 }}>✓</span>}
                 </div>
               </div>
               <div style={{ flex: 1, padding: '12px 16px', display: 'flex', alignItems: 'center' }}>
-                <span style={{ fontSize: 11, color: checked ? '#3a3a3a' : '#999', fontFamily: MONO, lineHeight: 1.55, textDecoration: checked ? 'line-through' : 'none' }}>{step.label}</span>
+                <span style={{ fontSize: 11, color: checked ? THEME.colors.secondary : THEME.colors.secondary, fontFamily: MONO, lineHeight: 1.55, textDecoration: checked ? 'line-through' : 'none' }}>{step.label}</span>
               </div>
             </div>
           )
         })}
         {dc === ROUTINE.length && (
-          <div style={{ padding: '14px 20px', background: '#0a1208', borderTop: '1px solid #1e3018' }}>
+          <div style={{ padding: '14px 20px', background: THEME.colors.positiveSurface, borderTop: `1px solid ${THEME.colors.positiveSurface}` }}>
             <div style={{ fontSize: 12, fontFamily: MONO, color: LIME, fontWeight: 700, letterSpacing: '0.06em' }}>ROUTINE COMPLETE — Execute the plan. Trust your prep.</div>
           </div>
         )}
       </Card>
 
-      <div style={{ background: '#120d0d', border: '1px solid #2a1818', borderRadius: 5, padding: '16px 20px' }}>
+      <div style={{ background: THEME.colors.negativeSurface, border: `1px solid ${THEME.colors.negativeSurface}`, borderRadius: 5, padding: '16px 20px' }}>
         <SLabel>End of Day Reset</SLabel>
         <textarea value={prep.dayReview || ''} onInput={e => upd('dayReview', e.target.value)} placeholder="What did you learn? How did IV affect your premium? What will you do differently tomorrow?"
-          style={{ background: '#111', border: `1px solid ${BORDER}`, borderRadius: 4, color: '#888', fontFamily: MONO, fontSize: 12, padding: '12px 14px', resize: 'vertical', minHeight: 80, outline: 'none', lineHeight: 1.7, width: '100%' }} />
+          style={{ background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 4, color: THEME.colors.secondary, fontFamily: MONO, fontSize: 12, padding: '12px 14px', resize: 'vertical', minHeight: 80, outline: 'none', lineHeight: 1.7, width: '100%' }} />
       </div>
     </div>
   )

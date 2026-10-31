@@ -1,3 +1,4 @@
+import { THEME } from '../lib/theme.js'
 import { useState } from 'react'
 import { Card, Btn } from './ui.jsx'
 import { BLUE, LIME, YELLOW, MONO, BORDER, f2 } from '../constants.js'
@@ -14,7 +15,7 @@ export default function SessionResearch({ ticker, onSelectTicker }) {
         <strong style={{ color: LIME }}>Session watchlist: {RESEARCH_SESSION}</strong>
         <span style={{ color: YELLOW, fontFamily: MONO, fontSize: 11 }}>{status} | CONDITIONAL, NOT LIVE SIGNALS</span>
       </div>
-      <p style={{ color: '#aaa', fontSize: 12, lineHeight: 1.6 }}>
+      <p style={{ color: THEME.colors.secondary, fontSize: 12, lineHeight: 1.6 }}>
         {RESEARCH_SOURCE}. After-hours coverage ends {new Date(RESEARCH_AS_OF).toLocaleString('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} CT. These references require a premarket refresh. No backtested win rate is claimed.
       </p>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -24,17 +25,17 @@ export default function SessionResearch({ ticker, onSelectTicker }) {
         <strong>{item.ticker}: {item.thesis}</strong>
         <Btn small onClick={() => onSelectTicker?.(item.ticker)}>Open {item.ticker} live map</Btn>
       </div>
-      <p style={{ color: '#aaa', fontSize: 12 }}>Regular close ${f2(item.close)} | After-hours reference ${f2(item.afterHours)} (historical)</p>
+      <p style={{ color: THEME.colors.secondary, fontSize: 12 }}>Regular close ${f2(item.close)} | After-hours reference ${f2(item.afterHours)} (historical)</p>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, textAlign: 'left' }}>
           <thead><tr><th style={{ padding: 8 }}>Price</th><th>Source / reference</th><th>Session</th></tr></thead>
           <tbody>{[...item.levels].reverse().map(level => <tr key={`${level.price}-${level.label}`} style={{ borderTop: `1px solid ${BORDER}` }}>
             <td style={{ padding: 8, fontFamily: MONO, color: level.kind === 'extended' ? YELLOW : BLUE }}>${f2(level.price)}</td>
-            <td>{level.label}</td><td style={{ color: '#aaa' }}>{level.kind === 'extended' ? 'After hours' : 'Regular'}</td>
+            <td>{level.label}</td><td style={{ color: THEME.colors.secondary }}>{level.kind === 'extended' ? 'After hours' : 'Regular'}</td>
           </tr>)}</tbody>
         </table>
       </div>
-      <div style={{ fontSize: 12, lineHeight: 1.7, color: '#ccc' }}>
+      <div style={{ fontSize: 12, lineHeight: 1.7, color: THEME.colors.secondary }}>
         <p><strong style={{ color: LIME }}>Long:</strong> {item.bullish}</p>
         <p><strong style={{ color: YELLOW }}>Short:</strong> {item.bearish}</p>
         <p><strong>Invalidation:</strong> {item.invalidation}</p>

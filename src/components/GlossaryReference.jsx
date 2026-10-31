@@ -1,3 +1,4 @@
+import { THEME } from '../lib/theme.js'
 // ─────────────────────────────────────────────────────────────────────────────
 // GlossaryReference.jsx — Plan / Glossary tab.
 //
@@ -14,9 +15,9 @@
 import { useMemo, useState } from 'react'
 import { LIME, RED, YELLOW, MONO, BORDER, PANEL } from '../constants.js'
 
-const FG = '#e8e8e8'
-const MUTED = '#666'
-const DIM = '#888'
+const FG = THEME.colors.text
+const MUTED = THEME.colors.secondary
+const DIM = THEME.colors.secondary
 
 const CATEGORIES = [
   { id: 'all', label: 'All' },
@@ -276,7 +277,7 @@ function EntryCard({ entry, query }) {
           <span style={{ fontSize: 8, color: MUTED, border: `1px solid ${BORDER}`, borderRadius: 3, padding: '2px 6px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
             {categoryLabel(entry.category)}
           </span>
-          <span style={{ fontSize: 12, color: '#555' }}>{open ? '−' : '+'}</span>
+          <span style={{ fontSize: 12, color: THEME.colors.secondary }}>{open ? '−' : '+'}</span>
         </div>
       </button>
 
@@ -298,7 +299,7 @@ function Section({ label, body }) {
   return (
     <div>
       <div style={{ fontSize: 9, color: MUTED, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 11, color: '#aaa', lineHeight: 1.6 }}>{body}</div>
+      <div style={{ fontSize: 11, color: THEME.colors.secondary, lineHeight: 1.6 }}>{body}</div>
     </div>
   )
 }
@@ -309,7 +310,7 @@ function BulletSection({ label, items }) {
       <div style={{ fontSize: 9, color: MUTED, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
       <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 4 }}>
         {items.map((it, i) => (
-          <li key={i} style={{ fontSize: 11, color: '#aaa', lineHeight: 1.6 }}>{it}</li>
+          <li key={i} style={{ fontSize: 11, color: THEME.colors.secondary, lineHeight: 1.6 }}>{it}</li>
         ))}
       </ul>
     </div>
@@ -356,7 +357,7 @@ export default function GlossaryReference() {
           placeholder="Search PDH, swing, volume…"
           style={{
             flex: '1 1 220px',
-            background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 4,
+            background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 4,
             color: FG, fontFamily: MONO, fontSize: 12,
             padding: '8px 12px', outline: 'none',
           }}
@@ -368,7 +369,7 @@ export default function GlossaryReference() {
               <button key={c.id} onClick={() => setCategory(c.id)} style={{
                 background: active ? `${LIME}22` : 'transparent',
                 border: `1px solid ${active ? `${LIME}55` : BORDER}`,
-                color: active ? LIME : '#888',
+                color: active ? LIME : THEME.colors.secondary,
                 fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
                 padding: '6px 10px', borderRadius: 3,
                 cursor: 'pointer', textTransform: 'uppercase',

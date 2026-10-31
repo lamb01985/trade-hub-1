@@ -1,3 +1,4 @@
+import { THEME } from '../lib/theme.js'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useLocalStorage } from '../hooks/useStore.js'
 import { SLabel, Heading } from './ui.jsx'
@@ -134,11 +135,11 @@ function StatusPill({ pass }) {
 
 function RuleRow({ n, title, body, pass }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 0', borderBottom: '0.5px solid #222' }}>
-      <div style={{ width: 22, fontSize: 11, fontFamily: MONO, color: '#444', fontWeight: 700 }}>{n}.</div>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 0', borderBottom: `0.5px solid ${THEME.colors.surface}` }}>
+      <div style={{ width: 22, fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary, fontWeight: 700 }}>{n}.</div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, color: '#ccc', fontFamily: MONO, marginBottom: 2 }}>{title}</div>
-        <div style={{ fontSize: 11, color: '#888', fontFamily: MONO }}>{body}</div>
+        <div style={{ fontSize: 13, color: THEME.colors.secondary, fontFamily: MONO, marginBottom: 2 }}>{title}</div>
+        <div style={{ fontSize: 11, color: THEME.colors.secondary, fontFamily: MONO }}>{body}</div>
       </div>
       <StatusPill pass={pass} />
     </div>
@@ -292,13 +293,13 @@ export default function CheckTab({ liveData, levelMap, mtfAlignment, ticker = 'Q
 
   // ── Verdict block colors ──────────────────────────────────────────────────
   const verdictBg = verdict === 'TRADE' || verdict === 'TRADE_FORCED' ? LIME
-    : verdict === 'NO_TRADE' ? RED : '#1a1a1a'
+    : verdict === 'NO_TRADE' ? RED : THEME.colors.surface
   const verdictText = verdict === 'TRADE' ? 'TRADE'
     : verdict === 'TRADE_FORCED' ? 'TRADE (FORCED)'
     : verdict === 'NO_TRADE' ? 'NO TRADE'
     : 'SELECT DIRECTION'
-  const verdictColor = verdict === 'TRADE' || verdict === 'TRADE_FORCED' ? '#0A0A0A'
-    : verdict === 'NO_TRADE' ? '#FFFFFF' : '#555'
+  const verdictColor = verdict === 'TRADE' || verdict === 'TRADE_FORCED' ? THEME.colors.background
+    : verdict === 'NO_TRADE' ? THEME.colors.text : THEME.colors.border
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -306,7 +307,7 @@ export default function CheckTab({ liveData, levelMap, mtfAlignment, ticker = 'Q
         <div>
           <SLabel>Pre-flight Check</SLabel>
           <Heading>CHECK</Heading>
-          <div style={{ fontSize: 11, fontFamily: MONO, color: '#555', marginTop: 4 }}>
+          <div style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary, marginTop: 4 }}>
             {ticker}, active timeframe: {ACTIVE_TF_MINUTES}M
           </div>
         </div>
@@ -321,8 +322,8 @@ export default function CheckTab({ liveData, levelMap, mtfAlignment, ticker = 'Q
             <button key={d} onClick={() => setDirection(d)} style={{
               flex: 1, padding: '14px 16px',
               background: active ? (longSel ? LIME : RED) : 'transparent',
-              color: active ? (longSel ? '#000' : '#fff') : '#888',
-              border: active ? 'none' : '0.5px solid #333',
+              color: active ? (longSel ? THEME.colors.background : THEME.colors.text) : THEME.colors.secondary,
+              border: active ? 'none' : `0.5px solid ${THEME.colors.surface}`,
               borderRadius: 5, fontFamily: MONO, fontSize: 14, fontWeight: 700, letterSpacing: '0.14em',
               cursor: 'pointer',
             }}>{d}</button>
@@ -334,7 +335,7 @@ export default function CheckTab({ liveData, levelMap, mtfAlignment, ticker = 'Q
       <div style={{
         height: 80, width: '100%',
         background: flashRed ? RED : verdictBg,
-        color: flashRed ? '#fff' : verdictColor,
+        color: flashRed ? THEME.colors.text : verdictColor,
         fontFamily: MONO, fontSize: 32, fontWeight: 700, letterSpacing: '0.08em',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         borderRadius: 5, transition: 'background 0.18s, color 0.18s',
@@ -350,17 +351,17 @@ export default function CheckTab({ liveData, levelMap, mtfAlignment, ticker = 'Q
           <RuleRow n={5} title="Printed signal, not gut feel" body={rules.r5.value} pass={rules.r5.pass} />
         </div>
       ) : (
-        <div style={{ padding: '24px 18px', background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 5, fontSize: 11, fontFamily: MONO, color: '#444' }}>
+        <div style={{ padding: '24px 18px', background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 5, fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary }}>
           Pick LONG or SHORT to evaluate the setup.
         </div>
       )}
 
       {/* Rule 5 manual input */}
       {rules && (
-        <div style={{ background: '#0c0c0c', border: '0.5px solid #222', borderRadius: 5, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ background: THEME.colors.background, border: `0.5px solid ${THEME.colors.surface}`, borderRadius: 5, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
             <input type="checkbox" checked={r5Checked} onChange={e => setR5Checked(e.target.checked)} style={{ width: 16, height: 16, accentColor: LIME, cursor: 'pointer' }} />
-            <span style={{ fontSize: 12, fontFamily: MONO, color: '#bbb' }}>
+            <span style={{ fontSize: 12, fontFamily: MONO, color: THEME.colors.secondary }}>
               I am entering because of a specific printed signal I can name in one sentence.
             </span>
           </label>
@@ -369,10 +370,10 @@ export default function CheckTab({ liveData, levelMap, mtfAlignment, ticker = 'Q
               value={r5Text} onChange={e => setR5Text(e.target.value)}
               placeholder="e.g. 5M close back above VWAP after retest"
               style={{
-                flex: 1, background: '#0a0a0a', border: '0.5px solid #222', borderRadius: 4,
-                color: '#e8e8e8', fontFamily: MONO, fontSize: 12, padding: '8px 10px', outline: 'none',
+                flex: 1, background: THEME.colors.background, border: `0.5px solid ${THEME.colors.surface}`, borderRadius: 4,
+                color: THEME.colors.text, fontFamily: MONO, fontSize: 12, padding: '8px 10px', outline: 'none',
               }} />
-            <span style={{ fontSize: 10, fontFamily: MONO, color: r5Text.length > 70 ? '#FFD166' : '#444', minWidth: 38, textAlign: 'right' }}>
+            <span style={{ fontSize: 10, fontFamily: MONO, color: r5Text.length > 70 ? THEME.colors.caution : THEME.colors.secondary, minWidth: 38, textAlign: 'right' }}>
               {r5Text.length}/80
             </span>
           </div>
@@ -391,8 +392,8 @@ export default function CheckTab({ liveData, levelMap, mtfAlignment, ticker = 'Q
             onTouchCancel={cancelHold}
             style={{
               position: 'relative', overflow: 'hidden',
-              background: 'transparent', border: '0.5px solid #2a2a2a',
-              color: '#666', fontFamily: MONO, fontSize: 10, letterSpacing: '0.14em',
+              background: 'transparent', border: `0.5px solid ${THEME.colors.surface}`,
+              color: THEME.colors.secondary, fontFamily: MONO, fontSize: 10, letterSpacing: '0.14em',
               padding: '8px 18px', borderRadius: 3, cursor: 'pointer',
               userSelect: 'none', WebkitUserSelect: 'none',
             }}>
@@ -401,7 +402,7 @@ export default function CheckTab({ liveData, levelMap, mtfAlignment, ticker = 'Q
               <div style={{ position: 'absolute', left: 0, bottom: 0, height: 2, width: `${overrideProgress}%`, background: RED, transition: 'width 0.05s linear' }} />
             )}
           </button>
-          <div style={{ fontSize: 9, fontFamily: MONO, color: '#333', letterSpacing: '0.08em' }}>
+          <div style={{ fontSize: 9, fontFamily: MONO, color: THEME.colors.secondary, letterSpacing: '0.08em' }}>
             Forced trades are logged. The button only flips after the full 3 seconds.
           </div>
         </div>
@@ -409,7 +410,7 @@ export default function CheckTab({ liveData, levelMap, mtfAlignment, ticker = 'Q
 
       {/* Override notes — required after forced trigger */}
       {overrideOn && (
-        <div style={{ background: '#150505', border: `1px solid ${RED}44`, borderRadius: 5, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ background: THEME.colors.negativeSurface, border: `1px solid ${RED}44`, borderRadius: 5, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ fontSize: 11, fontFamily: MONO, color: RED, fontWeight: 700, letterSpacing: '0.1em' }}>
             FORCED OVERRIDE, reason required before clearing
           </div>
@@ -417,19 +418,19 @@ export default function CheckTab({ liveData, levelMap, mtfAlignment, ticker = 'Q
             value={overrideReason} onChange={e => setOverrideReason(e.target.value)}
             placeholder="Why are you overriding?"
             style={{
-              background: '#0a0a0a', border: `0.5px solid ${RED}44`, borderRadius: 4,
-              color: '#e8c8c8', fontFamily: MONO, fontSize: 12, padding: '8px 10px', outline: 'none',
+              background: THEME.colors.background, border: `0.5px solid ${RED}44`, borderRadius: 4,
+              color: THEME.colors.negative, fontFamily: MONO, fontSize: 12, padding: '8px 10px', outline: 'none',
             }} />
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={confirmForcedOverride} disabled={!overrideReason.trim()} style={{
-              flex: 1, background: overrideReason.trim() ? RED : '#1a1a1a',
-              color: overrideReason.trim() ? '#fff' : '#444',
+              flex: 1, background: overrideReason.trim() ? RED : THEME.colors.surface,
+              color: overrideReason.trim() ? THEME.colors.text : THEME.colors.secondary,
               border: 'none', borderRadius: 4, padding: '10px',
               fontFamily: MONO, fontSize: 11, fontWeight: 700, letterSpacing: '0.12em',
               cursor: overrideReason.trim() ? 'pointer' : 'not-allowed',
             }}>Log override and clear</button>
             <button onClick={resetOverride} style={{
-              background: 'transparent', border: '0.5px solid #333', color: '#888',
+              background: 'transparent', border: `0.5px solid ${THEME.colors.surface}`, color: THEME.colors.secondary,
               borderRadius: 4, padding: '10px 14px',
               fontFamily: MONO, fontSize: 10, letterSpacing: '0.12em', cursor: 'pointer',
             }}>Cancel</button>
@@ -440,33 +441,33 @@ export default function CheckTab({ liveData, levelMap, mtfAlignment, ticker = 'Q
       {/* Recent checks */}
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <button onClick={() => setShowLog(s => !s)} style={{ background: 'transparent', border: 'none', color: '#666', fontFamily: MONO, fontSize: 10, letterSpacing: '0.14em', cursor: 'pointer', padding: 0 }}>
+          <button onClick={() => setShowLog(s => !s)} style={{ background: 'transparent', border: 'none', color: THEME.colors.secondary, fontFamily: MONO, fontSize: 10, letterSpacing: '0.14em', cursor: 'pointer', padding: 0 }}>
             {showLog ? '▼' : '▶'} RECENT CHECKS, last {LOG_LIMIT}
           </button>
           <div style={{ display: 'flex', gap: 14, fontSize: 10, fontFamily: MONO }}>
-            <span style={{ color: '#666' }}>Forced this week: <strong style={{ color: forcedCount > 0 ? RED : '#aaa' }}>{forcedCount}</strong></span>
-            <span style={{ color: '#666' }}>NO TRADE saves this week: <strong style={{ color: savesCount > 0 ? LIME : '#aaa' }}>{savesCount}</strong></span>
+            <span style={{ color: THEME.colors.secondary }}>Forced this week: <strong style={{ color: forcedCount > 0 ? RED : THEME.colors.secondary }}>{forcedCount}</strong></span>
+            <span style={{ color: THEME.colors.secondary }}>NO TRADE saves this week: <strong style={{ color: savesCount > 0 ? LIME : THEME.colors.secondary }}>{savesCount}</strong></span>
           </div>
         </div>
         {showLog && (
           log.length === 0
-            ? <div style={{ fontSize: 11, fontFamily: MONO, color: '#333', padding: '14px 0' }}>No checks logged yet.</div>
-            : <div style={{ background: '#0a0a0a', border: '0.5px solid #222', borderRadius: 5 }}>
+            ? <div style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary, padding: '14px 0' }}>No checks logged yet.</div>
+            : <div style={{ background: THEME.colors.background, border: `0.5px solid ${THEME.colors.surface}`, borderRadius: 5 }}>
                 {log.map((e, i) => {
                   const dt = new Date(e.timestamp)
                   const time = dt.toLocaleTimeString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
                   const isForced = !!e.override
                   const isPass = e.verdict === 'TRADE' || e.verdict === 'TRADE_FORCED'
-                  const tagColor = isForced ? RED : isPass ? LIME : '#888'
+                  const tagColor = isForced ? RED : isPass ? LIME : THEME.colors.secondary
                   return (
-                    <div key={e.timestamp + '-' + i} style={{ display: 'grid', gridTemplateColumns: '110px 60px 60px 100px 1fr', gap: 10, alignItems: 'center', padding: '9px 14px', borderBottom: i < log.length - 1 ? '0.5px solid #161616' : 'none' }}>
-                      <span style={{ fontSize: 10, fontFamily: MONO, color: '#555' }}>{time}</span>
-                      <span style={{ fontSize: 10, fontFamily: MONO, color: '#aaa', fontWeight: 700 }}>{e.ticker}</span>
+                    <div key={e.timestamp + '-' + i} style={{ display: 'grid', gridTemplateColumns: '110px 60px 60px 100px 1fr', gap: 10, alignItems: 'center', padding: '9px 14px', borderBottom: i < log.length - 1 ? `0.5px solid ${THEME.colors.surface}` : 'none' }}>
+                      <span style={{ fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary }}>{time}</span>
+                      <span style={{ fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary, fontWeight: 700 }}>{e.ticker}</span>
                       <span style={{ fontSize: 10, fontFamily: MONO, color: e.direction === 'LONG' ? LIME : RED, fontWeight: 700 }}>{e.direction}</span>
                       <span style={{ fontSize: 9, fontFamily: MONO, color: tagColor, fontWeight: 700, letterSpacing: '0.1em' }}>
                         {e.verdict.replace('_', ' ')}{isForced ? ' (FORCED)' : ''}
                       </span>
-                      <span style={{ fontSize: 10, fontFamily: MONO, color: '#666', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+                      <span style={{ fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
                         {e.override_reason || e.signal_text || '—'}
                       </span>
                     </div>

@@ -1,3 +1,4 @@
+import { THEME } from '../lib/theme.js'
 // ─────────────────────────────────────────────────────────────────────────────
 // FocusedTickerCard.jsx — per-ticker dashboard.
 //
@@ -22,9 +23,9 @@ import { CONDITIONS_BY_ID } from '../lib/conditionLibrary.js'
 import { getRecentNews } from '../lib/massive.js'
 import { occSymbol, SCHWAB_TRADE_URL, SCHWAB_BLUE } from '../lib/schwabClient.js'
 
-const FG = '#e8e8e8'
-const DIM = '#888'
-const MUTED = '#666'
+const FG = THEME.colors.text
+const DIM = THEME.colors.secondary
+const MUTED = THEME.colors.secondary
 
 function dirColor(d) { return d === 'short' ? RED : d === 'neutral' ? YELLOW : LIME }
 
@@ -48,13 +49,13 @@ function ConditionPill({ result }) {
   return (
     <div style={{
       display: 'inline-flex', alignItems: 'center', gap: 6,
-      background: result?.met ? '#0a1408' : '#0a0a0a',
+      background: result?.met ? THEME.colors.positiveSurface : THEME.colors.background,
       border: `1px solid ${color}44`,
       borderRadius: 3, padding: '3px 8px', fontSize: 10, fontFamily: MONO,
-      color: result?.met ? LIME : '#aaa',
+      color: result?.met ? LIME : THEME.colors.secondary,
     }}>
       <span>{result?.met ? '✓' : '·'}</span>
-      <span style={{ color: '#bbb' }}>{def?.label || result?.type}</span>
+      <span style={{ color: THEME.colors.secondary }}>{def?.label || result?.type}</span>
       {result?.label && <span style={{ color: MUTED, marginLeft: 4 }}>{result.label}</span>}
     </div>
   )
@@ -68,17 +69,17 @@ function KeyLevelsLadder({ price, snapshot, focused }) {
     if (price != null) arr.push({ kind: 'price', price, label: 'Now', color: LIME, bold: true })
     if (focused?.invalidationLevel?.price != null) arr.push({ kind: 'inv', price: focused.invalidationLevel.price, label: 'Invalid', color: RED })
     for (const z of focused?.entryZones || []) {
-      if (z.price != null) arr.push({ kind: 'entry', price: z.price, label: z.label || 'Entry', color: '#aaa' })
+      if (z.price != null) arr.push({ kind: 'entry', price: z.price, label: z.label || 'Entry', color: THEME.colors.secondary })
     }
     for (const t of focused?.targets || []) {
       if (t.price != null) arr.push({ kind: 'target', price: t.price, label: (t.type || 'target').replace('_', ' '), color: LIME })
     }
-    if (snapshot?.ema50 != null) arr.push({ kind: 'ema', price: snapshot.ema50, label: '50EMA', color: '#94a3b8' })
-    if (snapshot?.ema200 != null) arr.push({ kind: 'ema', price: snapshot.ema200, label: '200EMA', color: '#94a3b8' })
-    if (snapshot?.prevDay?.high != null) arr.push({ kind: 'pdh', price: snapshot.prevDay.high, label: 'PDH', color: '#94a3b8' })
-    if (snapshot?.prevDay?.low != null) arr.push({ kind: 'pdl', price: snapshot.prevDay.low, label: 'PDL', color: '#94a3b8' })
-    if (snapshot?.wk52High != null) arr.push({ kind: '52h', price: snapshot.wk52High, label: '52W H', color: '#94a3b8' })
-    if (snapshot?.wk52Low != null) arr.push({ kind: '52l', price: snapshot.wk52Low, label: '52W L', color: '#94a3b8' })
+    if (snapshot?.ema50 != null) arr.push({ kind: 'ema', price: snapshot.ema50, label: '50EMA', color: THEME.colors.blue })
+    if (snapshot?.ema200 != null) arr.push({ kind: 'ema', price: snapshot.ema200, label: '200EMA', color: THEME.colors.blue })
+    if (snapshot?.prevDay?.high != null) arr.push({ kind: 'pdh', price: snapshot.prevDay.high, label: 'PDH', color: THEME.colors.blue })
+    if (snapshot?.prevDay?.low != null) arr.push({ kind: 'pdl', price: snapshot.prevDay.low, label: 'PDL', color: THEME.colors.blue })
+    if (snapshot?.wk52High != null) arr.push({ kind: '52h', price: snapshot.wk52High, label: '52W H', color: THEME.colors.blue })
+    if (snapshot?.wk52Low != null) arr.push({ kind: '52l', price: snapshot.wk52Low, label: '52W L', color: THEME.colors.blue })
     return arr.filter(x => x.price != null && !isNaN(x.price)).sort((a, b) => a.price - b.price)
   }, [price, snapshot, focused])
 
@@ -94,7 +95,7 @@ function KeyLevelsLadder({ price, snapshot, focused }) {
     <div style={{ background: DARK, border: `1px solid ${BORDER}`, borderRadius: 4, padding: 10 }}>
       <div style={{ fontSize: 9, color: MUTED, fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 6 }}>Key levels</div>
       <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={{ display: 'block' }}>
-        <line x1={pad} y1={height - 22} x2={width - pad} y2={height - 22} stroke="#222" strokeWidth="1" />
+        <line x1={pad} y1={height - 22} x2={width - pad} y2={height - 22} stroke={THEME.colors.surface} strokeWidth="1" />
         {items.map((it, i) => {
           const x = pad + ((it.price - min) / range) * (width - 2 * pad)
           const top = height - 22
@@ -149,16 +150,16 @@ function StagedTradeInline({ trigger, setup, snapshot, accountValue }) {
   const pctOfAccount = cost != null && plan.accountValue ? (cost / plan.accountValue) * 100 : null
   return (
     <div style={{
-      background: '#150505', border: `1px solid ${RED}55`, borderRadius: 5,
+      background: THEME.colors.negativeSurface, border: `1px solid ${RED}55`, borderRadius: 5,
       padding: 12, display: 'flex', flexDirection: 'column', gap: 8,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <span style={{ background: RED, color: '#fff', fontSize: 10, fontWeight: 800, padding: '3px 8px', borderRadius: 3, letterSpacing: '0.14em', fontFamily: MONO }}>TRIGGERED · {setup.name}</span>
+        <span style={{ background: RED, color: THEME.colors.background, fontSize: 10, fontWeight: 800, padding: '3px 8px', borderRadius: 3, letterSpacing: '0.14em', fontFamily: MONO }}>TRIGGERED · {setup.name}</span>
         <span style={{ fontSize: 12, color: FG, fontFamily: MONO, fontWeight: 800 }}>
           {plan.side} {plan.optionType ? `$${plan.strike} ${plan.optionType.toUpperCase()} ${plan.expiration}` : `${plan.shares} sh`}
         </span>
       </div>
-      <div style={{ fontSize: 10, color: '#cbd5e1', fontFamily: MONO, lineHeight: 1.6 }}>
+      <div style={{ fontSize: 10, color: THEME.colors.text, fontFamily: MONO, lineHeight: 1.6 }}>
         {plan.optionType
           ? <>Strike <strong style={{ color: FG }}>${plan.strike}</strong> · DTE <strong style={{ color: FG }}>{plan.dte}</strong> · Contracts <strong style={{ color: FG }}>{plan.contracts}</strong> · Est cost <strong style={{ color: LIME }}>${cost != null ? cost.toFixed(0) : '—'}</strong>{pctOfAccount != null ? <> ({pctOfAccount.toFixed(2)}% of account)</> : null}</>
           : <>Shares <strong style={{ color: FG }}>{plan.shares}</strong> @ ${f2(price)} · Est cost <strong style={{ color: LIME }}>${cost != null ? cost.toFixed(0) : '—'}</strong>{pctOfAccount != null ? <> ({pctOfAccount.toFixed(2)}% of account)</> : null}</>
@@ -166,12 +167,12 @@ function StagedTradeInline({ trigger, setup, snapshot, accountValue }) {
       </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         <button onClick={copyPlan} style={{
-          background: 'transparent', border: `1px solid ${BORDER}`, color: '#aaa',
+          background: 'transparent', border: `1px solid ${BORDER}`, color: THEME.colors.secondary,
           padding: '6px 12px', borderRadius: 3, fontFamily: MONO, fontSize: 10,
           cursor: 'pointer', letterSpacing: '0.12em', textTransform: 'uppercase',
         }}>Copy plan</button>
         <button onClick={executeInSchwab} title={plan.optionType ? 'Copies the OCC symbol and opens the Schwab trade page' : 'Opens the Schwab trade page'} style={{
-          background: SCHWAB_BLUE, color: '#fff', border: 'none', padding: '6px 12px',
+          background: SCHWAB_BLUE, color: THEME.colors.text, border: 'none', padding: '6px 12px',
           borderRadius: 3, fontFamily: MONO, fontSize: 10, fontWeight: 800,
           letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer',
         }}>Execute in Schwab →</button>
@@ -191,11 +192,11 @@ function PerSetupRow({ setup, evaluation }) {
         <span style={{ fontSize: 11, color: FG, fontFamily: MONO, fontWeight: 700, flex: 1 }}>{setup.name}</span>
         <span style={{ fontSize: 9, color: setup.direction === 'short' ? RED : LIME, border: `1px solid ${(setup.direction === 'short' ? RED : LIME)}44`, padding: '2px 6px', borderRadius: 3, letterSpacing: '0.12em', textTransform: 'uppercase', fontFamily: MONO }}>{setup.direction || 'either'}</span>
         <span style={{ fontSize: 9, color, border: `1px solid ${color}55`, padding: '2px 6px', borderRadius: 3, letterSpacing: '0.14em', textTransform: 'uppercase', fontFamily: MONO }}>{status}</span>
-        <div style={{ width: 60, height: 4, background: '#1a1a1a', borderRadius: 2, overflow: 'hidden' }}>
+        <div style={{ width: 60, height: 4, background: THEME.colors.surface, borderRadius: 2, overflow: 'hidden' }}>
           <div style={{ height: '100%', width: `${pct * 100}%`, background: color }} />
         </div>
         <span style={{ fontSize: 10, color: MUTED, fontFamily: MONO, minWidth: 38, textAlign: 'right' }}>{evaluation?.metCount ?? 0}/{evaluation?.total ?? 0}</span>
-        <span style={{ fontSize: 11, color: '#444' }}>{open ? '▾' : '▸'}</span>
+        <span style={{ fontSize: 11, color: THEME.colors.secondary }}>{open ? '▾' : '▸'}</span>
       </div>
       {open && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
@@ -325,7 +326,7 @@ export default function FocusedTickerCard({
           onClick={() => onToggleCollapsed?.()}
           title={collapsed ? 'Expand card' : 'Collapse card'}
           style={{
-            background: 'transparent', border: `1px solid ${BORDER}`, color: '#aaa',
+            background: 'transparent', border: `1px solid ${BORDER}`, color: THEME.colors.secondary,
             padding: '4px 9px', borderRadius: 3, cursor: 'pointer', fontFamily: MONO,
             fontSize: 11, lineHeight: 1,
           }}
@@ -334,7 +335,7 @@ export default function FocusedTickerCard({
 
       {/* Collapsed summary line */}
       {collapsed && (
-        <div style={{ fontSize: 11, color: '#aaa', fontFamily: MONO, lineHeight: 1.5, letterSpacing: '0.04em' }}>
+        <div style={{ fontSize: 11, color: THEME.colors.secondary, fontFamily: MONO, lineHeight: 1.5, letterSpacing: '0.04em' }}>
           {attachedSetups.length === 0
             ? 'No setups attached.'
             : (
@@ -344,7 +345,7 @@ export default function FocusedTickerCard({
                 <span style={{ color: MUTED }}> · </span>
                 <span style={{ color: statusCounts.approaching > 0 ? YELLOW : MUTED, fontWeight: statusCounts.approaching > 0 ? 800 : 400 }}>{statusCounts.approaching} approaching</span>
                 <span style={{ color: MUTED }}> · </span>
-                <span style={{ color: '#aaa' }}>{statusCounts.monitoring} monitoring</span>
+                <span style={{ color: THEME.colors.secondary }}>{statusCounts.monitoring} monitoring</span>
               </>
             )}
         </div>
@@ -355,13 +356,13 @@ export default function FocusedTickerCard({
         <>
           {/* Thesis description */}
           {focused.thesisDescription && (
-            <div style={{ fontSize: 12, color: '#aaa', fontFamily: MONO, lineHeight: 1.6 }}>
+            <div style={{ fontSize: 12, color: THEME.colors.secondary, fontFamily: MONO, lineHeight: 1.6 }}>
               {focused.thesisDescription}
             </div>
           )}
           {focused.timeHorizon && (
             <div style={{ fontSize: 10, color: MUTED, fontFamily: MONO, letterSpacing: '0.06em' }}>
-              Horizon: <span style={{ color: '#aaa' }}>{focused.timeHorizon}</span>
+              Horizon: <span style={{ color: THEME.colors.secondary }}>{focused.timeHorizon}</span>
             </div>
           )}
 
@@ -406,12 +407,12 @@ export default function FocusedTickerCard({
         </div>
         {editingNotes ? (
           <textarea value={notesDraft} onChange={e => setNotesDraft(e.target.value)} rows={5} onBlur={saveNotes} style={{
-            background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 3,
+            background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 3,
             color: FG, fontFamily: MONO, fontSize: 11, padding: '8px 10px', outline: 'none',
             resize: 'vertical', lineHeight: 1.6,
           }} />
         ) : (
-          <div style={{ fontSize: 11, color: '#aaa', fontFamily: MONO, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+          <div style={{ fontSize: 11, color: THEME.colors.secondary, fontFamily: MONO, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
             {focused.notes || <span style={{ color: MUTED }}>No notes yet. Click Edit to add.</span>}
           </div>
         )}
@@ -426,7 +427,7 @@ export default function FocusedTickerCard({
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {news.slice(0, 5).map((n, i) => (
               <a key={i} href={n.article_url} target="_blank" rel="noopener noreferrer" style={{
-                fontSize: 11, color: '#aaa', textDecoration: 'none', fontFamily: MONO,
+                fontSize: 11, color: THEME.colors.secondary, textDecoration: 'none', fontFamily: MONO,
                 borderLeft: `2px solid ${BORDER}`, paddingLeft: 8, lineHeight: 1.5,
               }}>
                 {n.title} <span style={{ color: MUTED }}>— {new Date(n.published_utc).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
@@ -446,7 +447,7 @@ export default function FocusedTickerCard({
             {recentActivity.map((a, i) => {
               const d = new Date(a.triggeredAt)
               return (
-                <div key={i} style={{ display: 'flex', gap: 10, fontSize: 10, color: '#aaa', fontFamily: MONO, padding: '4px 6px', borderBottom: i === recentActivity.length - 1 ? 'none' : `1px solid ${BORDER}` }}>
+                <div key={i} style={{ display: 'flex', gap: 10, fontSize: 10, color: THEME.colors.secondary, fontFamily: MONO, padding: '4px 6px', borderBottom: i === recentActivity.length - 1 ? 'none' : `1px solid ${BORDER}` }}>
                   <span style={{ color: MUTED, minWidth: 90 }}>{d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                   <span style={{ color: FG, fontWeight: 700 }}>{a.setupName}</span>
                   {a.price != null && <span style={{ color: MUTED }}>@ ${f2(a.price)}</span>}
@@ -463,12 +464,12 @@ export default function FocusedTickerCard({
 }
 
 const actionBtn = {
-  background: 'transparent', border: `1px solid ${BORDER}`, color: '#aaa',
+  background: 'transparent', border: `1px solid ${BORDER}`, color: THEME.colors.secondary,
   padding: '5px 10px', borderRadius: 3, cursor: 'pointer', fontFamily: MONO,
   fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase',
 }
 const actionBtnSmall = {
-  background: 'transparent', border: `1px solid ${BORDER}`, color: '#aaa',
+  background: 'transparent', border: `1px solid ${BORDER}`, color: THEME.colors.secondary,
   padding: '3px 8px', borderRadius: 3, cursor: 'pointer', fontFamily: MONO,
   fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase',
 }

@@ -1,3 +1,6 @@
+import { Brand } from './Brand.jsx'
+import { BRAND } from '../lib/brand.js'
+import { THEME } from '../lib/theme.js'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import OperatorAccess from './intelligence/OperatorAccess.jsx'
 
@@ -84,11 +87,11 @@ export default function OperatorGate({ children }) {
       window.dispatchEvent(new Event('tradehub-operator-logout'))
     } catch { setError('Sign-out failed. Retry before leaving this browser.') }
   }
-  return <div style={{ background: '#0e0e0e', color: '#eee', minHeight: '100vh' }}>
+  return <div style={{ background: THEME.colors.background, color: THEME.colors.text, minHeight: '100vh' }}>
     {error && <p role="alert">{error}</p>}
-    {status === 'authenticated' ? <><button onClick={signOut}>Sign out of TradeHub</button>{children}</>
+    {status === 'authenticated' ? <><button onClick={signOut}>Sign out of {BRAND.name}</button>{children}</>
       : status === 'checking' ? <p role="status">Verifying private operator access...</p>
-        : <div style={{ padding: 24, maxWidth: 650 }}><h1>TradeHub operator access</h1>
+        : <div style={{ padding: 24, maxWidth: 650 }}><Brand /><h1 style={{fontSize:18}}>Private operator access</h1>
           {status === 'error' && <button onClick={verify}>Retry session check</button>}
           <OperatorAccess/></div>}
   </div>

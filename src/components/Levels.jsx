@@ -1,3 +1,4 @@
+import { THEME } from '../lib/theme.js'
 import { isLocalServicePreview, LOCAL_MARKET_LIMITATION } from '../lib/localPreview.js'
 import { useState, useMemo } from 'react'
 import SessionResearch from './SessionResearch.jsx'
@@ -9,27 +10,27 @@ import { requestNotificationPermission, Sounds } from '../lib/alerts.js'
 import { LIME, RED, YELLOW, BLUE, PURPLE, ORANGE, MONO, BORDER, LEVEL_COLORS, f2, getSession } from '../constants.js'
 
 const TYPE_COLORS = {
-  'pivot': '#888',
-  'pivot-r': '#FF7744',
-  'pivot-s': '#4488FF',
-  'structure': '#CCCCCC',
-  'vwap': '#C084FC',
-  'vwap-band': '#8050B0',
+  'pivot': THEME.colors.secondary,
+  'pivot-r': THEME.colors.negative,
+  'pivot-s': THEME.colors.blue,
+  'structure': THEME.colors.secondary,
+  'vwap': THEME.colors.purple,
+  'vwap-band': THEME.colors.purple,
   'orb': LIME,
-  'fib': '#FFD166',
-  'supply': '#FF4D4D',
-  'demand': '#60A5FA',
-  'weekly': '#FF6600',
-  'custom': '#888',
-  'poc': '#FFFFFF',
-  'vah': '#FFFFFF',
-  'val': '#FFFFFF',
-  'hvn': '#6699FF',
-  'lvn': '#334',
+  'fib': THEME.colors.caution,
+  'supply': THEME.colors.negative,
+  'demand': THEME.colors.blue,
+  'weekly': THEME.colors.caution,
+  'custom': THEME.colors.secondary,
+  'poc': THEME.colors.text,
+  'vah': THEME.colors.text,
+  'val': THEME.colors.text,
+  'hvn': THEME.colors.blue,
+  'lvn': THEME.colors.border,
   'premarket-high': LIME,
   'premarket-low': RED,
-  'round': '#556055',
-  'target': '#FFD166',
+  'round': THEME.colors.secondary,
+  'target': THEME.colors.caution,
 }
 
 function LevelRow({ level, currentPrice }) {
@@ -39,7 +40,7 @@ function LevelRow({ level, currentPrice }) {
   const isAbove = dist > 0
   const isVeryNear = absDist < 0.25
   const isNear = absDist < 0.75
-  const color = TYPE_COLORS[level.type] || '#666'
+  const color = TYPE_COLORS[level.type] || THEME.colors.secondary
   const isCurrentLevel = absDist < 0.08
   const isPOC = level.type === 'poc'
 
@@ -48,28 +49,28 @@ function LevelRow({ level, currentPrice }) {
       display: 'flex',
       alignItems: 'center',
       padding: '8px 16px',
-      borderBottom: `1px solid #0f0f0f`,
-      background: isCurrentLevel ? '#0d1a0d' : isVeryNear ? '#0f0f0a' : 'transparent',
-      borderLeft: isCurrentLevel ? `3px solid ${LIME}` : isVeryNear ? `3px solid ${color}88` : isPOC ? '3px solid #444' : '3px solid transparent',
+      borderBottom: `1px solid ${THEME.colors.surface}`,
+      background: isCurrentLevel ? THEME.colors.positiveSurface : isVeryNear ? THEME.colors.surface : 'transparent',
+      borderLeft: isCurrentLevel ? `3px solid ${LIME}` : isVeryNear ? `3px solid ${color}88` : isPOC ? `3px solid ${THEME.colors.border}` : '3px solid transparent',
     }}>
       <div style={{ width: 8, height: 8, borderRadius: isPOC ? 2 : '50%', background: color, flexShrink: 0, marginRight: 10, boxShadow: isNear ? `0 0 6px ${color}88` : 'none' }} />
 
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 12, fontFamily: MONO, color: isNear ? color : isPOC ? '#999' : '#777', fontWeight: isPOC ? 900 : isNear ? 700 : 400 }}>{level.label}</span>
+          <span style={{ fontSize: 12, fontFamily: MONO, color: isNear ? color : isPOC ? THEME.colors.secondary : THEME.colors.secondary, fontWeight: isPOC ? 900 : isNear ? 700 : 400 }}>{level.label}</span>
           {level.confluence > 0 && (
             <span style={{ fontSize: 8, background: `${YELLOW}22`, color: YELLOW, border: `1px solid ${YELLOW}44`, borderRadius: 2, padding: '1px 5px', fontFamily: MONO, letterSpacing: '0.08em' }}>
               CONFLUENCE ×{level.confluence + 1}
             </span>
           )}
         </div>
-        {level.sublabel && <div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, marginTop: 2 }}>{level.sublabel}</div>}
+        {level.sublabel && <div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, marginTop: 2 }}>{level.sublabel}</div>}
       </div>
 
       <div style={{ textAlign: 'right', marginLeft: 12 }}>
-        <div style={{ fontSize: 14, fontFamily: MONO, fontWeight: isPOC ? 900 : 700, color: isNear ? color : isPOC ? '#aaa' : '#555' }}>${f2(level.price)}</div>
+        <div style={{ fontSize: 14, fontFamily: MONO, fontWeight: isPOC ? 900 : 700, color: isNear ? color : isPOC ? THEME.colors.secondary : THEME.colors.secondary }}>${f2(level.price)}</div>
         {dist !== null && (
-          <div style={{ fontSize: 9, fontFamily: MONO, color: isAbove ? '#3a5a3a' : '#5a3a3a', marginTop: 1 }}>
+          <div style={{ fontSize: 9, fontFamily: MONO, color: isAbove ? THEME.colors.positive : THEME.colors.negative, marginTop: 1 }}>
             {isAbove ? '+' : ''}{f2(dist)} {isAbove ? '▲' : '▼'}
           </div>
         )}
@@ -80,10 +81,10 @@ function LevelRow({ level, currentPrice }) {
 
 function CurrentPriceMarker({ price }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', padding: '10px 16px', background: '#0a1a0a', borderLeft: `3px solid ${LIME}`, borderTop: `1px solid ${LIME}33`, borderBottom: `1px solid ${LIME}33` }}>
+    <div style={{ display: 'flex', alignItems: 'center', padding: '10px 16px', background: THEME.colors.positiveSurface, borderLeft: `3px solid ${LIME}`, borderTop: `1px solid ${LIME}33`, borderBottom: `1px solid ${LIME}33` }}>
       <div style={{ width: 8, height: 8, borderRadius: '50%', background: LIME, boxShadow: `0 0 10px ${LIME}`, flexShrink: 0, marginRight: 10, animation: 'pulse 1.5s infinite' }} />
       <div style={{ flex: 1 }}>
-        <span style={{ fontSize: 9, fontFamily: MONO, color: '#3a5a3a', letterSpacing: '0.12em', textTransform: 'uppercase' }}>Last recorded trade (see header timestamp)</span>
+        <span style={{ fontSize: 9, fontFamily: MONO, color: THEME.colors.positive, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Last recorded trade (see header timestamp)</span>
       </div>
       <div style={{ fontSize: 18, fontFamily: MONO, fontWeight: 900, color: LIME, letterSpacing: '-0.02em' }}>${f2(price)}</div>
     </div>
@@ -145,10 +146,10 @@ function buildSetupMsg(quality, nearestAbove, nearestBelow, price, atr, vwapData
 
 function SetupBadge({ quality, nearestAbove, nearestBelow, price, atr, vwapData, volProfile, alignment }) {
   const configs = {
-    'ON LEVEL': { color: LIME, bg: '#071208', border: '#1a3010' },
-    'APPROACHING': { color: YELLOW, bg: '#0e0c04', border: '#2a2008' },
-    'TIGHT RANGE': { color: ORANGE, bg: '#0e0800', border: '#2a1800' },
-    'BETWEEN LEVELS': { color: '#555', bg: '#0a0a0a', border: '#161616' },
+    'ON LEVEL': { color: LIME, bg: THEME.colors.positiveSurface, border: THEME.colors.positiveSurface },
+    'APPROACHING': { color: YELLOW, bg: THEME.colors.surface, border: THEME.colors.negativeSurface },
+    'TIGHT RANGE': { color: ORANGE, bg: THEME.colors.negativeSurface, border: THEME.colors.negativeSurface },
+    'BETWEEN LEVELS': { color: THEME.colors.secondary, bg: THEME.colors.background, border: THEME.colors.surface },
   }
   const c = configs[quality] || configs['BETWEEN LEVELS']
   const gapAbove = nearestAbove ? nearestAbove.price - price : null
@@ -159,20 +160,20 @@ function SetupBadge({ quality, nearestAbove, nearestBelow, price, atr, vwapData,
     <div style={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: 5, padding: '14px 18px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
         <div>
-          <div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 4, display: 'flex', alignItems: 'center' }}>Setup Quality<Tip tip="How close price is to a tradeable level right now. ON LEVEL means a potential entry exists at a known institutional level. APPROACHING means get ready. TIGHT RANGE means price is coiling. BETWEEN LEVELS means no edge — wait for price to reach a level." /></div>
+          <div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 4, display: 'flex', alignItems: 'center' }}>Setup Quality<Tip tip="How close price is to a tradeable level right now. ON LEVEL means a potential entry exists at a known institutional level. APPROACHING means get ready. TIGHT RANGE means price is coiling. BETWEEN LEVELS means no edge — wait for price to reach a level." /></div>
           <div style={{ fontSize: 16, fontWeight: 700, fontFamily: MONO, color: c.color }}>{quality || 'NO DATA'}</div>
         </div>
         <div style={{ textAlign: 'right' }}>
           {gapAbove !== null && gapBelow !== null && (
             <div style={{ fontSize: 10, fontFamily: MONO }}>
-              <div style={{ color: '#4a2a2a' }}>▲ +${f2(gapAbove)} to {nearestAbove?.label}</div>
-              <div style={{ color: '#2a4a2a', marginTop: 3 }}>▼ -${f2(gapBelow)} to {nearestBelow?.label}</div>
+              <div style={{ color: THEME.colors.negative }}>▲ +${f2(gapAbove)} to {nearestAbove?.label}</div>
+              <div style={{ color: THEME.colors.positive, marginTop: 3 }}>▼ -${f2(gapBelow)} to {nearestBelow?.label}</div>
             </div>
           )}
-          {atr && <div style={{ fontSize: 9, color: '#333', fontFamily: MONO, marginTop: 4, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 2 }}>ATR ${f2(atr)}<Tip tip="Average True Range — average daily price movement over 14 bars. Used to set stops that aren't too tight (noise) or too wide (too much loss). Stop offset = 0.5× ATR from your trigger level." /></div>}
+          {atr && <div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, marginTop: 4, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 2 }}>ATR ${f2(atr)}<Tip tip="Average True Range — average daily price movement over 14 bars. Used to set stops that aren't too tight (noise) or too wide (too much loss). Stop offset = 0.5× ATR from your trigger level." /></div>}
         </div>
       </div>
-      {msg && <div style={{ fontSize: 11, color: c.color === '#555' ? '#333' : c.color, fontFamily: MONO, opacity: 0.8, lineHeight: 1.6 }}>{msg}</div>}
+      {msg && <div style={{ fontSize: 11, color: c.color === THEME.colors.secondary ? THEME.colors.secondary : c.color, fontFamily: MONO, opacity: 0.8, lineHeight: 1.6 }}>{msg}</div>}
     </div>
   )
 }
@@ -269,7 +270,7 @@ export default function Levels({ liveData, ticker, onSelectTicker, orbHigh, orbL
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           {!notifSupported ? (
-            <span style={{ fontSize: 9, fontFamily: MONO, color: '#666' }}>Alerts not supported on this browser</span>
+            <span style={{ fontSize: 9, fontFamily: MONO, color: THEME.colors.secondary }}>Alerts not supported on this browser</span>
           ) : !settings?.alertsEnabled ? (
             <Btn small variant="lime" onClick={handleEnableAlerts}>Enable Alerts + Sound</Btn>
           ) : (
@@ -283,11 +284,11 @@ export default function Levels({ liveData, ticker, onSelectTicker, orbHigh, orbL
       {putThesis?.trigger != null && (() => {
         const triggered = price != null && price <= putThesis.trigger
         return (
-          <div style={{ background: triggered ? '#150505' : '#100404', border: `1px solid ${RED}55`, borderRadius: 5, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, animation: triggered ? 'hdrpulse 1.5s infinite' : 'none' }}>
+          <div style={{ background: triggered ? THEME.colors.negativeSurface : THEME.colors.negativeSurface, border: `1px solid ${RED}55`, borderRadius: 5, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, animation: triggered ? 'hdrpulse 1.5s infinite' : 'none' }}>
             <div style={{ fontSize: 12, fontFamily: MONO, color: RED, fontWeight: 700, letterSpacing: '0.06em' }}>
               {triggered ? '⚠ PUT THESIS TRIGGERED' : '⚠ PUT THESIS ACTIVE'} — entry below ${f2(putThesis.trigger)}
             </div>
-            <div style={{ fontSize: 10, fontFamily: MONO, color: '#aa6666' }}>
+            <div style={{ fontSize: 10, fontFamily: MONO, color: THEME.colors.negative }}>
               {price != null && `Current $${f2(price)} · ${triggered ? 'BREAK CONFIRMED' : `$${f2(price - putThesis.trigger)} above trigger`}`}
             </div>
           </div>
@@ -315,7 +316,7 @@ export default function Levels({ liveData, ticker, onSelectTicker, orbHigh, orbL
         const stateColor = s => s === 'BULLISH' ? LIME : s === 'BEARISH' ? RED : s === 'TRANSITION' ? ORANGE : YELLOW
         const arrow = s => s === 'BULLISH' ? '▲' : s === 'BEARISH' ? '▼' : '◆'
         return (
-          <div style={{ background: '#0c0c0c', border: `1px solid ${c}33`, borderRadius: 4, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ background: THEME.colors.background, border: `1px solid ${c}33`, borderRadius: 4, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
             <div style={{ display: 'flex', gap: 6 }}>
               {['1h', '15m', '5m', '1m'].map(tf => {
                 const s = a.mtf?.[tf]?.state
@@ -346,15 +347,15 @@ export default function Levels({ liveData, ticker, onSelectTicker, orbHigh, orbL
           : 'Balanced market — price inside value area, expect rotation between VAH and VAL.'
         const pocRel = price > poc + 0.05 ? 'above POC' : price < poc - 0.05 ? 'below POC' : 'at POC'
         return (
-          <div style={{ background: '#0a0a0a', border: `1px solid ${aboveColor}33`, borderRadius: 4, padding: '11px 14px' }}>
+          <div style={{ background: THEME.colors.background, border: `1px solid ${aboveColor}33`, borderRadius: 4, padding: '11px 14px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-              <span style={{ fontSize: 9, fontFamily: MONO, color: '#555', letterSpacing: '0.14em', textTransform: 'uppercase' }}>Value Area</span>
+              <span style={{ fontSize: 9, fontFamily: MONO, color: THEME.colors.secondary, letterSpacing: '0.14em', textTransform: 'uppercase' }}>Value Area</span>
               <span style={{ fontSize: 10, fontFamily: MONO, color: aboveColor, fontWeight: 700, letterSpacing: '0.06em' }}>
                 {above ? 'ABOVE VAH' : below ? 'BELOW VAL' : 'INSIDE VA'} · {pocRel.toUpperCase()}
               </span>
             </div>
-            <div style={{ fontSize: 11, fontFamily: MONO, color: '#aaa', lineHeight: 1.55 }}>
-              POC <strong style={{ color: '#FFFFFF' }}>${f2(poc)}</strong> · VAH <strong style={{ color: '#FFFFFF' }}>${f2(vah)}</strong> · VAL <strong style={{ color: '#FFFFFF' }}>${f2(val)}</strong>
+            <div style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary, lineHeight: 1.55 }}>
+              POC <strong style={{ color: THEME.colors.text }}>${f2(poc)}</strong> · VAH <strong style={{ color: THEME.colors.text }}>${f2(vah)}</strong> · VAL <strong style={{ color: THEME.colors.text }}>${f2(val)}</strong>
             </div>
             <div style={{ fontSize: 10, fontFamily: MONO, color: aboveColor, lineHeight: 1.55, marginTop: 4, opacity: 0.85 }}>
               {auctionMsg}
@@ -364,10 +365,10 @@ export default function Levels({ liveData, ticker, onSelectTicker, orbHigh, orbL
       })()}
 
       {!price && (
-        <div style={{ background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 5, padding: '28px 24px' }}>
+        <div style={{ background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 5, padding: '28px 24px' }}>
           <div role="status" style={{ fontSize: 12, fontFamily: MONO, color: YELLOW, marginBottom: 10 }}>Live levels unavailable</div>
-          <p style={{ fontSize: 11, fontFamily: MONO, color: '#aaa', lineHeight: 1.7 }}>{isLocalServicePreview() ? LOCAL_MARKET_LIMITATION : liveData?.loadingContext ? 'Loading server market-data context. No live price has been returned yet.' : liveData?.contextError ? 'The server market-data context could not be loaded. Check the server connection and retry.' : 'No current market-data price has been returned. A server-side Massive connection is required; browser key entry does not configure the server.'}</p>
-          <p style={{fontSize:11,color:'#999'}}>No current VWAP or live price confirmation is inferred. You can still enter manual reference levels below.</p>
+          <p style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary, lineHeight: 1.7 }}>{isLocalServicePreview() ? LOCAL_MARKET_LIMITATION : liveData?.loadingContext ? 'Loading server market-data context. No live price has been returned yet.' : liveData?.contextError ? 'The server market-data context could not be loaded. Check the server connection and retry.' : 'No current market-data price has been returned. A server-side Massive connection is required; browser key entry does not configure the server.'}</p>
+          <p style={{fontSize:11,color:THEME.colors.secondary}}>No current VWAP or live price confirmation is inferred. You can still enter manual reference levels below.</p>
         </div>
       )}
 
@@ -378,11 +379,11 @@ export default function Levels({ liveData, ticker, onSelectTicker, orbHigh, orbL
           {[
             { label: 'Live Price', value: `$${f2(price)}`, color: LIME },
             { label: 'VWAP', value: vwapData ? `$${f2(vwapData.vwap)}` : '—', color: PURPLE, tip: "Volume Weighted Average Price — the average price weighted by volume. Institutions use VWAP as their primary anchor. Price above VWAP favors longs, below favors shorts." },
-            { label: 'vs VWAP', value: vwapData ? `${price > vwapData.vwap ? '+' : ''}$${f2(price - vwapData.vwap)}` : '—', color: vwapData ? (price > vwapData.vwap ? LIME : RED) : '#444' },
-            { label: 'Active Levels', value: levels.length, color: '#777' },
+            { label: 'vs VWAP', value: vwapData ? `${price > vwapData.vwap ? '+' : ''}$${f2(price - vwapData.vwap)}` : '—', color: vwapData ? (price > vwapData.vwap ? LIME : RED) : THEME.colors.secondary },
+            { label: 'Active Levels', value: levels.length, color: THEME.colors.secondary },
           ].map(({ label, value, color, tip }) => (
             <Card key={label} style={{ padding: '12px 14px' }}>
-              <div style={{ fontSize: 9, color: '#2a2a2a', fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 4, display: 'flex', alignItems: 'center' }}>{label}{tip && <Tip tip={tip} />}</div>
+              <div style={{ fontSize: 9, color: THEME.colors.secondary, fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 4, display: 'flex', alignItems: 'center' }}>{label}{tip && <Tip tip={tip} />}</div>
               <div style={{ fontSize: 18, fontWeight: 700, fontFamily: MONO, color }}>{value}</div>
             </Card>
           ))}
@@ -406,7 +407,7 @@ export default function Levels({ liveData, ticker, onSelectTicker, orbHigh, orbL
 
       {/* Fib source label */}
       {autoFibs && (
-        <div style={{ fontSize: 9, fontFamily: MONO, color: '#2a2a2a', paddingLeft: 2, letterSpacing: '0.06em' }}>
+        <div style={{ fontSize: 9, fontFamily: MONO, color: THEME.colors.secondary, paddingLeft: 2, letterSpacing: '0.06em' }}>
           Fibonacci drawn from {autoFibs.source}
         </div>
       )}
@@ -415,7 +416,7 @@ export default function Levels({ liveData, ticker, onSelectTicker, orbHigh, orbL
       <Card style={{ padding: 0, overflow: 'hidden' }}>
         {/* Blue-sky flag: nothing structural overhead */}
         {price && blueSkyUp && above.length === 0 && (
-          <div style={{ padding: '12px 20px', background: '#0a1410', borderBottom: '1px solid #1e2a18', fontFamily: MONO, fontSize: 11, color: LIME, fontWeight: 700, letterSpacing: '0.04em' }}>
+          <div style={{ padding: '12px 20px', background: THEME.colors.positiveSurface, borderBottom: `1px solid ${THEME.colors.positiveSurface}`, fontFamily: MONO, fontSize: 11, color: LIME, fontWeight: 700, letterSpacing: '0.04em' }}>
             ▲ BLUE SKY — no resistance overhead. Price has cleared every structural level. Breaking into open space; use whole-dollar levels and the measured-move target as guides, and watch for momentum exhaustion.
           </div>
         )}
@@ -435,13 +436,13 @@ export default function Levels({ liveData, ticker, onSelectTicker, orbHigh, orbL
 
         {/* Blue-sky flag: nothing structural below */}
         {price && blueSkyDown && below.length === 0 && (
-          <div style={{ padding: '12px 20px', background: '#140a0a', borderTop: '1px solid #2a1818', fontFamily: MONO, fontSize: 11, color: '#ff5555', fontWeight: 700, letterSpacing: '0.04em' }}>
+          <div style={{ padding: '12px 20px', background: THEME.colors.negativeSurface, borderTop: `1px solid ${THEME.colors.negativeSurface}`, fontFamily: MONO, fontSize: 11, color: THEME.colors.negative, fontWeight: 700, letterSpacing: '0.04em' }}>
             ▼ NO SUPPORT BELOW — price has broken under every structural level. Free-fall risk; use whole-dollar levels and the measured-move target as guides.
           </div>
         )}
 
         {filteredLevels.length === 0 && (
-          <div style={{ padding: '40px 20px', textAlign: 'center', color: '#2a2a2a', fontFamily: MONO, fontSize: 11 }}>
+          <div style={{ padding: '40px 20px', textAlign: 'center', color: THEME.colors.secondary, fontFamily: MONO, fontSize: 11 }}>
             No levels loaded yet. Add your API key in Command to load market context.
           </div>
         )}
@@ -458,8 +459,8 @@ export default function Levels({ liveData, ticker, onSelectTicker, orbHigh, orbL
         {customLevels.length > 0 && (
           <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {customLevels.map((l, i) => (
-              <div key={i} style={{ background: '#141414', border: `1px solid ${BORDER}`, borderRadius: 3, padding: '4px 10px', display: 'flex', gap: 8, alignItems: 'center' }}>
-                <span style={{ fontSize: 10, fontFamily: MONO, color: '#888' }}>{l.label} ${f2(l.price)}</span>
+              <div key={i} style={{ background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 3, padding: '4px 10px', display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span style={{ fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary }}>{l.label} ${f2(l.price)}</span>
                 <span onClick={() => setCustomLevels(prev => prev.filter((_, j) => j !== i))} style={{ fontSize: 9, color: RED, cursor: 'pointer' }}>✕</span>
               </div>
             ))}
@@ -489,7 +490,7 @@ export default function Levels({ liveData, ticker, onSelectTicker, orbHigh, orbL
           ].map(({ type, label }) => (
             <div key={type} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{ width: 8, height: 8, borderRadius: '50%', background: TYPE_COLORS[type], flexShrink: 0 }} />
-              <span style={{ fontSize: 9, fontFamily: MONO, color: '#444' }}>{label}</span>
+              <span style={{ fontSize: 9, fontFamily: MONO, color: THEME.colors.secondary }}>{label}</span>
             </div>
           ))}
         </div>
@@ -500,11 +501,11 @@ export default function Levels({ liveData, ticker, onSelectTicker, orbHigh, orbL
         <Card>
           <SLabel>Alert Log</SLabel>
           {liveData.lastAlerts.slice(0, 5).map((alert, i) => (
-            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: i < 4 ? `1px solid #0f0f0f` : 'none' }}>
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: i < 4 ? `1px solid ${THEME.colors.surface}` : 'none' }}>
               <span style={{ fontSize: 11, fontFamily: MONO, color: alert.type === 'break' ? LIME : YELLOW }}>
                 {alert.type === 'break' ? alert.direction : alert.type === 'confluence' ? '⊕ CONFLUENCE' : '◈ APPROACHING'} {alert.level?.label}
               </span>
-              <span style={{ fontSize: 10, fontFamily: MONO, color: '#2a2a2a' }}>${f2(alert.price)}</span>
+              <span style={{ fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary }}>${f2(alert.price)}</span>
             </div>
           ))}
         </Card>

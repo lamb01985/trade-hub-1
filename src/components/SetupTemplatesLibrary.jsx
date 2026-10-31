@@ -1,3 +1,4 @@
+import { THEME } from '../lib/theme.js'
 // ─────────────────────────────────────────────────────────────────────────────
 // SetupTemplatesLibrary.jsx — modal browser of professional setup templates.
 //
@@ -25,9 +26,9 @@ import { createSetup } from '../lib/setupStorage.js'
 import { backtestSetup } from '../lib/setupBacktest.js'
 import BacktestResults from './BacktestResults.jsx'
 
-const FG = '#e8e8e8'
-const DIM = '#888'
-const MUTED = '#666'
+const FG = THEME.colors.text
+const DIM = THEME.colors.secondary
+const MUTED = THEME.colors.secondary
 
 // Convert a template into the createSetup-compatible shape used by the
 // SetupBuilder. status='paused' so the user reviews before activating.
@@ -86,7 +87,7 @@ function TemplateInlineBacktest({ template, apiKey, cacheRef }) {
           Inline backtest (default universe + conditions)
         </div>
         <button onClick={run} disabled={running || !apiKey} style={{
-          background: running || !apiKey ? '#1a1a1a' : LIME, color: running || !apiKey ? '#666' : '#000',
+          background: running || !apiKey ? THEME.colors.surface : LIME, color: running || !apiKey ? THEME.colors.secondary : THEME.colors.background,
           border: 'none', padding: '6px 12px', borderRadius: 3, fontFamily: MONO, fontSize: 10,
           cursor: running || !apiKey ? 'not-allowed' : 'pointer', fontWeight: 700,
           letterSpacing: '0.12em', textTransform: 'uppercase',
@@ -94,10 +95,10 @@ function TemplateInlineBacktest({ template, apiKey, cacheRef }) {
       </div>
       {running && (
         <>
-          <div style={{ fontSize: 10, color: '#aaa', fontFamily: MONO }}>
+          <div style={{ fontSize: 10, color: THEME.colors.secondary, fontFamily: MONO }}>
             {progress.stage} {progress.ticker || ''} ({progress.pct}%)
           </div>
-          <div style={{ height: 3, background: '#1a1a1a', borderRadius: 2, overflow: 'hidden' }}>
+          <div style={{ height: 3, background: THEME.colors.surface, borderRadius: 2, overflow: 'hidden' }}>
             <div style={{ height: '100%', width: `${progress.pct}%`, background: LIME, transition: 'width 0.3s ease' }} />
           </div>
         </>
@@ -119,7 +120,7 @@ function TemplateCard({ template, isExpanded, onToggle, onClone, alreadyCloned, 
       <div onClick={onToggle} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', flexWrap: 'wrap' }}>
         <span style={{ fontSize: 13, color: FG, fontWeight: 800, fontFamily: MONO }}>{template.name}</span>
         {badge(template.direction, dirColor)}
-        {badge(CATEGORY_LABELS[template.category] || template.category, '#94a3b8')}
+        {badge(CATEGORY_LABELS[template.category] || template.category, THEME.colors.blue)}
         {alreadyCloned && badge('cloned', LIME)}
         <div style={{ flex: 1 }} />
         <span style={{ fontSize: 10, color: DIM, fontFamily: MONO }}>
@@ -127,21 +128,21 @@ function TemplateCard({ template, isExpanded, onToggle, onClone, alreadyCloned, 
         </span>
         <span style={{ fontSize: 11, color: MUTED }}>{isExpanded ? '▼' : '▶'}</span>
       </div>
-      <div style={{ fontSize: 11, color: '#aaa', fontFamily: MONO, lineHeight: 1.5 }}>
+      <div style={{ fontSize: 11, color: THEME.colors.secondary, fontFamily: MONO, lineHeight: 1.5 }}>
         {template.description}
       </div>
       <div style={{ fontSize: 9, color: MUTED, fontFamily: MONO }}>
-        Source: <span style={{ color: '#bbb' }}>{template.source}</span>
+        Source: <span style={{ color: THEME.colors.secondary }}>{template.source}</span>
       </div>
       {isExpanded && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, borderTop: `1px solid ${BORDER}`, paddingTop: 10 }}>
           <div>
             <div style={{ fontSize: 9, color: MUTED, fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 4 }}>When it works</div>
-            <div style={{ fontSize: 11, color: '#aaa', fontFamily: MONO, lineHeight: 1.5 }}>{template.whenItWorks}</div>
+            <div style={{ fontSize: 11, color: THEME.colors.secondary, fontFamily: MONO, lineHeight: 1.5 }}>{template.whenItWorks}</div>
           </div>
           <div>
             <div style={{ fontSize: 9, color: MUTED, fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 4 }}>When it doesn't</div>
-            <div style={{ fontSize: 11, color: '#aaa', fontFamily: MONO, lineHeight: 1.5 }}>{template.whenItDoesnt}</div>
+            <div style={{ fontSize: 11, color: THEME.colors.secondary, fontFamily: MONO, lineHeight: 1.5 }}>{template.whenItDoesnt}</div>
           </div>
           <div>
             <div style={{ fontSize: 9, color: MUTED, fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 4 }}>Conditions ({template.defaultOperator || 'all'})</div>
@@ -151,8 +152,8 @@ function TemplateCard({ template, isExpanded, onToggle, onClone, alreadyCloned, 
                 const paramStr = Object.entries(c.params || {}).map(([k, v]) => `${k}=${v}`).join(', ')
                 return (
                   <span key={i} style={{
-                    fontSize: 10, color: '#bbb', fontFamily: MONO,
-                    background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 3,
+                    fontSize: 10, color: THEME.colors.secondary, fontFamily: MONO,
+                    background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 3,
                     padding: '3px 8px',
                   }}>
                     {def?.label || c.type}{paramStr ? <span style={{ color: MUTED }}>  ·  {paramStr}</span> : null}
@@ -163,13 +164,13 @@ function TemplateCard({ template, isExpanded, onToggle, onClone, alreadyCloned, 
           </div>
           <div>
             <div style={{ fontSize: 9, color: MUTED, fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 4 }}>Default universe</div>
-            <div style={{ fontSize: 11, color: '#aaa', fontFamily: MONO, lineHeight: 1.6 }}>
+            <div style={{ fontSize: 11, color: THEME.colors.secondary, fontFamily: MONO, lineHeight: 1.6 }}>
               {(template.defaultUniverse || []).join(', ') || '—'}
             </div>
           </div>
           <div>
             <div style={{ fontSize: 9, color: MUTED, fontFamily: MONO, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 4 }}>Default trade plan</div>
-            <div style={{ fontSize: 11, color: '#aaa', fontFamily: MONO, lineHeight: 1.6 }}>
+            <div style={{ fontSize: 11, color: THEME.colors.secondary, fontFamily: MONO, lineHeight: 1.6 }}>
               {(() => {
                 const tp = template.defaultTradePlan || {}
                 if (tp.instrumentType === 'stock') return `Stock · sizing ${(tp.sizingValue * 100).toFixed(2)}%`
@@ -178,7 +179,7 @@ function TemplateCard({ template, isExpanded, onToggle, onClone, alreadyCloned, 
             </div>
           </div>
           {template.notes && (
-            <div style={{ background: '#150d04', border: `1px solid ${YELLOW}44`, borderRadius: 3, padding: '8px 10px', fontSize: 10, color: '#c8a030', fontFamily: MONO, lineHeight: 1.5 }}>
+            <div style={{ background: THEME.colors.negativeSurface, border: `1px solid ${YELLOW}44`, borderRadius: 3, padding: '8px 10px', fontSize: 10, color: THEME.colors.caution, fontFamily: MONO, lineHeight: 1.5 }}>
               {template.notes}
             </div>
           )}
@@ -187,7 +188,7 @@ function TemplateCard({ template, isExpanded, onToggle, onClone, alreadyCloned, 
 
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
             <button onClick={() => onClone(template)} style={{
-              background: LIME, color: '#000', border: 'none', padding: '8px 14px',
+              background: LIME, color: THEME.colors.background, border: 'none', padding: '8px 14px',
               borderRadius: 3, fontFamily: MONO, fontSize: 10, fontWeight: 800,
               letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer',
             }}>Clone to new setup →</button>
@@ -222,7 +223,7 @@ export default function SetupTemplatesLibrary({ apiKey, onClone, onCancel }) {
       padding: 28, zIndex: 220, overflowY: 'auto',
     }}>
       <div style={{
-        background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 6,
+        background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 6,
         width: '100%', maxWidth: 880, display: 'flex', flexDirection: 'column', gap: 14,
         padding: 18, fontFamily: MONO,
       }}>
@@ -231,7 +232,7 @@ export default function SetupTemplatesLibrary({ apiKey, onClone, onCancel }) {
             <div style={{ fontSize: 10, color: MUTED, letterSpacing: '0.16em', textTransform: 'uppercase' }}>Templates</div>
             <div style={{ fontSize: 18, color: FG, fontWeight: 800, letterSpacing: '-0.01em' }}>Start from a proven setup</div>
           </div>
-          <button onClick={onCancel} style={{ background: 'transparent', border: 'none', color: '#aaa', fontSize: 16, cursor: 'pointer' }}>✕</button>
+          <button onClick={onCancel} style={{ background: 'transparent', border: 'none', color: THEME.colors.secondary, fontSize: 16, cursor: 'pointer' }}>✕</button>
         </div>
 
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -260,7 +261,7 @@ export default function SetupTemplatesLibrary({ apiKey, onClone, onCancel }) {
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 6 }}>
           <button onClick={onCancel} style={{
-            background: 'transparent', border: `1px solid ${BORDER}`, color: '#aaa',
+            background: 'transparent', border: `1px solid ${BORDER}`, color: THEME.colors.secondary,
             padding: '8px 16px', borderRadius: 4, cursor: 'pointer',
             fontFamily: MONO, fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase',
           }}>Close</button>
@@ -273,7 +274,7 @@ export default function SetupTemplatesLibrary({ apiKey, onClone, onCancel }) {
 function chipStyle(active) {
   return {
     background: active ? LIME : 'transparent',
-    color: active ? '#000' : '#aaa',
+    color: active ? THEME.colors.background : THEME.colors.secondary,
     border: `1px solid ${active ? LIME : BORDER}`,
     padding: '5px 10px', borderRadius: 3, fontFamily: MONO, fontSize: 10,
     cursor: 'pointer', letterSpacing: '0.12em', textTransform: 'uppercase',

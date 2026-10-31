@@ -1,3 +1,4 @@
+import { THEME } from './theme.js'
 // Calendar data: OPEX (computed), FOMC (hardcoded 2026), recurring economic
 // releases (algorithmic), and a small hardcoded one-off list for the next 30
 // days. Earnings come ONLY from the live Nasdaq fetch (via /api/calendar-earnings
@@ -258,11 +259,11 @@ export function startOfWeek(date) {
 }
 
 export function colorForEvent(e) {
-  if (e.type === 'fomc') return '#F97316' // orange
-  if (e.type === 'opex' && e.tripleWitching) return '#F97316'
-  if (e.type === 'opex') return '#D1FF79' // lime
-  if (e.type === 'earnings') return '#60A5FA' // blue
-  if (e.impact === 'high') return '#FF4D4D' // red
-  if (e.impact === 'medium') return '#FFD166' // yellow
-  return '#888'
+  if (e.type === 'fomc') return THEME.colors.orange // orange
+  if (e.type === 'opex' && e.tripleWitching) return THEME.colors.orange
+  if (e.type === 'opex') return THEME.colors.accent // lime
+  if (e.type === 'earnings') return THEME.colors.blue // blue
+  if (e.impact === 'high') return THEME.colors.negative // red
+  if (e.impact === 'medium') return THEME.colors.caution // yellow
+  return THEME.colors.secondary
 }

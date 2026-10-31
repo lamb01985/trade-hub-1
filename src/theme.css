@@ -1,0 +1,14 @@
+html, body, #root { min-height: 100%; }
+body { margin: 0; background: var(--edge-background); color: var(--edge-text); font-family: 'IBM Plex Sans', sans-serif; }
+button, input, select, textarea { font: inherit; }
+button, select, input, textarea { color: var(--edge-text); background-color: var(--edge-surface); }
+button { border: 1px solid var(--edge-border); border-radius: 5px; padding: 8px 12px; cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+a { color: var(--edge-accent); }
+:focus-visible { outline: 2px solid var(--edge-accent); outline-offset: 3px; }
+input::placeholder, textarea::placeholder { color: var(--edge-secondary); opacity: 1; }
+::selection { background: var(--edge-accent); color: var(--edge-background); }
+.edge-brand { display: inline-flex; flex-direction: column; gap: 3px; font-family: 'IBM Plex Sans', sans-serif; }
+.edge-brand-name { font-weight: 700; font-size: 20px; letter-spacing: -.035em; color: var(--edge-text); }
+.edge-brand-tagline { font-size: 10px; font-weight: 400; letter-spacing: .05em; color: var(--edge-secondary); }
+.edge-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; border: 1px solid currentColor; border-radius: 4px; padding: 3px 7px; }

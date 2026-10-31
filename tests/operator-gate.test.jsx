@@ -45,7 +45,7 @@ it('preserves authenticated tools and reports failed sign out honestly', async (
   vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(session(true)).mockResolvedValue({ ok: false }))
   render(<OperatorGate><p>Private tools</p></OperatorGate>)
   await screen.findByText('Private tools')
-  fireEvent.click(screen.getByText('Sign out of TradeHub'))
+  fireEvent.click(screen.getByText('Sign out of EdgeIQ'))
   await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Sign-out failed'))
   expect(screen.getByText('Private tools')).toBeTruthy()
 })

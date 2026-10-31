@@ -1,3 +1,4 @@
+import { THEME } from '../lib/theme.js'
 // ─────────────────────────────────────────────────────────────────────────────
 // Bot.jsx — multi-ticker coach composer.
 //
@@ -18,9 +19,9 @@ import BotSettingsDrawer from './BotSettingsDrawer.jsx'
 import BotWatchlistChips from './BotWatchlistChips.jsx'
 import BotPendingPanel from './BotPendingPanel.jsx'
 
-const FG = '#e8e8e8'
-const DIM = '#888'
-const MUTED = '#666'
+const FG = THEME.colors.text
+const DIM = THEME.colors.secondary
+const MUTED = THEME.colors.secondary
 
 function StateChip({ label, color }) {
   return (
@@ -44,7 +45,7 @@ const STATE_COLOR = {
   WATCH:    YELLOW,
   GO:       LIME,
   IN_TRADE: BLUE,
-  CLOSED:   '#aaa',
+  CLOSED:   THEME.colors.secondary,
   LOCKED:   RED,
 }
 
@@ -108,8 +109,8 @@ export default function Bot({
               title="Dev only. Injects a synthetic GO signal on the primary ticker."
               style={{
                 background: 'transparent',
-                color: '#C084FC',
-                border: '1px solid #C084FC55',
+                color: THEME.colors.purple,
+                border: `1px solid ${THEME.colors.purple + '55'}`,
                 borderRadius: 3,
                 padding: '5px 10px',
                 fontFamily: MONO,

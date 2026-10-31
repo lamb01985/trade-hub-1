@@ -1,27 +1,28 @@
-export const LIME = '#D1FF79'
-export const RED = '#FF4D4D'
-export const YELLOW = '#FFD166'
-export const BLUE = '#60A5FA'
-export const PURPLE = '#C084FC'
-export const ORANGE = '#F97316'
-export const DARK = '#0e0e0e'
-export const PANEL = '#191919'
-export const BORDER = '#2c2c2c'
+import { THEME } from './lib/theme.js'
+export const LIME = THEME.colors.accent
+export const RED = THEME.colors.negative
+export const YELLOW = THEME.colors.caution
+export const BLUE = THEME.colors.blue
+export const PURPLE = THEME.colors.purple
+export const ORANGE = THEME.colors.orange
+export const DARK = THEME.colors.background
+export const PANEL = THEME.colors.surface
+export const BORDER = THEME.colors.border
 export const MONO = "'DM Mono', monospace"
 export const SANS = "'IBM Plex Sans', sans-serif"
 
 export const LEVEL_COLORS = {
-  pivot: '#888888',
-  'pivot-r': '#FF7744',
-  'pivot-s': '#4477FF',
-  structure: '#CCCCCC',
-  vwap: '#C084FC',
-  'vwap-band': '#7050A0',
-  orb: '#D1FF79',
-  fib: '#FFD166',
-  supply: '#FF4D4D',
-  demand: '#60A5FA',
-  weekly: '#FF6600',
+  pivot: THEME.colors.secondary,
+  'pivot-r': THEME.colors.negative,
+  'pivot-s': THEME.colors.blue,
+  structure: THEME.colors.secondary,
+  vwap: THEME.colors.purple,
+  'vwap-band': THEME.colors.purple,
+  orb: THEME.colors.accent,
+  fib: THEME.colors.caution,
+  supply: THEME.colors.negative,
+  demand: THEME.colors.blue,
+  weekly: THEME.colors.caution,
 }
 
 export const SESSION_LABELS = {
@@ -35,13 +36,13 @@ export const SESSION_LABELS = {
 }
 
 export const SESSION_COLORS = {
-  'pre-market': '#444',
+  'pre-market': THEME.colors.border,
   open: LIME,
   chop: YELLOW,
   'power-hour': ORANGE,
-  'after-hours': '#444',
-  weekend: '#3a3a3a',
-  holiday: '#3a3a3a',
+  'after-hours': THEME.colors.border,
+  weekend: THEME.colors.border,
+  holiday: THEME.colors.border,
 }
 
 export const SESSION_TIPS = {
@@ -172,7 +173,7 @@ export const uid = () => Math.random().toString(36).slice(2, 10)
 export const f2 = (n, d = 2) => n == null || isNaN(n) ? '—' : Number(n).toFixed(d)
 export const fmtD = n => n == null || isNaN(n) ? '—' : `${n >= 0 ? '+' : '-'}$${Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 export const fmtU = n => n == null || isNaN(n) ? '—' : `$${Math.abs(n).toFixed(2)}`
-export const rrColor = rr => !rr || isNaN(rr) ? '#444' : rr >= 3 ? LIME : rr >= 2 ? YELLOW : RED
+export const rrColor = rr => !rr || isNaN(rr) ? THEME.colors.border : rr >= 3 ? LIME : rr >= 2 ? YELLOW : RED
 
 export function ivContext(iv) {
   if (iv < 15) return { label: 'VERY LOW', color: BLUE, detail: 'Cheap premium. Rare — double-check there\'s an expected move.' }

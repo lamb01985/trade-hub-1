@@ -1,3 +1,4 @@
+import { THEME } from '../lib/theme.js'
 // ─────────────────────────────────────────────────────────────────────────────
 // WheelScanner.jsx — options-income scanner for the wheel strategy.
 //
@@ -400,12 +401,12 @@ ${JSON.stringify(summary, null, 2)}`
     if (pos) {
       const s = analysis?.callScore ?? -1
       if (s >= HARVEST_CALL_SCORE) return { name: 'HARVEST', color: LIME, desc: 'Sell call now' }
-      return { name: 'HOLD', color: '#94a3b8', desc: 'Wait for better setup' }
+      return { name: 'HOLD', color: THEME.colors.blue, desc: 'Wait for better setup' }
     }
     const s = analysis?.putScore ?? -1
     if (s >= ARMED_PUT_SCORE) return { name: 'ARMED', color: LIME, desc: 'Sell put now' }
     if (s >= WATCH_PUT_SCORE) return { name: 'WATCH', color: YELLOW, desc: 'Setting up' }
-    return { name: 'HUNT', color: '#64748b', desc: 'No signal yet' }
+    return { name: 'HUNT', color: THEME.colors.blue, desc: 'No signal yet' }
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -422,18 +423,18 @@ ${JSON.stringify(summary, null, 2)}`
   }
 
   return (
-    <div style={{ fontFamily: MONO, color: '#e2e8f0' }}>
+    <div style={{ fontFamily: MONO, color: THEME.colors.text }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 6, flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <div style={{ fontSize: 10, color: '#666', letterSpacing: '0.16em', textTransform: 'uppercase' }}>Options income system</div>
-          <div style={{ fontSize: 22, color: '#e8e8e8', fontWeight: 800, letterSpacing: '-0.02em' }}>
+          <div style={{ fontSize: 10, color: THEME.colors.secondary, letterSpacing: '0.16em', textTransform: 'uppercase' }}>Options income system</div>
+          <div style={{ fontSize: 22, color: THEME.colors.text, fontWeight: 800, letterSpacing: '-0.02em' }}>
             The Wheel<span style={{ color: LIME }}>.</span>
           </div>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: 9, color: '#666', letterSpacing: '0.12em', textTransform: 'uppercase' }}>Last scan</div>
-          <div style={{ fontSize: 11, color: '#aaa' }}>{fmtTime(lastScan)}</div>
+          <div style={{ fontSize: 9, color: THEME.colors.secondary, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Last scan</div>
+          <div style={{ fontSize: 11, color: THEME.colors.secondary }}>{fmtTime(lastScan)}</div>
         </div>
       </div>
       <div style={{ height: 1, background: BORDER, marginBottom: 14 }} />
@@ -448,8 +449,8 @@ ${JSON.stringify(summary, null, 2)}`
           disabled={isScanning || (watchlist || []).length === 0 || !apiKey}
           title={!apiKey ? 'Add Massive API key in Command tab' : undefined}
           style={{
-            background: isScanning || !apiKey ? '#1a1a1a' : LIME,
-            color: isScanning || !apiKey ? '#666' : '#000',
+            background: isScanning || !apiKey ? THEME.colors.surface : LIME,
+            color: isScanning || !apiKey ? THEME.colors.secondary : THEME.colors.background,
             border: 'none', padding: '8px 16px', borderRadius: 4,
             fontWeight: 800, fontSize: 11, fontFamily: MONO, letterSpacing: '0.14em',
             textTransform: 'uppercase', cursor: isScanning || !apiKey ? 'not-allowed' : 'pointer',
@@ -460,17 +461,17 @@ ${JSON.stringify(summary, null, 2)}`
           {isScanning ? `Scanning ${scanProgress}%` : 'Run scan'}
         </button>
         <style>{`@keyframes wheel-spin { to { transform: rotate(360deg); } }`}</style>
-        <div style={{ flex: 1, minWidth: 100, height: 3, background: '#1a1a1a', borderRadius: 2, overflow: 'hidden', position: 'relative' }}>
+        <div style={{ flex: 1, minWidth: 100, height: 3, background: THEME.colors.surface, borderRadius: 2, overflow: 'hidden', position: 'relative' }}>
           {isScanning && (
             <div style={{ position: 'absolute', top: 0, left: 0, height: '100%', width: `${scanProgress}%`, background: LIME, transition: 'width 0.3s ease' }} />
           )}
         </div>
-        <div style={{ fontSize: 10, color: '#666', letterSpacing: '0.06em' }}>
+        <div style={{ fontSize: 10, color: THEME.colors.secondary, letterSpacing: '0.06em' }}>
           {(watchlist || []).length} watch · {positions.length} held
         </div>
       </div>
       {scanError && (
-        <div style={{ background: '#150505', border: `1px solid ${RED}44`, color: RED, padding: '8px 12px', borderRadius: 4, marginBottom: 12, fontSize: 11, fontFamily: MONO }}>
+        <div style={{ background: THEME.colors.negativeSurface, border: `1px solid ${RED}44`, color: RED, padding: '8px 12px', borderRadius: 4, marginBottom: 12, fontSize: 11, fontFamily: MONO }}>
           {scanError}
         </div>
       )}
@@ -490,7 +491,7 @@ ${JSON.stringify(summary, null, 2)}`
               onClick={() => setActiveTab(tab.id)}
               style={{
                 background: 'transparent',
-                color: active ? LIME : '#666',
+                color: active ? LIME : THEME.colors.secondary,
                 border: 'none',
                 borderBottom: active ? `2px solid ${LIME}` : '2px solid transparent',
                 padding: '8px 14px', fontSize: 11, fontWeight: 700, letterSpacing: '0.14em',
@@ -511,7 +512,7 @@ ${JSON.stringify(summary, null, 2)}`
           {huntRows.length === 0 && <EmptyState text="Add tickers in Setup to begin hunting" />}
           {huntRows.map(r => {
             const hasData = r.price != null
-            const phase = hasData ? phaseFor(r.ticker, r) : { name: 'HUNT', color: '#666', desc: 'Not scanned' }
+            const phase = hasData ? phaseFor(r.ticker, r) : { name: 'HUNT', color: THEME.colors.secondary, desc: 'Not scanned' }
             const isExpanded = expandedTicker === r.ticker
             return (
               <div
@@ -524,10 +525,10 @@ ${JSON.stringify(summary, null, 2)}`
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ fontSize: 14, fontWeight: 800, color: '#e8e8e8', minWidth: 60, letterSpacing: '0.06em' }}>{r.ticker}</div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: THEME.colors.text, minWidth: 60, letterSpacing: '0.06em' }}>{r.ticker}</div>
                   {hasData ? (
                     <>
-                      <div style={{ flex: 1, fontSize: 12, color: '#e8e8e8' }}>
+                      <div style={{ flex: 1, fontSize: 12, color: THEME.colors.text }}>
                         {fmtMoney(r.price)}{' '}
                         <span style={{ color: (r.changePct ?? 0) >= 0 ? LIME : RED, fontSize: 10 }}>{fmtPct(r.changePct)}</span>
                       </div>
@@ -535,9 +536,9 @@ ${JSON.stringify(summary, null, 2)}`
                       <ScoreRing score={r.putScore} color={phase.color} />
                     </>
                   ) : (
-                    <div style={{ flex: 1, fontSize: 11, color: '#666' }}>{r.error ? `Error: ${r.error}` : 'Not yet scanned'}</div>
+                    <div style={{ flex: 1, fontSize: 11, color: THEME.colors.secondary }}>{r.error ? `Error: ${r.error}` : 'Not yet scanned'}</div>
                   )}
-                  <ChevronRight size={13} style={{ color: '#444', transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }} />
+                  <ChevronRight size={13} style={{ color: THEME.colors.secondary, transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }} />
                 </div>
 
                 {isExpanded && hasData && (
@@ -561,7 +562,7 @@ ${JSON.stringify(summary, null, 2)}`
           {positions.length === 0 && <EmptyState text="No assigned shares yet. Add positions in Setup." />}
           {holdRows.map(p => {
             const hasData = p.price != null
-            const phase = hasData ? phaseFor(p.ticker, p) : { name: 'HOLD', color: '#94a3b8', desc: 'Not scanned' }
+            const phase = hasData ? phaseFor(p.ticker, p) : { name: 'HOLD', color: THEME.colors.blue, desc: 'Not scanned' }
             const pnl = hasData ? (p.price - p.costBasis) * p.shares : null
             const pnlPct = hasData ? ((p.price - p.costBasis) / p.costBasis) * 100 : null
             return (
@@ -574,8 +575,8 @@ ${JSON.stringify(summary, null, 2)}`
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
-                  <div style={{ fontSize: 14, fontWeight: 800, color: '#e8e8e8', minWidth: 60, letterSpacing: '0.06em' }}>{p.ticker}</div>
-                  <div style={{ fontSize: 10, color: '#aaa' }}>{p.shares} sh @ {fmtMoney(p.costBasis)}</div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: THEME.colors.text, minWidth: 60, letterSpacing: '0.06em' }}>{p.ticker}</div>
+                  <div style={{ fontSize: 10, color: THEME.colors.secondary }}>{p.shares} sh @ {fmtMoney(p.costBasis)}</div>
                   {hasData && (
                     <div style={{ fontSize: 11, color: pnl >= 0 ? LIME : RED }}>
                       {fmtMoney(pnl)} ({fmtPct(pnlPct)})
@@ -586,7 +587,7 @@ ${JSON.stringify(summary, null, 2)}`
                   {hasData && <ScoreRing score={p.callScore} color={phase.color} />}
                   <button
                     onClick={() => removePosition(p.ticker)}
-                    style={{ background: 'transparent', border: 'none', color: '#666', cursor: 'pointer', padding: 4 }}
+                    style={{ background: 'transparent', border: 'none', color: THEME.colors.secondary, cursor: 'pointer', padding: 4 }}
                     title="Remove position"
                   ><X size={14} /></button>
                 </div>
@@ -616,11 +617,11 @@ ${JSON.stringify(summary, null, 2)}`
               value={capital}
               onChange={(e) => setCapital(Number(e.target.value))}
               style={{
-                background: 'transparent', border: 'none', color: '#e8e8e8',
+                background: 'transparent', border: 'none', color: THEME.colors.text,
                 fontSize: 14, fontFamily: MONO, flex: 1, outline: 'none',
               }}
             />
-            <div style={{ fontSize: 10, color: '#666' }}>per put cycle</div>
+            <div style={{ fontSize: 10, color: THEME.colors.secondary }}>per put cycle</div>
           </div>
 
           <SectionLabel>Watchlist</SectionLabel>
@@ -634,14 +635,14 @@ ${JSON.stringify(summary, null, 2)}`
               maxLength={6}
               style={{
                 flex: 1, background: PANEL, border: `1px solid ${BORDER}`,
-                color: '#e8e8e8', padding: '8px 10px', borderRadius: 4,
+                color: THEME.colors.text, padding: '8px 10px', borderRadius: 4,
                 fontFamily: MONO, fontSize: 12, outline: 'none',
               }}
             />
             <button
               onClick={addTicker}
               style={{
-                background: LIME, color: '#000', border: 'none',
+                background: LIME, color: THEME.colors.background, border: 'none',
                 padding: '8px 12px', borderRadius: 4, cursor: 'pointer',
                 display: 'flex', alignItems: 'center', fontFamily: MONO,
               }}
@@ -658,10 +659,10 @@ ${JSON.stringify(summary, null, 2)}`
                   fontSize: 11, display: 'flex', alignItems: 'center', gap: 6,
                 }}
               >
-                <span style={{ color: '#e8e8e8', fontWeight: 700, letterSpacing: '0.06em' }}>{t}</span>
+                <span style={{ color: THEME.colors.text, fontWeight: 700, letterSpacing: '0.06em' }}>{t}</span>
                 <button
                   onClick={() => removeTicker(t)}
-                  style={{ background: 'transparent', border: 'none', color: '#666', cursor: 'pointer', padding: 0, display: 'flex' }}
+                  style={{ background: 'transparent', border: 'none', color: THEME.colors.secondary, cursor: 'pointer', padding: 0, display: 'flex' }}
                 ><X size={11} /></button>
               </div>
             ))}
@@ -686,28 +687,28 @@ ${JSON.stringify(summary, null, 2)}`
                 <input placeholder="TICKER" value={posDraft.ticker} onChange={(e) => setPosDraft({ ...posDraft, ticker: e.target.value })} style={inputStyle} />
                 <input type="number" placeholder="Shares" value={posDraft.shares} onChange={(e) => setPosDraft({ ...posDraft, shares: e.target.value })} style={inputStyle} />
                 <input type="number" placeholder="Cost basis $" value={posDraft.costBasis} onChange={(e) => setPosDraft({ ...posDraft, costBasis: e.target.value })} style={inputStyle} />
-                <button onClick={addPosition} style={{ ...inputStyle, background: LIME, color: '#000', cursor: 'pointer', fontWeight: 700, letterSpacing: '0.12em' }}>SAVE</button>
-                <button onClick={() => setEditingPos(false)} style={{ ...inputStyle, color: '#666', cursor: 'pointer' }}>CANCEL</button>
+                <button onClick={addPosition} style={{ ...inputStyle, background: LIME, color: THEME.colors.background, cursor: 'pointer', fontWeight: 700, letterSpacing: '0.12em' }}>SAVE</button>
+                <button onClick={() => setEditingPos(false)} style={{ ...inputStyle, color: THEME.colors.secondary, cursor: 'pointer' }}>CANCEL</button>
               </div>
             )}
           </div>
           {positions.map(p => (
             <div key={p.ticker} style={{ background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 5, padding: 9, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ color: '#e8e8e8', fontWeight: 700, minWidth: 60, letterSpacing: '0.06em' }}>{p.ticker}</span>
-              <span style={{ fontSize: 11, color: '#aaa' }}>{p.shares} sh @ {fmtMoney(p.costBasis)}</span>
+              <span style={{ color: THEME.colors.text, fontWeight: 700, minWidth: 60, letterSpacing: '0.06em' }}>{p.ticker}</span>
+              <span style={{ fontSize: 11, color: THEME.colors.secondary }}>{p.shares} sh @ {fmtMoney(p.costBasis)}</span>
               <div style={{ flex: 1 }} />
-              <button onClick={() => removePosition(p.ticker)} style={{ background: 'transparent', border: 'none', color: '#666', cursor: 'pointer' }}><X size={13} /></button>
+              <button onClick={() => removePosition(p.ticker)} style={{ background: 'transparent', border: 'none', color: THEME.colors.secondary, cursor: 'pointer' }}><X size={13} /></button>
             </div>
           ))}
 
           <div style={{ marginTop: 22, padding: 12, background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 5 }}>
             <div style={{ fontSize: 9, letterSpacing: '0.14em', color: LIME, marginBottom: 6, textTransform: 'uppercase' }}>Scoring + estimates</div>
-            <div style={{ fontSize: 11, color: '#aaa', lineHeight: 1.6 }}>
-              <strong style={{ color: '#e8e8e8' }}>Put score</strong>: RSI (28), proximity to support (22), annualized premium yield (28), trend bias (±8), HV environment bonus (4-8). ARMED ≥ {ARMED_PUT_SCORE}, WATCH ≥ {WATCH_PUT_SCORE}.
+            <div style={{ fontSize: 11, color: THEME.colors.secondary, lineHeight: 1.6 }}>
+              <strong style={{ color: THEME.colors.text }}>Put score</strong>: RSI (28), proximity to support (22), annualized premium yield (28), trend bias (±8), HV environment bonus (4-8). ARMED ≥ {ARMED_PUT_SCORE}, WATCH ≥ {WATCH_PUT_SCORE}.
               <br /><br />
-              <strong style={{ color: '#e8e8e8' }}>Call score</strong>: RSI (28), proximity to resistance (20), strike at or above cost basis (18), annualized yield (22), HV environment bonus (4-8). HARVEST ≥ {HARVEST_CALL_SCORE}.
+              <strong style={{ color: THEME.colors.text }}>Call score</strong>: RSI (28), proximity to resistance (20), strike at or above cost basis (18), annualized yield (22), HV environment bonus (4-8). HARVEST ≥ {HARVEST_CALL_SCORE}.
               <br /><br />
-              <strong style={{ color: '#e8e8e8' }}>Strikes + premiums</strong> are HV-based Black-Scholes estimates (scanner estimates; compare against Massive snapshots below). The contract browser below loads provider data separately; it does not replace these modeled scores.
+              <strong style={{ color: THEME.colors.text }}>Strikes + premiums</strong> are HV-based Black-Scholes estimates (scanner estimates; compare against Massive snapshots below). The contract browser below loads provider data separately; it does not replace these modeled scores.
             </div>
           </div>
         </div>
@@ -715,7 +716,7 @@ ${JSON.stringify(summary, null, 2)}`
 
       <OptionsContracts ticker={expandedTicker || watchlist?.[0] || 'QQQ'} />
 
-      <div style={{ marginTop: 24, padding: 10, borderTop: `1px solid ${BORDER}`, fontSize: 9, color: '#444', textAlign: 'center', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+      <div style={{ marginTop: 24, padding: 10, borderTop: `1px solid ${BORDER}`, fontSize: 9, color: THEME.colors.secondary, textAlign: 'center', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
         Scanner scores use HV estimates · Contract browser uses Massive snapshots
       </div>
     </div>
@@ -727,7 +728,7 @@ ${JSON.stringify(summary, null, 2)}`
 const inputStyle = {
   background: DARK,
   border: `1px solid ${BORDER}`,
-  color: '#e8e8e8',
+  color: THEME.colors.text,
   padding: '7px 9px',
   borderRadius: 3,
   fontFamily: MONO,
@@ -758,7 +759,7 @@ function ScoreRing({ score, color }) {
   return (
     <div style={{ position: 'relative', width: 36, height: 36 }}>
       <svg width="36" height="36" style={{ transform: 'rotate(-90deg)' }}>
-        <circle cx="18" cy="18" r="14" fill="none" stroke="#1a1a1a" strokeWidth="3" />
+        <circle cx="18" cy="18" r="14" fill="none" stroke={THEME.colors.surface} strokeWidth="3" />
         <circle
           cx="18" cy="18" r="14" fill="none"
           stroke={color} strokeWidth="3"
@@ -779,25 +780,25 @@ function ScoreRing({ score, color }) {
 
 function MetricsGrid({ r }) {
   const cells = [
-    { label: 'RSI', value: r.rsi, color: r.rsi == null ? '#666' : r.rsi < 30 ? LIME : r.rsi > 70 ? RED : '#aaa' },
-    { label: 'HV30', value: r.ivPct != null ? `${r.ivPct}%` : '—', color: r.ivEnv === 'high' || r.ivEnv === 'elevated' ? LIME : '#aaa' },
-    { label: 'Trend', value: (r.trend || '—').toUpperCase(), color: r.trend === 'uptrend' ? LIME : r.trend === 'downtrend' ? RED : '#aaa' },
-    { label: 'IV Env', value: (r.ivEnv || 'unknown').toUpperCase(), color: r.ivEnv === 'high' || r.ivEnv === 'elevated' ? LIME : '#aaa' },
+    { label: 'RSI', value: r.rsi, color: r.rsi == null ? THEME.colors.secondary : r.rsi < 30 ? LIME : r.rsi > 70 ? RED : THEME.colors.secondary },
+    { label: 'HV30', value: r.ivPct != null ? `${r.ivPct}%` : '—', color: r.ivEnv === 'high' || r.ivEnv === 'elevated' ? LIME : THEME.colors.secondary },
+    { label: 'Trend', value: (r.trend || '—').toUpperCase(), color: r.trend === 'uptrend' ? LIME : r.trend === 'downtrend' ? RED : THEME.colors.secondary },
+    { label: 'IV Env', value: (r.ivEnv || 'unknown').toUpperCase(), color: r.ivEnv === 'high' || r.ivEnv === 'elevated' ? LIME : THEME.colors.secondary },
   ]
   return (
     <>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginBottom: 10 }}>
         {cells.map(c => (
           <div key={c.label} style={{ padding: 7, background: DARK, borderRadius: 3 }}>
-            <div style={{ fontSize: 9, color: '#666', letterSpacing: '0.12em', marginBottom: 2, textTransform: 'uppercase' }}>{c.label}</div>
+            <div style={{ fontSize: 9, color: THEME.colors.secondary, letterSpacing: '0.12em', marginBottom: 2, textTransform: 'uppercase' }}>{c.label}</div>
             <div style={{ fontSize: 12, color: c.color, fontWeight: 700, fontFamily: MONO }}>{c.value ?? '—'}</div>
           </div>
         ))}
       </div>
-      <div style={{ display: 'flex', gap: 14, fontSize: 9, color: '#666', marginBottom: 8, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-        <span>Support <span style={{ color: '#aaa' }}>${f2(r.support)}</span></span>
-        <span>Resistance <span style={{ color: '#aaa' }}>${f2(r.resistance)}</span></span>
-        <span>52W <span style={{ color: '#aaa' }}>${f2(r.wk52Low)}–${f2(r.wk52High)}</span></span>
+      <div style={{ display: 'flex', gap: 14, fontSize: 9, color: THEME.colors.secondary, marginBottom: 8, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+        <span>Support <span style={{ color: THEME.colors.secondary }}>${f2(r.support)}</span></span>
+        <span>Resistance <span style={{ color: THEME.colors.secondary }}>${f2(r.resistance)}</span></span>
+        <span>52W <span style={{ color: THEME.colors.secondary }}>${f2(r.wk52Low)}–${f2(r.wk52High)}</span></span>
       </div>
     </>
   )
@@ -817,18 +818,18 @@ function PutCandidateCard({ candidate, thesis, capital }) {
         Suggested put · {dte}D · estimate
       </div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>
-        <div style={{ fontSize: 15, color: '#e8e8e8', fontFamily: MONO, fontWeight: 700 }}>${f2(strike)}P</div>
+        <div style={{ fontSize: 15, color: THEME.colors.text, fontFamily: MONO, fontWeight: 700 }}>${f2(strike)}P</div>
         <div style={{ fontSize: 12, color: LIME, fontFamily: MONO, fontWeight: 700 }}>${f2(premium)}</div>
-        <div style={{ fontSize: 10, color: '#aaa', fontFamily: MONO }}>{yieldPct.toFixed(2)}% / {annualized.toFixed(1)}% ann</div>
-        {candidate?.deltaApprox != null && <div style={{ fontSize: 10, color: '#666', fontFamily: MONO }}>Δ {candidate.deltaApprox.toFixed(2)}</div>}
+        <div style={{ fontSize: 10, color: THEME.colors.secondary, fontFamily: MONO }}>{yieldPct.toFixed(2)}% / {annualized.toFixed(1)}% ann</div>
+        {candidate?.deltaApprox != null && <div style={{ fontSize: 10, color: THEME.colors.secondary, fontFamily: MONO }}>Δ {candidate.deltaApprox.toFixed(2)}</div>}
       </div>
       {contracts > 0 && (
-        <div style={{ fontSize: 10, color: '#aaa', marginBottom: 6, fontFamily: MONO }}>
+        <div style={{ fontSize: 10, color: THEME.colors.secondary, marginBottom: 6, fontFamily: MONO }}>
           ${capital.toLocaleString()} → {contracts} contract{contracts > 1 ? 's' : ''} · <span style={{ color: LIME }}>+${totalPremium.toFixed(0)} premium</span>
         </div>
       )}
       {thesis && (
-        <div style={{ fontSize: 11, color: '#cbd5e1', lineHeight: 1.5, fontFamily: MONO, borderTop: `1px solid ${BORDER}`, paddingTop: 6, marginTop: 6 }}>
+        <div style={{ fontSize: 11, color: THEME.colors.text, lineHeight: 1.5, fontFamily: MONO, borderTop: `1px solid ${BORDER}`, paddingTop: 6, marginTop: 6 }}>
           {thesis}
         </div>
       )}
@@ -852,16 +853,16 @@ function CallCandidateCard({ candidate, thesis, costBasis, shares }) {
         Suggested call · {dte}D · estimate {!aboveCost && '· below cost'}
       </div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>
-        <div style={{ fontSize: 15, color: '#e8e8e8', fontFamily: MONO, fontWeight: 700 }}>${f2(strike)}C</div>
+        <div style={{ fontSize: 15, color: THEME.colors.text, fontFamily: MONO, fontWeight: 700 }}>${f2(strike)}C</div>
         <div style={{ fontSize: 12, color: LIME, fontFamily: MONO, fontWeight: 700 }}>${f2(premium)}</div>
-        <div style={{ fontSize: 10, color: '#aaa', fontFamily: MONO }}>{yieldPct.toFixed(2)}% / {annualized.toFixed(1)}% ann</div>
-        {candidate?.deltaApprox != null && <div style={{ fontSize: 10, color: '#666', fontFamily: MONO }}>Δ {candidate.deltaApprox.toFixed(2)}</div>}
+        <div style={{ fontSize: 10, color: THEME.colors.secondary, fontFamily: MONO }}>{yieldPct.toFixed(2)}% / {annualized.toFixed(1)}% ann</div>
+        {candidate?.deltaApprox != null && <div style={{ fontSize: 10, color: THEME.colors.secondary, fontFamily: MONO }}>Δ {candidate.deltaApprox.toFixed(2)}</div>}
       </div>
-      <div style={{ fontSize: 10, color: '#aaa', marginBottom: 6, fontFamily: MONO }}>
+      <div style={{ fontSize: 10, color: THEME.colors.secondary, marginBottom: 6, fontFamily: MONO }}>
         {contracts} contract{contracts !== 1 ? 's' : ''} on {shares} sh · <span style={{ color: LIME }}>+${totalPremium.toFixed(0)}</span>
       </div>
       {thesis && (
-        <div style={{ fontSize: 11, color: '#cbd5e1', lineHeight: 1.5, fontFamily: MONO, borderTop: `1px solid ${BORDER}`, paddingTop: 6, marginTop: 6 }}>
+        <div style={{ fontSize: 11, color: THEME.colors.text, lineHeight: 1.5, fontFamily: MONO, borderTop: `1px solid ${BORDER}`, paddingTop: 6, marginTop: 6 }}>
           {thesis}
         </div>
       )}
@@ -871,7 +872,7 @@ function CallCandidateCard({ candidate, thesis, costBasis, shares }) {
 
 function ConfidenceBanner() {
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginTop: 10, padding: 8, background: '#150d04', border: `1px solid ${YELLOW}44`, borderRadius: 3 }}>
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginTop: 10, padding: 8, background: THEME.colors.negativeSurface, border: `1px solid ${YELLOW}44`, borderRadius: 3 }}>
       <AlertCircle size={11} style={{ color: YELLOW, marginTop: 2, flexShrink: 0 }} />
       <div style={{ fontSize: 10, color: YELLOW, lineHeight: 1.5, fontFamily: MONO }}>
         Low confidence (insufficient daily history for a reliable HV). Treat the premium as a rough sanity check, not a quote.
@@ -882,7 +883,7 @@ function ConfidenceBanner() {
 
 function SectionLabel({ children }) {
   return (
-    <div style={{ fontSize: 9, letterSpacing: '0.16em', color: '#666', marginBottom: 8, marginTop: 4, textTransform: 'uppercase', fontFamily: MONO }}>
+    <div style={{ fontSize: 9, letterSpacing: '0.16em', color: THEME.colors.secondary, marginBottom: 8, marginTop: 4, textTransform: 'uppercase', fontFamily: MONO }}>
       {children}
     </div>
   )
@@ -890,7 +891,7 @@ function SectionLabel({ children }) {
 
 function EmptyState({ text }) {
   return (
-    <div style={{ padding: 32, textAlign: 'center', color: '#666', fontSize: 11, border: `1px dashed ${BORDER}`, borderRadius: 5, fontFamily: MONO }}>
+    <div style={{ padding: 32, textAlign: 'center', color: THEME.colors.secondary, fontSize: 11, border: `1px dashed ${BORDER}`, borderRadius: 5, fontFamily: MONO }}>
       {text}
     </div>
   )

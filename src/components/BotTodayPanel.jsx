@@ -1,3 +1,4 @@
+import { THEME } from '../lib/theme.js'
 // ─────────────────────────────────────────────────────────────────────────────
 // BotTodayPanel.jsx — chronological strip of every setup the coach surfaced
 // today. Each row shows time, setup name, direction, status, and (for skipped
@@ -6,12 +7,12 @@
 
 import { LIME, RED, YELLOW, BLUE, ORANGE, PANEL, BORDER, MONO, SANS, fmtD } from '../constants.js'
 
-const FG = '#e8e8e8'
-const DIM = '#888'
-const MUTED = '#666'
+const FG = THEME.colors.text
+const DIM = THEME.colors.secondary
+const MUTED = THEME.colors.secondary
 
 const STATUS_COLOR = {
-  pending: '#888',
+  pending: THEME.colors.secondary,
   taken:   BLUE,
   win:     LIME,
   loss:    RED,
@@ -79,7 +80,7 @@ function Row({ record }) {
       gap: 10,
       alignItems: 'center',
       padding: '8px 10px',
-      background: '#0a0a0a',
+      background: THEME.colors.background,
       border: `1px solid ${BORDER}`,
       borderLeft: `2px solid ${color}`,
       borderRadius: 3,

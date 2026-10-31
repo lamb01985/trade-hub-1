@@ -1,3 +1,4 @@
+import { THEME } from '../lib/theme.js'
 // ─────────────────────────────────────────────────────────────────────────────
 // AdjustSetupsModal.jsx — checkbox modal that picks which active setups
 // watch a focused ticker.
@@ -17,8 +18,8 @@ import { useMemo, useState } from 'react'
 import { LIME, RED, YELLOW, MONO, BORDER, PANEL, DARK } from '../constants.js'
 import { resolveUniverseTickers, universeIsSaved, universeAppendTickers } from '../lib/universeResolver.js'
 
-const FG = '#e8e8e8'
-const MUTED = '#666'
+const FG = THEME.colors.text
+const MUTED = THEME.colors.secondary
 
 function dirColor(d) { return d === 'short' ? RED : d === 'either' || d === 'neutral' ? YELLOW : LIME }
 
@@ -91,7 +92,7 @@ export default function AdjustSetupsModal({
       padding: 28, zIndex: 250,
     }}>
       <div style={{
-        background: '#0a0a0a', border: `1px solid ${BORDER}`, borderRadius: 6,
+        background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 6,
         width: '100%', maxWidth: 640, display: 'flex', flexDirection: 'column', gap: 12,
         padding: 18, fontFamily: MONO,
       }}>
@@ -100,7 +101,7 @@ export default function AdjustSetupsModal({
             <div style={{ fontSize: 10, color: MUTED, letterSpacing: '0.14em', textTransform: 'uppercase' }}>Adjust setup attachment</div>
             <div style={{ fontSize: 16, color: FG, fontWeight: 800 }}>{T}</div>
           </div>
-          <button onClick={onCancel} style={{ background: 'transparent', border: 'none', color: '#aaa', fontSize: 16, cursor: 'pointer' }}>✕</button>
+          <button onClick={onCancel} style={{ background: 'transparent', border: 'none', color: THEME.colors.secondary, fontSize: 16, cursor: 'pointer' }}>✕</button>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontFamily: MONO, fontSize: 11 }}>
@@ -123,7 +124,7 @@ export default function AdjustSetupsModal({
             const resolved = resolveUniverseTickers(s.universe, savedUniverses)
             const alreadyHasTicker = resolved.map(t => String(t).toUpperCase()).includes(T)
             return (
-              <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderBottom: `1px solid #131313`, cursor: 'pointer' }}>
+              <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderBottom: `1px solid ${THEME.colors.surface}`, cursor: 'pointer' }}>
                 <input type="checkbox" checked={checked} onChange={() => toggle(s.id)} />
                 <span style={{ fontSize: 12, color: FG, fontFamily: MONO, fontWeight: 700, flex: 1 }}>{s.name}</span>
                 <span style={{ fontSize: 9, color: dc, fontFamily: MONO, fontWeight: 700, border: `1px solid ${dc}55`, padding: '2px 6px', borderRadius: 3, letterSpacing: '0.12em', textTransform: 'uppercase' }}>{s.direction || 'either'}</span>
@@ -141,12 +142,12 @@ export default function AdjustSetupsModal({
 
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button onClick={onCancel} style={{
-            background: 'transparent', border: `1px solid ${BORDER}`, color: '#aaa',
+            background: 'transparent', border: `1px solid ${BORDER}`, color: THEME.colors.secondary,
             padding: '8px 16px', borderRadius: 4, cursor: 'pointer',
             fontFamily: MONO, fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase',
           }}>Cancel</button>
           <button onClick={confirm} style={{
-            background: LIME, color: '#000', border: 'none',
+            background: LIME, color: THEME.colors.background, border: 'none',
             padding: '8px 16px', borderRadius: 4, cursor: 'pointer',
             fontFamily: MONO, fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase',
             fontWeight: 800,

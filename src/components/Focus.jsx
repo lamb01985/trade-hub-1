@@ -1,3 +1,4 @@
+import { THEME } from '../lib/theme.js'
 // ─────────────────────────────────────────────────────────────────────────────
 // Focus.jsx — Plan / Focus sub-tab. Lists FocusedTickerCards plus the
 // editor and adjust-setups modals.
@@ -18,8 +19,8 @@ import FocusedTickerCard from './FocusedTickerCard.jsx'
 import ThesisEditor from './ThesisEditor.jsx'
 import AdjustSetupsModal from './AdjustSetupsModal.jsx'
 
-const FG = '#e8e8e8'
-const MUTED = '#666'
+const FG = THEME.colors.text
+const MUTED = THEME.colors.secondary
 
 export default function Focus({
   focusedTickers = [],
@@ -119,19 +120,19 @@ export default function Focus({
           {focusedTickers.length > 1 && (
             <>
               <button onClick={() => setAllCollapsed(false)} title="Expand every focused ticker" style={{
-                background: 'transparent', border: `1px solid ${BORDER}`, color: '#aaa',
+                background: 'transparent', border: `1px solid ${BORDER}`, color: THEME.colors.secondary,
                 padding: '7px 12px', borderRadius: 3, fontFamily: MONO, fontSize: 10,
                 letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer',
               }}>Expand all</button>
               <button onClick={() => setAllCollapsed(true)} title="Collapse every focused ticker" style={{
-                background: 'transparent', border: `1px solid ${BORDER}`, color: '#aaa',
+                background: 'transparent', border: `1px solid ${BORDER}`, color: THEME.colors.secondary,
                 padding: '7px 12px', borderRadius: 3, fontFamily: MONO, fontSize: 10,
                 letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer',
               }}>Collapse all</button>
             </>
           )}
           <button onClick={handleNewClick} style={{
-            background: LIME, color: '#000', border: 'none', padding: '10px 16px',
+            background: LIME, color: THEME.colors.background, border: 'none', padding: '10px 16px',
             borderRadius: 4, fontFamily: MONO, fontSize: 11, fontWeight: 800,
             letterSpacing: '0.14em', textTransform: 'uppercase', cursor: 'pointer',
           }}>+ Focus on ticker</button>
