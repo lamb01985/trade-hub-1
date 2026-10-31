@@ -1,6 +1,7 @@
 import { loadEnv } from 'vite'
 
 const SERVER_ENV_KEYS = [
+  'THESIS_ENABLED', 'THESIS_DEV_FIXTURES',
   'MASSIVE_BUDGET_ENFORCED', 'MASSIVE_BUDGET_REDIS_REST_URL', 'MASSIVE_BUDGET_REDIS_REST_TOKEN', 'TRADEHUB_PREVIEW_ONLY',
   'MARKET_DATA_SERVICE_URL', 'MARKET_DATA_SERVICE_TOKEN', 'MARKET_DATA_DEPLOYMENT_PROFILE',
   'MASSIVE_ACCOUNT_BUDGET_SCOPE', 'MASSIVE_REQUESTS_PER_MINUTE', 'MASSIVE_LEGACY_RESERVED_REQUESTS_PER_MINUTE', 'MARKET_DATA_UNIFIED_ENABLED',
@@ -26,7 +27,7 @@ const MAX_BODY_BYTES = 40_000
 export function resolveApiRoute(pathname) {
   if (STATIC_ROUTES.has(pathname)) return { file: STATIC_ROUTES.get(pathname), params: {} }
   if (/^\/api\/market\/(capabilities|snapshot|bars|options|intelligence)$/.test(pathname)) return { file: '/api/market/[resource].js', params: { resource: pathname.split('/').pop() } }
-  const action = pathname.match(/^\/api\/(ai|intelligence|schwab\/auth|schwab\/debug)\/([a-z-]+)$/)
+  const action = pathname.match(/^\/api\/(ai|intelligence|thesis|schwab\/auth|schwab\/debug)\/([a-z-]+)$/)
   if (action) return { file: `/api/${action[1]}/[action].js`, params: { action: action[2] } }
   const resource = pathname.match(/^\/api\/schwab\/([a-z-]+)$/)
   if (resource) return { file: '/api/schwab/[resource].js', params: { resource: resource[1] } }

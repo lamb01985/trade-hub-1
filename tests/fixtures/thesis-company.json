@@ -1,0 +1,1172 @@
+{
+  "schema_version": "thesis-company-v1",
+  "request_id": "00000000-0000-0000-0000-000000000001",
+  "profile": "fixture-test",
+  "generated_at": "2026-10-30T12:00:00Z",
+  "as_of": "2026-10-30",
+  "source_type": "DEVELOPMENT_FIXTURE",
+  "issuer": {
+    "symbol": "DEMOA",
+    "cik": "0000000001",
+    "name": "Synthetic Compounding Co.",
+    "sic": 7372
+  },
+  "periods": [
+    {
+      "start": "2025-01-01",
+      "end": "2025-12-31",
+      "facts": {
+        "revenue": {
+          "value": 195000000,
+          "unit": "USD",
+          "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+          "start": "2025-01-01",
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "net_income": {
+          "value": 23400000.0,
+          "unit": "USD",
+          "concept": "NetIncomeLoss",
+          "start": "2025-01-01",
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "cfo": {
+          "value": 29250000.0,
+          "unit": "USD",
+          "concept": "NetCashProvidedByUsedInOperatingActivities",
+          "start": "2025-01-01",
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "capex": {
+          "value": 7800000.0,
+          "unit": "USD",
+          "concept": "PaymentsToAcquirePropertyPlantAndEquipment",
+          "start": "2025-01-01",
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "cash": {
+          "value": 80000000,
+          "unit": "USD",
+          "concept": "CashAndCashEquivalentsAtCarryingValue",
+          "start": null,
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "assets": {
+          "value": 200000000,
+          "unit": "USD",
+          "concept": "Assets",
+          "start": null,
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "liabilities": {
+          "value": 60000000,
+          "unit": "USD",
+          "concept": "Liabilities",
+          "start": null,
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "equity": {
+          "value": 140000000,
+          "unit": "USD",
+          "concept": "StockholdersEquity",
+          "start": null,
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "current_assets": {
+          "value": 100000000,
+          "unit": "USD",
+          "concept": "AssetsCurrent",
+          "start": null,
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "current_liabilities": {
+          "value": 40000000,
+          "unit": "USD",
+          "concept": "LiabilitiesCurrent",
+          "start": null,
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "debt_current": {
+          "value": 10000000,
+          "unit": "USD",
+          "concept": "LongTermDebtCurrent",
+          "start": null,
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "debt_noncurrent": {
+          "value": 20000000,
+          "unit": "USD",
+          "concept": "LongTermDebtNoncurrent",
+          "start": null,
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "eps": {
+          "value": 2.34,
+          "unit": "USD/shares",
+          "concept": "EarningsPerShareDiluted",
+          "start": "2025-01-01",
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        }
+      }
+    },
+    {
+      "start": "2024-01-01",
+      "end": "2024-12-31",
+      "facts": {
+        "revenue": {
+          "value": 150000000,
+          "unit": "USD",
+          "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+          "start": "2024-01-01",
+          "end": "2024-12-31",
+          "filed": "2025-02-15",
+          "accession": "0000000001-25-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "net_income": {
+          "value": 18000000.0,
+          "unit": "USD",
+          "concept": "NetIncomeLoss",
+          "start": "2024-01-01",
+          "end": "2024-12-31",
+          "filed": "2025-02-15",
+          "accession": "0000000001-25-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "cfo": {
+          "value": 22500000.0,
+          "unit": "USD",
+          "concept": "NetCashProvidedByUsedInOperatingActivities",
+          "start": "2024-01-01",
+          "end": "2024-12-31",
+          "filed": "2025-02-15",
+          "accession": "0000000001-25-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "capex": {
+          "value": 6000000.0,
+          "unit": "USD",
+          "concept": "PaymentsToAcquirePropertyPlantAndEquipment",
+          "start": "2024-01-01",
+          "end": "2024-12-31",
+          "filed": "2025-02-15",
+          "accession": "0000000001-25-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "cash": {
+          "value": 80000000,
+          "unit": "USD",
+          "concept": "CashAndCashEquivalentsAtCarryingValue",
+          "start": null,
+          "end": "2024-12-31",
+          "filed": "2025-02-15",
+          "accession": "0000000001-25-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "assets": {
+          "value": 200000000,
+          "unit": "USD",
+          "concept": "Assets",
+          "start": null,
+          "end": "2024-12-31",
+          "filed": "2025-02-15",
+          "accession": "0000000001-25-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "liabilities": {
+          "value": 60000000,
+          "unit": "USD",
+          "concept": "Liabilities",
+          "start": null,
+          "end": "2024-12-31",
+          "filed": "2025-02-15",
+          "accession": "0000000001-25-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "equity": {
+          "value": 140000000,
+          "unit": "USD",
+          "concept": "StockholdersEquity",
+          "start": null,
+          "end": "2024-12-31",
+          "filed": "2025-02-15",
+          "accession": "0000000001-25-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "current_assets": {
+          "value": 100000000,
+          "unit": "USD",
+          "concept": "AssetsCurrent",
+          "start": null,
+          "end": "2024-12-31",
+          "filed": "2025-02-15",
+          "accession": "0000000001-25-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "current_liabilities": {
+          "value": 40000000,
+          "unit": "USD",
+          "concept": "LiabilitiesCurrent",
+          "start": null,
+          "end": "2024-12-31",
+          "filed": "2025-02-15",
+          "accession": "0000000001-25-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "debt_current": {
+          "value": 10000000,
+          "unit": "USD",
+          "concept": "LongTermDebtCurrent",
+          "start": null,
+          "end": "2024-12-31",
+          "filed": "2025-02-15",
+          "accession": "0000000001-25-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "debt_noncurrent": {
+          "value": 20000000,
+          "unit": "USD",
+          "concept": "LongTermDebtNoncurrent",
+          "start": null,
+          "end": "2024-12-31",
+          "filed": "2025-02-15",
+          "accession": "0000000001-25-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "eps": {
+          "value": 1.8,
+          "unit": "USD/shares",
+          "concept": "EarningsPerShareDiluted",
+          "start": "2024-01-01",
+          "end": "2024-12-31",
+          "filed": "2025-02-15",
+          "accession": "0000000001-25-000001",
+          "source_url": "fixture://thesis-demo"
+        }
+      }
+    },
+    {
+      "start": "2023-01-01",
+      "end": "2023-12-31",
+      "facts": {
+        "revenue": {
+          "value": 120000000,
+          "unit": "USD",
+          "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+          "start": "2023-01-01",
+          "end": "2023-12-31",
+          "filed": "2024-02-15",
+          "accession": "0000000001-24-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "net_income": {
+          "value": 14400000.0,
+          "unit": "USD",
+          "concept": "NetIncomeLoss",
+          "start": "2023-01-01",
+          "end": "2023-12-31",
+          "filed": "2024-02-15",
+          "accession": "0000000001-24-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "cfo": {
+          "value": 18000000.0,
+          "unit": "USD",
+          "concept": "NetCashProvidedByUsedInOperatingActivities",
+          "start": "2023-01-01",
+          "end": "2023-12-31",
+          "filed": "2024-02-15",
+          "accession": "0000000001-24-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "capex": {
+          "value": 4800000.0,
+          "unit": "USD",
+          "concept": "PaymentsToAcquirePropertyPlantAndEquipment",
+          "start": "2023-01-01",
+          "end": "2023-12-31",
+          "filed": "2024-02-15",
+          "accession": "0000000001-24-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "cash": {
+          "value": 80000000,
+          "unit": "USD",
+          "concept": "CashAndCashEquivalentsAtCarryingValue",
+          "start": null,
+          "end": "2023-12-31",
+          "filed": "2024-02-15",
+          "accession": "0000000001-24-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "assets": {
+          "value": 200000000,
+          "unit": "USD",
+          "concept": "Assets",
+          "start": null,
+          "end": "2023-12-31",
+          "filed": "2024-02-15",
+          "accession": "0000000001-24-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "liabilities": {
+          "value": 60000000,
+          "unit": "USD",
+          "concept": "Liabilities",
+          "start": null,
+          "end": "2023-12-31",
+          "filed": "2024-02-15",
+          "accession": "0000000001-24-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "equity": {
+          "value": 140000000,
+          "unit": "USD",
+          "concept": "StockholdersEquity",
+          "start": null,
+          "end": "2023-12-31",
+          "filed": "2024-02-15",
+          "accession": "0000000001-24-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "current_assets": {
+          "value": 100000000,
+          "unit": "USD",
+          "concept": "AssetsCurrent",
+          "start": null,
+          "end": "2023-12-31",
+          "filed": "2024-02-15",
+          "accession": "0000000001-24-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "current_liabilities": {
+          "value": 40000000,
+          "unit": "USD",
+          "concept": "LiabilitiesCurrent",
+          "start": null,
+          "end": "2023-12-31",
+          "filed": "2024-02-15",
+          "accession": "0000000001-24-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "debt_current": {
+          "value": 10000000,
+          "unit": "USD",
+          "concept": "LongTermDebtCurrent",
+          "start": null,
+          "end": "2023-12-31",
+          "filed": "2024-02-15",
+          "accession": "0000000001-24-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "debt_noncurrent": {
+          "value": 20000000,
+          "unit": "USD",
+          "concept": "LongTermDebtNoncurrent",
+          "start": null,
+          "end": "2023-12-31",
+          "filed": "2024-02-15",
+          "accession": "0000000001-24-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "eps": {
+          "value": 1.44,
+          "unit": "USD/shares",
+          "concept": "EarningsPerShareDiluted",
+          "start": "2023-01-01",
+          "end": "2023-12-31",
+          "filed": "2024-02-15",
+          "accession": "0000000001-24-000001",
+          "source_url": "fixture://thesis-demo"
+        }
+      }
+    },
+    {
+      "start": "2022-01-01",
+      "end": "2022-12-31",
+      "facts": {
+        "revenue": {
+          "value": 100000000,
+          "unit": "USD",
+          "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+          "start": "2022-01-01",
+          "end": "2022-12-31",
+          "filed": "2023-02-15",
+          "accession": "0000000001-23-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "net_income": {
+          "value": 12000000.0,
+          "unit": "USD",
+          "concept": "NetIncomeLoss",
+          "start": "2022-01-01",
+          "end": "2022-12-31",
+          "filed": "2023-02-15",
+          "accession": "0000000001-23-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "cfo": {
+          "value": 15000000.0,
+          "unit": "USD",
+          "concept": "NetCashProvidedByUsedInOperatingActivities",
+          "start": "2022-01-01",
+          "end": "2022-12-31",
+          "filed": "2023-02-15",
+          "accession": "0000000001-23-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "capex": {
+          "value": 4000000.0,
+          "unit": "USD",
+          "concept": "PaymentsToAcquirePropertyPlantAndEquipment",
+          "start": "2022-01-01",
+          "end": "2022-12-31",
+          "filed": "2023-02-15",
+          "accession": "0000000001-23-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "cash": {
+          "value": 80000000,
+          "unit": "USD",
+          "concept": "CashAndCashEquivalentsAtCarryingValue",
+          "start": null,
+          "end": "2022-12-31",
+          "filed": "2023-02-15",
+          "accession": "0000000001-23-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "assets": {
+          "value": 200000000,
+          "unit": "USD",
+          "concept": "Assets",
+          "start": null,
+          "end": "2022-12-31",
+          "filed": "2023-02-15",
+          "accession": "0000000001-23-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "liabilities": {
+          "value": 60000000,
+          "unit": "USD",
+          "concept": "Liabilities",
+          "start": null,
+          "end": "2022-12-31",
+          "filed": "2023-02-15",
+          "accession": "0000000001-23-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "equity": {
+          "value": 140000000,
+          "unit": "USD",
+          "concept": "StockholdersEquity",
+          "start": null,
+          "end": "2022-12-31",
+          "filed": "2023-02-15",
+          "accession": "0000000001-23-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "current_assets": {
+          "value": 100000000,
+          "unit": "USD",
+          "concept": "AssetsCurrent",
+          "start": null,
+          "end": "2022-12-31",
+          "filed": "2023-02-15",
+          "accession": "0000000001-23-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "current_liabilities": {
+          "value": 40000000,
+          "unit": "USD",
+          "concept": "LiabilitiesCurrent",
+          "start": null,
+          "end": "2022-12-31",
+          "filed": "2023-02-15",
+          "accession": "0000000001-23-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "debt_current": {
+          "value": 10000000,
+          "unit": "USD",
+          "concept": "LongTermDebtCurrent",
+          "start": null,
+          "end": "2022-12-31",
+          "filed": "2023-02-15",
+          "accession": "0000000001-23-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "debt_noncurrent": {
+          "value": 20000000,
+          "unit": "USD",
+          "concept": "LongTermDebtNoncurrent",
+          "start": null,
+          "end": "2022-12-31",
+          "filed": "2023-02-15",
+          "accession": "0000000001-23-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        "eps": {
+          "value": 1.2,
+          "unit": "USD/shares",
+          "concept": "EarningsPerShareDiluted",
+          "start": "2022-01-01",
+          "end": "2022-12-31",
+          "filed": "2023-02-15",
+          "accession": "0000000001-23-000001",
+          "source_url": "fixture://thesis-demo"
+        }
+      }
+    }
+  ],
+  "metrics": {
+    "revenue": {
+      "value": 195000000,
+      "unit": "USD",
+      "formula": "Reported annual fact",
+      "inputs": [
+        {
+          "value": 195000000,
+          "unit": "USD",
+          "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+          "start": "2025-01-01",
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        }
+      ]
+    },
+    "net_income": {
+      "value": 23400000.0,
+      "unit": "USD",
+      "formula": "Reported annual fact",
+      "inputs": [
+        {
+          "value": 23400000.0,
+          "unit": "USD",
+          "concept": "NetIncomeLoss",
+          "start": "2025-01-01",
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        }
+      ]
+    },
+    "cfo": {
+      "value": 29250000.0,
+      "unit": "USD",
+      "formula": "Reported annual fact",
+      "inputs": [
+        {
+          "value": 29250000.0,
+          "unit": "USD",
+          "concept": "NetCashProvidedByUsedInOperatingActivities",
+          "start": "2025-01-01",
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        }
+      ]
+    },
+    "capex": {
+      "value": 7800000.0,
+      "unit": "USD",
+      "formula": "Reported annual fact",
+      "inputs": [
+        {
+          "value": 7800000.0,
+          "unit": "USD",
+          "concept": "PaymentsToAcquirePropertyPlantAndEquipment",
+          "start": "2025-01-01",
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        }
+      ]
+    },
+    "cash": {
+      "value": 80000000,
+      "unit": "USD",
+      "formula": "Reported annual fact",
+      "inputs": [
+        {
+          "value": 80000000,
+          "unit": "USD",
+          "concept": "CashAndCashEquivalentsAtCarryingValue",
+          "start": null,
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        }
+      ]
+    },
+    "assets": {
+      "value": 200000000,
+      "unit": "USD",
+      "formula": "Reported annual fact",
+      "inputs": [
+        {
+          "value": 200000000,
+          "unit": "USD",
+          "concept": "Assets",
+          "start": null,
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        }
+      ]
+    },
+    "liabilities": {
+      "value": 60000000,
+      "unit": "USD",
+      "formula": "Reported annual fact",
+      "inputs": [
+        {
+          "value": 60000000,
+          "unit": "USD",
+          "concept": "Liabilities",
+          "start": null,
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        }
+      ]
+    },
+    "equity": {
+      "value": 140000000,
+      "unit": "USD",
+      "formula": "Reported annual fact",
+      "inputs": [
+        {
+          "value": 140000000,
+          "unit": "USD",
+          "concept": "StockholdersEquity",
+          "start": null,
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        }
+      ]
+    },
+    "current_assets": {
+      "value": 100000000,
+      "unit": "USD",
+      "formula": "Reported annual fact",
+      "inputs": [
+        {
+          "value": 100000000,
+          "unit": "USD",
+          "concept": "AssetsCurrent",
+          "start": null,
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        }
+      ]
+    },
+    "current_liabilities": {
+      "value": 40000000,
+      "unit": "USD",
+      "formula": "Reported annual fact",
+      "inputs": [
+        {
+          "value": 40000000,
+          "unit": "USD",
+          "concept": "LiabilitiesCurrent",
+          "start": null,
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        }
+      ]
+    },
+    "debt_current": {
+      "value": 10000000,
+      "unit": "USD",
+      "formula": "Reported annual fact",
+      "inputs": [
+        {
+          "value": 10000000,
+          "unit": "USD",
+          "concept": "LongTermDebtCurrent",
+          "start": null,
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        }
+      ]
+    },
+    "debt_noncurrent": {
+      "value": 20000000,
+      "unit": "USD",
+      "formula": "Reported annual fact",
+      "inputs": [
+        {
+          "value": 20000000,
+          "unit": "USD",
+          "concept": "LongTermDebtNoncurrent",
+          "start": null,
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        }
+      ]
+    },
+    "eps": {
+      "value": 2.34,
+      "unit": "USD/shares",
+      "formula": "Reported annual fact",
+      "inputs": [
+        {
+          "value": 2.34,
+          "unit": "USD/shares",
+          "concept": "EarningsPerShareDiluted",
+          "start": "2025-01-01",
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        }
+      ]
+    },
+    "fcf": {
+      "value": 21450000.0,
+      "unit": "USD",
+      "formula": "Operating cash flow - purchases of property, plant and equipment",
+      "inputs": [
+        {
+          "value": 29250000.0,
+          "unit": "USD",
+          "concept": "NetCashProvidedByUsedInOperatingActivities",
+          "start": "2025-01-01",
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        {
+          "value": 7800000.0,
+          "unit": "USD",
+          "concept": "PaymentsToAcquirePropertyPlantAndEquipment",
+          "start": "2025-01-01",
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        }
+      ]
+    },
+    "debt": {
+      "value": 30000000,
+      "unit": "USD",
+      "formula": "Observed current + noncurrent long-term debt (limited debt proxy)",
+      "inputs": [
+        {
+          "value": 10000000,
+          "unit": "USD",
+          "concept": "LongTermDebtCurrent",
+          "start": null,
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        {
+          "value": 20000000,
+          "unit": "USD",
+          "concept": "LongTermDebtNoncurrent",
+          "start": null,
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        }
+      ]
+    },
+    "net_margin": {
+      "value": 12.0,
+      "unit": "percent",
+      "formula": "Net income / revenue \u00d7 100",
+      "inputs": [
+        {
+          "value": 23400000.0,
+          "unit": "USD",
+          "concept": "NetIncomeLoss",
+          "start": "2025-01-01",
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        {
+          "value": 195000000,
+          "unit": "USD",
+          "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+          "start": "2025-01-01",
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        }
+      ]
+    },
+    "cash_conversion": {
+      "value": 1.25,
+      "unit": "ratio",
+      "formula": "Operating cash flow / positive net income",
+      "inputs": [
+        {
+          "value": 29250000.0,
+          "unit": "USD",
+          "concept": "NetCashProvidedByUsedInOperatingActivities",
+          "start": "2025-01-01",
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        {
+          "value": 23400000.0,
+          "unit": "USD",
+          "concept": "NetIncomeLoss",
+          "start": "2025-01-01",
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        }
+      ]
+    },
+    "current_ratio": {
+      "value": 2.5,
+      "unit": "ratio",
+      "formula": "Current assets / positive current liabilities",
+      "inputs": [
+        {
+          "value": 100000000,
+          "unit": "USD",
+          "concept": "AssetsCurrent",
+          "start": null,
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        {
+          "value": 40000000,
+          "unit": "USD",
+          "concept": "LiabilitiesCurrent",
+          "start": null,
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        }
+      ]
+    },
+    "debt_assets": {
+      "value": 0.15,
+      "unit": "ratio",
+      "formula": "Limited debt proxy / positive assets",
+      "inputs": [
+        {
+          "value": 10000000,
+          "unit": "USD",
+          "concept": "LongTermDebtCurrent",
+          "start": null,
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        {
+          "value": 20000000,
+          "unit": "USD",
+          "concept": "LongTermDebtNoncurrent",
+          "start": null,
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        {
+          "value": 200000000,
+          "unit": "USD",
+          "concept": "Assets",
+          "start": null,
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        }
+      ]
+    },
+    "revenue_yoy": {
+      "value": 30.0,
+      "unit": "percent",
+      "formula": "Consecutive annual revenue / prior annual revenue - 1, \u00d7 100",
+      "inputs": [
+        {
+          "value": 195000000,
+          "unit": "USD",
+          "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+          "start": "2025-01-01",
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        {
+          "value": 150000000,
+          "unit": "USD",
+          "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+          "start": "2024-01-01",
+          "end": "2024-12-31",
+          "filed": "2025-02-15",
+          "accession": "0000000001-25-000001",
+          "source_url": "fixture://thesis-demo"
+        }
+      ]
+    },
+    "prior_revenue_yoy": {
+      "value": 25.0,
+      "unit": "percent",
+      "formula": "Prior consecutive annual revenue growth",
+      "inputs": [
+        {
+          "value": 150000000,
+          "unit": "USD",
+          "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+          "start": "2024-01-01",
+          "end": "2024-12-31",
+          "filed": "2025-02-15",
+          "accession": "0000000001-25-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        {
+          "value": 120000000,
+          "unit": "USD",
+          "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+          "start": "2023-01-01",
+          "end": "2023-12-31",
+          "filed": "2024-02-15",
+          "accession": "0000000001-24-000001",
+          "source_url": "fixture://thesis-demo"
+        }
+      ]
+    },
+    "growth_acceleration": {
+      "value": 5.0,
+      "unit": "percentage_points",
+      "formula": "Revenue YoY - prior revenue YoY",
+      "inputs": [
+        {
+          "value": 195000000,
+          "unit": "USD",
+          "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+          "start": "2025-01-01",
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        {
+          "value": 150000000,
+          "unit": "USD",
+          "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+          "start": "2024-01-01",
+          "end": "2024-12-31",
+          "filed": "2025-02-15",
+          "accession": "0000000001-25-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        {
+          "value": 120000000,
+          "unit": "USD",
+          "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+          "start": "2023-01-01",
+          "end": "2023-12-31",
+          "filed": "2024-02-15",
+          "accession": "0000000001-24-000001",
+          "source_url": "fixture://thesis-demo"
+        }
+      ]
+    },
+    "margin_change": {
+      "value": 0.0,
+      "unit": "percentage_points",
+      "formula": "Net margin - prior consecutive annual net margin",
+      "inputs": [
+        {
+          "value": 23400000.0,
+          "unit": "USD",
+          "concept": "NetIncomeLoss",
+          "start": "2025-01-01",
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        {
+          "value": 195000000,
+          "unit": "USD",
+          "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+          "start": "2025-01-01",
+          "end": "2025-12-31",
+          "filed": "2026-02-15",
+          "accession": "0000000001-26-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        {
+          "value": 18000000.0,
+          "unit": "USD",
+          "concept": "NetIncomeLoss",
+          "start": "2024-01-01",
+          "end": "2024-12-31",
+          "filed": "2025-02-15",
+          "accession": "0000000001-25-000001",
+          "source_url": "fixture://thesis-demo"
+        },
+        {
+          "value": 150000000,
+          "unit": "USD",
+          "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+          "start": "2024-01-01",
+          "end": "2024-12-31",
+          "filed": "2025-02-15",
+          "accession": "0000000001-25-000001",
+          "source_url": "fixture://thesis-demo"
+        }
+      ]
+    }
+  },
+  "assessments": {
+    "quality": {
+      "state": "GREEN",
+      "reason": "Financial-quality proxy: earnings cash conversion, not a moat assessment.",
+      "assumptions": [
+        "Positive earnings and annual operating cash flow; no qualitative quality inference."
+      ],
+      "counterarguments": [
+        "Working-capital timing and one-time items can distort cash conversion."
+      ]
+    },
+    "profitability": {
+      "state": "GREEN",
+      "reason": "Annual net margin 12.00%.",
+      "assumptions": [
+        "Net income and revenue use the same fiscal period and USD."
+      ],
+      "counterarguments": [
+        "Unusual gains or expenses can distort reported margins."
+      ]
+    },
+    "growth": {
+      "state": "GREEN",
+      "reason": "Revenue growth 30.00%; acceleration 5.00 points.",
+      "assumptions": [
+        "Three consecutive annual periods; no quarterly or segment forecast."
+      ],
+      "counterarguments": [
+        "Acquisitions, currency and fiscal changes can explain growth."
+      ]
+    },
+    "financial_health": {
+      "state": "GREEN",
+      "reason": "Current ratio, observed debt/assets and equity screen.",
+      "assumptions": [
+        "Limited reported debt proxy; off-balance-sheet commitments not assessed."
+      ],
+      "counterarguments": [
+        "Liquidity timing, refinancing and industry structure require filing-note review."
+      ]
+    },
+    "valuation": {
+      "state": "UNKNOWN",
+      "reason": "Verified market price, forecasts and a valuation model are not supplied.",
+      "assumptions": [
+        "No missing inputs are treated as zero."
+      ],
+      "counterarguments": [
+        "Additional filings or context can change this assessment."
+      ]
+    },
+    "entry": {
+      "state": "UNKNOWN",
+      "reason": "Options/stock liquidity, borrow and technical entry evidence are not supplied.",
+      "assumptions": [
+        "No missing inputs are treated as zero."
+      ],
+      "counterarguments": [
+        "Additional filings or context can change this assessment."
+      ]
+    }
+  },
+  "scores": {
+    "long_financial": 100,
+    "short_deterioration": 0,
+    "long_coverage": 1.0,
+    "short_coverage": 1.0,
+    "policy_version": "thesis-annual-financial-v1"
+  },
+  "quality": {
+    "freshness": "ANNUAL_ONLY",
+    "confidence": "MEDIUM",
+    "warnings": [
+      "Annual statements only; interim results, valuation, management quality and execution are not assessed.",
+      "Financial screen scores are unvalidated research heuristics, not expected returns or bankruptcy probabilities.",
+      "Synthetic development fixture. Not actual company financial data."
+    ]
+  },
+  "readiness": "NOT_EVALUATED"
+}
