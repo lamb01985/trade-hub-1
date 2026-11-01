@@ -1,3 +1,4 @@
+import { evidenceStatus } from '../lib/marketEvidence.js'
 import { THEME } from '../lib/theme.js'
 import { useEffect, useRef, useState } from 'react'
 import { getOptionChain } from '../lib/massive.js'
@@ -9,6 +10,8 @@ const time = value => value ? new Date(value).toLocaleString('en-US', { timeZone
 const cell = { padding: '9px 8px', textAlign: 'right', whiteSpace: 'nowrap', borderBottom: `1px solid ${BORDER}` }
 
 export default function OptionsContracts({ ticker = 'QQQ', onSelect, onSendToPrep, onSendToCalc }) {
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t) }, [])
   const [symbol, setSymbol] = useState(ticker)
   const [expiry, setExpiry] = useState('')
   const [strike, setStrike] = useState('')
@@ -48,7 +51,7 @@ export default function OptionsContracts({ ticker = 'QQQ', onSelect, onSendToPre
     <SLabel>Massive · Options contracts</SLabel>
     <p style={{ color: THEME.colors.secondary, fontSize: 12, lineHeight: 1.6 }}>Compare contracts from your subscription. IV, Greeks and open interest can be available even when bid/ask quotes are not supplied.</p>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10 }}>
-      <Fld label="Underlying" value={symbol} onChange={v => { invalidate(); setSymbol(v.toUpperCase()) }} mono />
+      <Fld label="Underlying" type="text" value={symbol} onChange={v => { invalidate(); setSymbol(v.toUpperCase()) }} mono />
       <Fld label="Expiration (optional)" type="date" value={expiry} onChange={v => { invalidate(); setExpiry(v) }} />
       <Fld label="Exact strike (optional)" value={strike} onChange={v => { invalidate(); setStrike(v) }} />
       <Sel label="Contracts" value={type} onChange={v => { invalidate(); setType(v) }} options={[{ value: 'all', label: 'Calls + puts' }, { value: 'call', label: 'Calls' }, { value: 'put', label: 'Puts' }]} />
@@ -59,11 +62,12 @@ export default function OptionsContracts({ ticker = 'QQQ', onSelect, onSendToPre
     {result?.hasMore && <p style={{ color: YELLOW, fontSize: 12 }}>Partial chain: more contracts exist. Select an expiration or exact strike to narrow this 250-contract page.</p>}
     {result && !rows.length && <p style={{ color: YELLOW }}>No matching contracts. Try another expiration or clear the strike filter.</p>}
     {!!rows.length && <div style={{ overflowX: 'auto', maxHeight: 360 }}><table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-      <thead><tr>{['Contract', 'Expiry', 'Strike', 'Bid', 'Ask', 'IV', 'Delta', 'Theta', 'OI', 'Volume', ''].map((label, i) => <th key={i} scope="col" style={cell}>{label}</th>)}</tr></thead>
+      <thead><tr>{['Contract', 'Expiry', 'Strike', 'Bid', 'Ask', 'IV', 'Delta', 'Theta', 'OI', 'Volume', 'Quote time / status', ''].map((label, i) => <th key={i} scope="col" style={cell}>{label}</th>)}</tr></thead>
       <tbody>{rows.map(r => <tr key={r.symbol} style={{ background: c?.symbol === r.symbol ? THEME.colors.positiveSurface : 'transparent' }}>
-        <td style={cell}>{r.type.toUpperCase()}</td><td style={cell}>{r.expiry}</td><td style={cell}>${number(r.strike)}</td>
+        <td style={cell}>{r.symbol}<br/>{r.type.toUpperCase()} · OPTION · Massive</td><td style={cell}>{r.expiry}</td><td style={cell}>${number(r.strike)}</td>
         <td style={cell}>{number(r.bid)}</td><td style={cell}>{number(r.ask)}</td><td style={cell}>{r.iv == null ? '—' : `${number(r.iv * 100)}%`}</td>
         <td style={cell}>{number(r.delta, 3)}</td><td style={cell}>{number(r.theta, 4)}</td><td style={cell}>{number(r.openInterest, 0)}</td><td style={cell}>{number(r.volume, 0)}</td>
+        <td style={cell}>{time(r.quoteTime)}<br/>{r.bid == null || r.ask == null || r.spread == null ? 'QUOTE UNAVAILABLE / INVALID' : evidenceStatus(r.quoteTime ? Date.parse(r.quoteTime) : null, { now, timeframe: r.quoteTimeframe, kind: 'OPTION_QUOTE' })} · {r.quoteTimeframe}</td>
         <td style={cell}><Btn onClick={() => choose(r)}>Inspect</Btn></td>
       </tr>)}</tbody>
     </table></div>}

@@ -1,3 +1,4 @@
+import { getMarketHolidayName } from '../constants.js'
 export const STALE_TRADE_MS = 60_000
 export const REST_QUOTE_REFRESH_MS = 30_000
 const MAX_FUTURE_SKEW_MS = 30_000
@@ -37,6 +38,7 @@ export function tradeFreshness(timestamp, now = Date.now()) {
   const minute = Number(part('hour')) * 60 + Number(part('minute'))
   const stamp = normalizeTradeTimestamp(timestamp)
   const ageMs = stamp == null ? null : now - stamp
+  if (getMarketHolidayName(new Date(now))) return { fresh: false, label: 'FEED CLOSED', ageMs }
   if (minute >= 1200 || minute < 240) return { fresh: false, label: 'OVERNIGHT NOT COVERED', ageMs }
   if (part('weekday') === 'Sat' || part('weekday') === 'Sun') return { fresh: false, label: 'FEED CLOSED', ageMs }
   if (ageMs == null || ageMs < -MAX_FUTURE_SKEW_MS) return { fresh: false, label: 'TIME UNVERIFIED', ageMs }

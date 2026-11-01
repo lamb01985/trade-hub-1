@@ -6,7 +6,7 @@ const scrypt = promisify(crypto.scrypt)
 const SESSION_SECONDS = 8 * 60 * 60
 const LOGIN_WINDOW_SECONDS = 15 * 60
 const MAX_LOGIN_ATTEMPTS = 10
-const COOKIE = 'th_operator'
+const cookieName = () => localMode() && process.env.TRADEHUB_LOCAL_DESK === 'true' ? 'th_desk_operator' : 'th_operator'
 let redis
 const memory = new Map()
 export function localMode() {
@@ -61,8 +61,8 @@ export function requireOrigin(req) {
 }
 function sessionKey(id) { return `th:operator:session:${crypto.createHash('sha256').update(id).digest('hex')}` }
 function cookieId(req) {
-  const part = (req.headers?.cookie || '').split(';').map(s => s.trim()).find(s => s.startsWith(`${COOKIE}=`))
-  const id = part?.slice(COOKIE.length + 1)
+  const part = (req.headers?.cookie || '').split(';').map(s => s.trim()).find(s => s.startsWith(`${cookieName()}=`))
+  const id = part?.slice(cookieName().length + 1)
   return /^[a-f0-9]{64}$/.test(id || '') ? id : null
 }
 export async function requireOperator(req) {
@@ -84,13 +84,13 @@ export async function login(req, res, password) {
   if (!crypto.timingSafeEqual(candidate, Buffer.from(hash, 'hex'))) throw new AccessError(401, 'invalid_login')
   const id = crypto.randomBytes(32).toString('hex')
   await stateSet(sessionKey(id), { operator: process.env.TRADEHUB_OPERATOR_ID }, SESSION_SECONDS)
-  res.setHeader('Set-Cookie', `${COOKIE}=${id}; HttpOnly; ${localMode() ? '' : 'Secure; '}SameSite=Strict; Path=/; Max-Age=${SESSION_SECONDS}`)
+  res.setHeader('Set-Cookie', `${cookieName()}=${id}; HttpOnly; ${localMode() ? '' : 'Secure; '}SameSite=Strict; Path=/; Max-Age=${SESSION_SECONDS}`)
 }
 export async function logout(req, res) {
   requireOrigin(req)
   const id = cookieId(req)
   if (id) await stateDelete(sessionKey(id))
-  res.setHeader('Set-Cookie', `${COOKIE}=; HttpOnly; ${localMode() ? '' : 'Secure; '}SameSite=Strict; Path=/; Max-Age=0`)
+  res.setHeader('Set-Cookie', `${cookieName()}=; HttpOnly; ${localMode() ? '' : 'Secure; '}SameSite=Strict; Path=/; Max-Age=0`)
 }
 export function sendFailure(res, error) {
   const status = error instanceof AccessError ? error.status : 503

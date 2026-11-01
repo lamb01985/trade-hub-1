@@ -1,3 +1,4 @@
+import ReadinessDesk from './components/ReadinessDesk.jsx'
 import { useThesisAvailability } from './hooks/useThesisAvailability.js'
 import WorkspaceShell from './components/workspace/WorkspaceShell.jsx'
 import Portfolio from './components/workspace/Portfolio.jsx'
@@ -113,6 +114,11 @@ const defaultSettings = { dailyLossLimit: 500, maxTradesPerDay: 5, orPeriod: '15
 const defaultPrep = { ticker: 'QQQ', orPeriod: '15', orbHigh: '', orbLow: '', sessionOpen: '', sessionClose: '', keyLevel: '', plannedStrike: '', plannedDTE: '1', ivNote: '', gamePlan: '', avoidNotes: '', dayReview: '', marketEvents: '', instrument: 'options' }
 
 export default function App() {
+  if (new URLSearchParams(window.location.search).get('desk') === 'live') return <ReadinessDesk />
+  return <ConfiguredApp />
+}
+
+function ConfiguredApp() {
   const capabilities = useMarketData('capabilities')
   const [mode, setMode] = useState('legacy')
   const thesisAvailable = useThesisAvailability()

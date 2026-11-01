@@ -4,7 +4,7 @@ afterEach(() => vi.unstubAllGlobals())
 
 it('queries server-managed snapshot access with filters and reports partial chains', async () => {
   vi.stubGlobal('window', { location: { origin: 'https://tradehub.test' } })
-  const fetcher = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ results: [{ details: { ticker: 'O:TEST', strike_price: 725 }, greeks: { delta: 0.5 } }], next_url: 'https://api.massive.com/next' }) })
+  const fetcher = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ results: [{ details: { ticker: 'O:QQQ261023C00725000', strike_price: 725, expiration_date: '2026-10-23', contract_type: 'call' }, greeks: { delta: 0.5 } }], next_url: 'https://api.massive.com/next' }) })
   vi.stubGlobal('fetch', fetcher)
   const data = await getOptionChain('qqq', { expiry: '2026-10-23', type: 'call', strike: 725 })
   const url = new URL(fetcher.mock.calls[0][0])

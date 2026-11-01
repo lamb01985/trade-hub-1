@@ -567,34 +567,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
     ])
   }, [liveData?.intradayBars, timeframe, currentThreshold])
 
-  // ── Real-time price tick: update current candle (only when not on fallback) ─
-  useEffect(() => {
-    if (!candleRef.current || !liveData?.price) return
-    if (liveData?.isHistoricalFallback) return
-    const mins = TIMEFRAMES.find(t => t.id === timeframe)?.mins || 5
-    const bucketMs = mins * 60000
-    const now = Date.now()
-    const bucket = Math.floor(now / bucketMs) * bucketMs
-    const time = Math.floor(bucket / 1000)
-    const price = liveData.price
-    const cur = currentCandleRef.current
-
-    if (!cur || cur.time !== time) {
-      const newBar = { time, open: price, high: price, low: price, close: price }
-      candleRef.current.update(newBar)
-      currentCandleRef.current = newBar
-    } else {
-      const updated = {
-        time,
-        open: cur.open,
-        high: Math.max(cur.high, price),
-        low: Math.min(cur.low, price),
-        close: price,
-      }
-      candleRef.current.update(updated)
-      currentCandleRef.current = updated
-    }
-  }, [liveData?.price, liveData?.isHistoricalFallback, timeframe])
+  // Candles use provider aggregates only. Last trades cannot reconstruct OHLC.
 
   // ── Draw level price lines ──────────────────────────────────────────────────
   useEffect(() => {

@@ -17,7 +17,8 @@ export function providerTime(value) {
 }
 export function normalizeOption(raw, underlying) {
   const d = raw.details || {}, q = raw.last_quote || {}, t = raw.last_trade || {}
-  const bid = num(q.bid), ask = num(q.ask)
+  const validQuote = num(q.bid) != null && num(q.ask) != null && q.bid >= 0 && q.ask > 0 && q.ask >= q.bid
+  const bid = validQuote ? q.bid : null, ask = validQuote ? q.ask : null
   const spread = bid != null && ask != null && ask > 0 && bid >= 0 && ask >= bid ? ask - bid : null
   return {
     symbol: d.ticker || '', underlying, type: d.contract_type || '',
@@ -32,4 +33,17 @@ export function normalizeOption(raw, underlying) {
     underlyingPrice: num(raw.underlying_asset?.price ?? raw.underlying_asset?.value),
     underlyingTime: providerTime(raw.underlying_asset?.last_updated),
   }
+}
+
+// Validate OCC identity before any chain row reaches a view or calculator.
+export function validateOptionIdentity(raw, underlying, filters = {}) {
+  const d = raw?.details || {}
+  const m = /^O:([A-Z][A-Z0-9.-]{0,9})([0-9]{6})([CP])([0-9]{8})$/.exec(d.ticker || '')
+  if (!m) throw new Error('Invalid option contract identity')
+  const expiry = `20${m[2].slice(0,2)}-${m[2].slice(2,4)}-${m[2].slice(4,6)}`
+  if (!Number.isFinite(Date.parse(expiry)) || new Date(expiry).toISOString().slice(0,10) !== expiry) throw new Error('Invalid option expiry')
+  if (filters.minExpiry && expiry < filters.minExpiry) throw new Error('Expired contract outside requested date range')
+  const type = m[3] === 'C' ? 'call' : 'put'
+  if (m[1] !== underlying || raw.underlying_asset?.ticker && raw.underlying_asset.ticker !== underlying || d.underlying_ticker && d.underlying_ticker !== underlying || d.expiration_date !== expiry || d.contract_type !== type || d.strike_price !== Number(m[4])/1000 || filters.expiry && filters.expiry !== expiry || filters.type && ['call','put'].includes(filters.type) && filters.type !== type || filters.strike != null && filters.strike !== '' && Number(filters.strike) !== d.strike_price) throw new Error('Option contract does not match requested instrument or filters')
+  return raw
 }

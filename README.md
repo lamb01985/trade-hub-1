@@ -295,3 +295,16 @@ M2.0/M2.1 adds an explicit read-only Unified ETF context alongside Legacy mode. 
 The gateway requires a dedicated service token of at least 32 random bytes and exact audience; hosted service URLs must use HTTPS. Literal loopback HTTP is allowed only for explicitly local development. Start the configured engine with `.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8765` in the sibling engine repository, and `npm run dev` here; use http://127.0.0.1:5173 after operator sign-in. Configuration/Redis policy and verified recency are activation prerequisites, not automatic defaults. An unconfigured setup returns typed unavailable JSON. Historical `preview:local` continues to disable live routes.
 
 The actual deployment subscription and field entitlements govern access; the older plan-name note above is not verification of Options Standard or this deployment account. See [implementation evidence](docs/market-data/M2-0-M2-1-IMPLEMENTATION-REPORT.md) for tests, residual browser-key exposure and required activation/release steps.
+
+## Monday November 2 live-data readiness desk
+
+Use the isolated read-only desk with `npm run desk:live` and
+http://127.0.0.1:4190/?desk=live . It needs a valid server-only
+`POLYGON_API_KEY` or `MASSIVE_API_KEY`; the available engine key was rejected.
+No credentials were changed. Provider errors remain explicit, and no fixture
+replaces unavailable market data. Broker, AI and notification routes are blocked
+in this loopback launcher. The historical `preview:local` still disables feeds.
+
+See [verified access, startup, checks and Monday blockers](docs/market-data/MONDAY-2026-11-02-READINESS.md).
+The current recommendation is **NO-GO for live use** pending a valid approved
+server key, confirmed exchange rights and an active-session smoke test.

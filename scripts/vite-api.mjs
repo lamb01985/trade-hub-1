@@ -14,6 +14,7 @@ const SERVER_ENV_KEYS = [
   'RESEND_API_KEY', 'NOTIFICATION_EMAIL', 'RESEND_FROM', 'TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID',
 ]
 const STATIC_ROUTES = new Map([
+  ['/api/desk', '/api/desk.js'],
   ['/api/calendar-earnings', '/api/calendar-earnings.js'],
   ['/api/notify-email', '/api/notify-email.js'],
   ['/api/notify-telegram', '/api/notify-telegram.js'],

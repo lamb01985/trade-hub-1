@@ -31,7 +31,7 @@ it('keeps method rejection private and ahead of authentication',async()=>{for(co
 it('supports authenticated REST and retires key delivery while redacting recursive credential echoes',async()=>{
  const cookie=await login();const key='synthetic/key+secret';fetch.mockResolvedValue(new Response(JSON.stringify({[key]:[key,encodeURIComponent(key)]}),{status:403}))
  const r=await call('polygon/proxy',cookie);expect(r.code).toBe(403);expect(JSON.stringify(r.body)).not.toContain(key);expect(JSON.stringify(r.body)).not.toContain(encodeURIComponent(key));expect(r.body['[REDACTED]']).toEqual(['[REDACTED]','[REDACTED]'])
- expect(fetch.mock.calls[0][1].redirect).toBe('error');expect(new URL(fetch.mock.calls[0][0]).origin).toBe('https://api.polygon.io');expect((await call('polygon/ws-auth',cookie)).body).toEqual({error:'STREAMING_CREDENTIAL_DELIVERY_RETIRED',transport:'REST_POLL'})
+ expect(fetch.mock.calls[0][1].redirect).toBe('error');expect(new URL(fetch.mock.calls[0][0]).origin).toBe('https://api.massive.com');expect((await call('polygon/ws-auth',cookie)).body).toEqual({error:'STREAMING_CREDENTIAL_DELIVERY_RETIRED',transport:'REST_POLL'})
 })
 it('rejects original prefix/traversal/parameter bypasses in handler and direct helper',async()=>{
  const cookie=await login();const {polygonFetch}=await import('../api/_lib/polygon.js')

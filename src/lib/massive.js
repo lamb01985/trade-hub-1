@@ -11,7 +11,7 @@
 // Every outcome (success / failure / rate-limit retry) is recorded into
 // apiHealth so the header indicator reflects current API quality.
 
-import { marketDate, normalizeOption } from './optionSnapshot.js'
+import { marketDate, normalizeOption, validateOptionIdentity } from './optionSnapshot.js'
 import { recordSuccess, recordFailure, recordRateLimit, recordUnavailable } from './apiHealth.js'
 import { MARKET_HOLIDAYS_2026 as HOLIDAY_MAP_2026 } from '../constants.js'
 import { normalizeTradeTimestamp } from './quoteQuality.js'
@@ -313,7 +313,7 @@ export async function getOptionChain(ticker, { expiry, type, strike, limit = 250
   }, { priority: true })
   if (data.status === 'ERROR' || data.status === 'NOT_AUTHORIZED') throw new Error(data.message || data.error || 'Options access was denied by Massive.')
   if (data.results != null && !Array.isArray(data.results)) throw new Error('Massive returned an invalid options snapshot.')
-  return { contracts: (data.results || []).map(raw => normalizeOption(raw, symbol)), hasMore: !!data.next_url, fetchedAt: new Date().toISOString() }
+  return { contracts: (data.results || []).map(raw => normalizeOption(validateOptionIdentity(raw, symbol, { expiry, type, strike, minExpiry: expiry ? null : marketDate() }), symbol)), hasMore: !!data.next_url, fetchedAt: new Date().toISOString() }
 }
 
 export async function getLastTrade(ticker, options = {}) {
