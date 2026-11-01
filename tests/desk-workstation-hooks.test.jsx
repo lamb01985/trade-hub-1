@@ -36,3 +36,35 @@ it('clears previous price data when a refresh fails',async()=>{
  expect(hook.result.current.feed.data).toBeNull()
  expect(hook.result.current.feed.error).toBe('provider connection failed')
 })
+it('respects provider Retry-After without duplicate polls while the UI clock advances',async()=>{
+ vi.useFakeTimers();let snapshots=0
+ vi.stubGlobal('fetch',vi.fn(async url=>{
+   const q=new URL(url,'http://localhost').searchParams
+   if(q.get('action')==='context')return response({symbol:'QQQ'})
+   snapshots++
+   return response({stocks:{data:null,error:'RATE_LIMITED',retryAfter:120}})
+ }))
+ const hook=renderHook(()=>useDeskMarketData('QQQ','current'))
+ await act(async()=>{})
+ expect(snapshots).toBe(1)
+ await act(async()=>vi.advanceTimersByTimeAsync(119999))
+ expect(snapshots).toBe(1)
+ await act(async()=>vi.advanceTimersByTimeAsync(1))
+ expect(snapshots).toBe(2)
+ hook.unmount()
+ await act(async()=>vi.advanceTimersByTimeAsync(300000))
+ expect(snapshots).toBe(2)
+})
+it('pauses automatic polling on an invalid retry hint and keeps the error explicit',async()=>{
+ vi.useFakeTimers();let snapshots=0
+ vi.stubGlobal('fetch',vi.fn(async url=>{
+   if(new URL(url,'http://localhost').searchParams.get('action')==='context')return response({symbol:'QQQ'})
+   snapshots++;return response({stocks:{data:null,error:'RATE_LIMITED',retryAfter:86401}})
+ }))
+ const hook=renderHook(()=>useDeskMarketData('QQQ','current'))
+ await act(async()=>{})
+ expect(hook.result.current.feed.error).toContain('Automatic refresh paused')
+ expect(hook.result.current.feed.data).toBeNull()
+ await act(async()=>vi.advanceTimersByTimeAsync(300000))
+ expect(snapshots).toBe(1)
+})

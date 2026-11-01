@@ -6,10 +6,14 @@ import { DESK_SYMBOLS, stockEvidence, observation, eastern, previousSession, val
 async function read(path, params={}) {
   const r=await polygonFetch(path,params)
   const d=JSON.parse(r.body)
-  if(r.status!==200 || ['ERROR','NOT_AUTHORIZED'].includes(d.status)) throw new AccessError(r.status===200?502:r.status, r.status===401?'PROVIDER_KEY_REJECTED':r.status===403?'NOT_ENTITLED':r.status===429?'RATE_LIMITED':'PROVIDER_ERROR')
+  if(r.status!==200 || ['ERROR','NOT_AUTHORIZED'].includes(d.status)) {
+    const error = new AccessError(r.status===200?502:r.status, r.status===401?'PROVIDER_KEY_REJECTED':r.status===403?'NOT_ENTITLED':r.status===429?'RATE_LIMITED':'PROVIDER_ERROR')
+    if (r.status === 429 && r.retryAfter !== undefined) error.retryAfter = Number(r.retryAfter)
+    throw error
+  }
   return d
 }
-async function attempt(fn) {try{return {data:await fn(),error:null}}catch(e){return {data:null,error:e.code||e.message||'UNAVAILABLE'}}}
+async function attempt(fn) {try{return {data:await fn(),error:null}}catch(e){return {data:null,error:e.code||e.message||'UNAVAILABLE',...(e.retryAfter===undefined?{}:{retryAfter:e.retryAfter})}}}
 export default async function handler(req,res) {
   try {
     const operator=await providerOperator(req,res)

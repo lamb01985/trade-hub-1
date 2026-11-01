@@ -128,7 +128,7 @@ async function fetchWithTimeout(url, options) {
 
 async function throttledFetch(url, rawOptions = {}, generation = sessionGeneration) {
   assertSession(generation)
-  const { priority = false, ...options } = rawOptions
+  const { priority = false, noRateRetry = false, ...options } = rawOptions
   // Short-circuit: this endpoint pattern has already 403'd on this session,
   // so don't waste a request slot. We synthesize a Response-shape object the
   // callers can branch on, identical to what fetch would have produced.
@@ -166,6 +166,7 @@ async function throttledFetch(url, rawOptions = {}, generation = sessionGenerati
       }
       if (r.status === 429) {
         recordRateLimit({ url: shortUrl(url), attempt })
+        if (noRateRetry) return r
         if (attempt < MAX_RETRIES - 1) {
           const waitMs = (attempt + 1) * 2000
           // eslint-disable-next-line no-console
@@ -274,6 +275,11 @@ async function get(path, params = {}, options = {}) {
     }
     const err = new Error(`Polygon API ${res.status}: ${text.slice(0, 120)}`)
     err.status = res.status
+    if (res.status === 429) {
+      const hint = res.headers?.get?.('Retry-After')
+      const seconds = /^\d+$/.test(hint || '') ? Number(hint) : null
+      err.retryAfter = Number.isInteger(seconds) && seconds >= 1 && seconds <= 86400 ? seconds : 60
+    }
     err.unavailable = res.status === 403
     throw err
   }
@@ -310,7 +316,7 @@ export async function getOptionChain(ticker, { expiry, type, strike, limit = 250
     contract_type: type === 'call' || type === 'put' ? type : undefined,
     strike_price: strike === '' || strike == null ? undefined : strike,
     sort: 'expiration_date', order: 'asc', limit: Math.min(250, Math.max(1, limit)),
-  }, { priority: true })
+  }, { priority: true, noRateRetry: true })
   if (data.status === 'ERROR' || data.status === 'NOT_AUTHORIZED') throw new Error(data.message || data.error || 'Options access was denied by Massive.')
   if (data.results != null && !Array.isArray(data.results)) throw new Error('Massive returned an invalid options snapshot.')
   return { contracts: (data.results || []).map(raw => normalizeOption(validateOptionIdentity(raw, symbol, { expiry, type, strike, minExpiry: expiry ? null : marketDate() }), symbol)), hasMore: !!data.next_url, fetchedAt: new Date().toISOString() }

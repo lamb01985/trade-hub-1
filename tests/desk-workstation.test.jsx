@@ -40,3 +40,11 @@ it('never reuses historical bars after switching back to Today',()=>{
  fireEvent.click(screen.getByRole('button',{name:'Today',exact:true}))
  expect(screen.getByTestId('chart-adapter').textContent).toContain('"bars":0')
 })
+it('disables manual refresh during provider cooldown and keeps unavailable prices explicit',()=>{
+ const now=Date.parse('2026-11-01T18:00:00Z')
+ state.data=data({feed:{data:{stocks:{data:null,error:'RATE_LIMITED'}},error:null,loading:false,retryAt:now+120000}})
+ render(<ReadinessDesk/>);
+ expect(screen.getByRole('button',{name:'Retry in 120s',exact:true}).disabled).toBe(true)
+ expect(screen.getByTestId('selected-price').textContent).toContain('—')
+ expect(screen.getByRole('alert').textContent).toContain('RATE_LIMITED')
+})

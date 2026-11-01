@@ -10,6 +10,7 @@ const time = value => value ? new Date(value).toLocaleString('en-US', { timeZone
 const cell = { padding: '9px 8px', textAlign: 'right', whiteSpace: 'nowrap', borderBottom: `1px solid ${BORDER}` }
 
 export default function OptionsContracts({ ticker = 'QQQ', onSelect, onSendToPrep, onSendToCalc, lockedUnderlying = false }) {
+  const [retryAt, setRetryAt] = useState(0)
   const [now, setNow] = useState(Date.now())
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t) }, [])
   const [symbol, setSymbol] = useState(ticker)
@@ -31,6 +32,7 @@ export default function OptionsContracts({ ticker = 'QQQ', onSelect, onSendToPre
   useEffect(() => () => { request.current++ }, [])
 
   async function load() {
+    if (Date.now() < retryAt) return
     const id = ++request.current
     setLoading(true); setError(''); setResult(null); setSelected(null); onSelect?.(null)
     try {
@@ -38,7 +40,10 @@ export default function OptionsContracts({ ticker = 'QQQ', onSelect, onSendToPre
       const data = await getOptionChain(symbol, { expiry, type, strike })
       if (id === request.current) setResult(data)
     } catch (e) {
-      if (id === request.current) setError(e.status === 403
+      if (id === request.current && e.status === 429) {
+        setRetryAt(Date.now() + (e.retryAfter || 60) * 1000)
+        setError('Massive rate limit reached. Retry after the displayed cooldown.')
+      } else if (id === request.current) setError(e.status === 403
         ? 'Massive denied this snapshot request for the server API key. Check that this key belongs to your options subscription. Other stock data remains available.'
         : e.message || 'Options request failed.')
     } finally { if (id === request.current) setLoading(false) }
@@ -56,7 +61,7 @@ export default function OptionsContracts({ ticker = 'QQQ', onSelect, onSendToPre
       <Fld label="Exact strike (optional)" value={strike} onChange={v => { invalidate(); setStrike(v) }} />
       <Sel label="Contracts" value={type} onChange={v => { invalidate(); setType(v) }} options={[{ value: 'all', label: 'Calls + puts' }, { value: 'call', label: 'Calls' }, { value: 'put', label: 'Puts' }]} />
     </div>
-    <div style={{ marginTop: 12 }}><Btn onClick={load} disabled={loading || !symbol.trim()}>{loading ? 'Loading contracts…' : 'Load options data →'}</Btn></div>
+    <div style={{ marginTop: 12 }}><Btn onClick={load} disabled={loading || !symbol.trim() || now < retryAt}>{now < retryAt ? `Retry options in ${Math.ceil((retryAt-now)/1000)}s` : loading ? 'Loading contracts…' : 'Load options data →'}</Btn></div>
     {error && <p role="alert" style={{ color: RED, fontSize: 12 }}>{error}</p>}
     {result && <p role="status" style={{ color: THEME.colors.secondary, fontSize: 11 }}>{rows.length} contracts returned · fetched {time(result.fetchedAt)}. Quote and trade timestamps are shown separately.</p>}
     {result?.hasMore && <p style={{ color: YELLOW, fontSize: 12 }}>Partial chain: more contracts exist. Select an expiration or exact strike to narrow this 250-contract page.</p>}

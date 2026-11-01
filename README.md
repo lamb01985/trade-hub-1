@@ -325,3 +325,9 @@ evidence and screenshots only under ignored `.local/`.
 See [current integration and verification](docs/market-data/MONDAY-2026-11-02-INTEGRATION.md).
 The [initial readiness audit](docs/market-data/MONDAY-2026-11-02-READINESS.md)
 is historical: its rejected-key blocker was resolved by owner configuration.
+
+Final acceptance and the Monday startup checklist are in
+[Monday readiness acceptance](docs/market-data/MONDAY-2026-11-02-ACCEPTANCE.md).
+The final reliability fix honors provider Retry-After delays and shows the
+remaining cooldown on Refresh data. For the full closed-market acceptance pass,
+run `node scripts/verify-monday-acceptance.mjs`.

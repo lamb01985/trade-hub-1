@@ -42,6 +42,8 @@ export default function ReadinessDesk() {
     if (!DESK_SYMBOLS.includes(next)) {setSelectionError('Choose a supported watchlist symbol.');return}
     setSelectionError('');setSymbol(next)
   }
+  const retryAt = Math.max(feed.retryAt||0,context.retryAt||0)
+  const coolingDown = retryAt > now
   const active = NAV.find(item=>item.id===view)
   return <WorkspaceShell active={active} showSignOut={false} primaryNav={NAV} navGroups={[]} onNavigate={item=>setView(item.id)} ticker={symbol} onTicker={select}
     session={currentSession.replaceAll('_',' ')} connected={sourceAvailable} connectionLabel={sourceAvailable?'Massive connected':feed.loading?'Connecting…':'Data unavailable'}
@@ -49,7 +51,7 @@ export default function ReadinessDesk() {
     status={<span>Last trade {stamp(trade?.timestamp)}</span>} actions={<button className="eq-text-action" onClick={()=>setView('health')}>Data Health</button>}>
     <PageHeading eyebrow="TradeHub · Personal trading workspace" title={active.label}
       description={view==='desk'?'Price action, reference levels and a plan for both directions.':view==='options'?'Contract pricing and dated liquidity evidence.':'Source timestamps, coverage and provider status.'}
-      actions={<button className="eq-button" disabled={feed.loading||context.loading} onClick={()=>setRefresh(n=>n+1)}><RefreshCw size={14}/>{feed.loading?'Refreshing…':'Refresh data'}</button>}/>
+      actions={<button className="eq-button" disabled={feed.loading||context.loading||coolingDown} onClick={()=>setRefresh(n=>n+1)}><RefreshCw size={14}/>{coolingDown?`Retry in ${Math.ceil((retryAt-now)/1000)}s`:feed.loading?'Refreshing…':'Refresh data'}</button>}/>
     {selectionError && <p role="alert">{selectionError}</p>}
     {currentSession==='CLOSED' && <p className="desk-session-note" role="status">Market closed. Last trades and quotes are recorded observations; they are not executable live prices.</p>}
     {observationError && <p role="alert" className="desk-session-note">{observationError} · Market observations unavailable. No historical price is substituted.</p>}

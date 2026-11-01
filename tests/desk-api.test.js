@@ -29,3 +29,20 @@ it('requires bounded watchlist and explicit index identities on newly allowed pa
   expect(()=>validateProviderRequest('/v3/snapshot',{ticker:'SPY'})).toThrow()
   expect(()=>validateProviderRequest('/v2/snapshot/locale/us/markets/stocks/tickers',{tickers:'QQQ,NVDA'})).not.toThrow()
 })
+it('preserves a provider Retry-After delay in the affected field state',async()=>{
+  vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify({status:'ERROR'}),{status:429,headers:{'Retry-After':'120'}})))
+  const r=res();await desk(await req({action:'watchlist'}),r)
+  expect(r.body.stocks).toEqual({data:null,error:'RATE_LIMITED',retryAfter:120})
+})
+it('requests Monday bars and rejects Friday data rather than silently relabeling it',async()=>{
+  vi.useFakeTimers();vi.setSystemTime(new Date('2026-11-02T14:35:00Z'))
+  const friday=Date.parse('2026-10-30T13:30:00Z')
+  const fetcher=vi.fn(async()=>new Response(JSON.stringify({ticker:'QQQ',results:[{t:friday,o:100,h:101,l:99,c:100,v:10}]}),{status:200}))
+  vi.stubGlobal('fetch',fetcher)
+  try {
+    const r=res();await desk(await req({action:'context',symbol:'QQQ',period:'current'}),r)
+    expect(new URL(fetcher.mock.calls[0][0]).pathname).toContain('/minute/2026-11-02/2026-11-02')
+    expect(r.body.date).toBe('2026-11-02');expect(r.body.priorDate).toBe('2026-10-30')
+    expect(r.body.bars).toEqual({data:null,error:'INVALID_BAR'});expect(r.body.indicators).toBeNull()
+  } finally {vi.useRealTimers()}
+})
