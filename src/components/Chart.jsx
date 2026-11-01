@@ -302,7 +302,7 @@ function detectConfluences(levels, threshold = 0.30) {
   })
 }
 
-export default function ChartTab({ liveData, levelMap, trades, ticker, customLevels = [], onCustomLevelsChange, mtfAlignment, putThesis, volumeThresholds = {}, onVolumeThresholdsChange }) {
+export default function ChartTab(props) {
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 768)
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -311,7 +311,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
     return () => window.removeEventListener('resize', onResize)
   }, [])
 
-  if (isMobile) {
+  if (isMobile && !props.researchOnly) {
     return (
       <div style={{ padding: '40px 24px', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center', maxWidth: 460, margin: '60px auto' }}>
         <div style={{ fontSize: 36, opacity: 0.4 }}>📊</div>
@@ -322,6 +322,10 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
       </div>
     )
   }
+  return <ChartSurface {...props}/>
+}
+
+function ChartSurface({ liveData, levelMap, trades, ticker, customLevels = [], onCustomLevelsChange, mtfAlignment, putThesis, researchOnly = false, volumeThresholds = {}, onVolumeThresholdsChange }) {
   const wrapRef = useRef(null)
   const chartRef = useRef(null)
   const candleRef = useRef(null)
@@ -340,7 +344,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
   const putTriggerLineRef = useRef(null)
 
   const [timeframe, setTimeframe] = useState('5m')
-  const [layers, setLayers] = useState({ pivots: true, vwap: true, fibs: true, zones: true, signals: true, structure: true, premarket: true, volprofile: true })
+  const [layers, setLayers] = useState({ pivots: true, vwap: true, fibs: true, zones: true, signals: !researchOnly, structure: !researchOnly, premarket: true, volprofile: !researchOnly })
   const [showAllSwings, setShowAllSwings] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const [newLabel, setNewLabel] = useState('')
@@ -404,7 +408,8 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
       },
       crosshair: { mode: 1 },
       rightPriceScale: { borderColor: THEME.colors.border, scaleMargins: { top: 0.05, bottom: 0.22 } },
-      timeScale: { borderColor: THEME.colors.border, timeVisible: true, secondsVisible: false, rightOffset: 10 },
+      timeScale: { borderColor: THEME.colors.border, timeVisible: true, secondsVisible: false, rightOffset: 10, ...(researchOnly ? { tickMarkFormatter: time => new Date(Number(time)*1000).toLocaleTimeString('en-US',{timeZone:'America/Chicago',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}) } : {}) },
+      ...(researchOnly ? { localization: { timeFormatter: time => new Date(Number(time)*1000).toLocaleString('en-US',{timeZone:'America/Chicago',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',timeZoneName:'short'}) } } : {}),
     })
 
     const candle = chart.addSeries(CandlestickSeries, {
@@ -474,8 +479,11 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
       chartRef.current.applyOptions({ width: el.clientWidth, height: el.clientHeight })
     }
     window.addEventListener('resize', onResize)
+    const resizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(onResize) : null
+    resizeObserver?.observe(el)
 
     return () => {
+      resizeObserver?.disconnect()
       window.removeEventListener('resize', onResize)
       chart.remove()
       chartRef.current = null
@@ -944,7 +952,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{ticker || 'QQQ'}</span>
+          <span style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.secondary, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{ticker || 'QQQ'}{researchOnly ? ' · Last completed bar close' : ''}</span>
           {liveData?.price && (
             <span style={{ fontSize: 18, fontFamily: MONO, fontWeight: 900, color: LIME }}>${f2(liveData.price)}</span>
           )}
@@ -955,7 +963,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
           )}
           {liveData?.isHistoricalFallback && (
             <span style={{ fontSize: 9, fontFamily: MONO, color: YELLOW, border: `1px solid ${YELLOW}33`, borderRadius: 3, padding: '2px 6px', letterSpacing: '0.08em' }}>
-              SHOWING PRIOR SESSION
+              COMPLETED SESSION REVIEW
             </span>
           )}
         </div>
@@ -964,11 +972,11 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
             <Pill key={tf.id} label={tf.label} active={timeframe === tf.id} onClick={() => setTimeframe(tf.id)} />
           ))}
           <span style={{ width: 8 }} />
-          {LAYER_GROUPS.map(g => (
+          {LAYER_GROUPS.filter(g => !researchOnly || ['pivots','vwap','premarket'].includes(g.id)).map(g => (
             <Pill key={g.id} label={g.label} active={layers[g.id]} onClick={() => setLayers(s => ({ ...s, [g.id]: !s[g.id] }))} />
           ))}
           <span style={{ width: 8 }} />
-          <button onClick={() => setAddOpen(s => !s)} style={{
+          <button hidden={researchOnly} onClick={() => setAddOpen(s => !s)} style={{
             background: addOpen ? LIME : 'transparent', border: `1px solid ${addOpen ? LIME : BORDER}`,
             color: addOpen ? THEME.colors.background : THEME.colors.secondary, fontFamily: MONO, fontSize: 9, padding: '4px 10px',
             borderRadius: 3, cursor: 'pointer', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700,
@@ -978,7 +986,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
             fontFamily: MONO, fontSize: 9, padding: '4px 10px', borderRadius: 3,
             cursor: 'pointer', letterSpacing: '0.1em', textTransform: 'uppercase',
           }}>Auto-fit</button>
-          <button onClick={() => setShowAllSwings(s => !s)} title="Toggle every detected swing vs only the most recent pair" style={{
+          <button hidden={researchOnly} onClick={() => setShowAllSwings(s => !s)} title="Toggle every detected swing vs only the most recent pair" style={{
             background: showAllSwings ? THEME.colors.surface : 'transparent', border: `1px solid ${BORDER}`,
             color: showAllSwings ? LIME : THEME.colors.secondary,
             fontFamily: MONO, fontSize: 9, padding: '4px 10px', borderRadius: 3,
@@ -1007,7 +1015,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
       )}
 
       {/* ── Volume threshold readout ───────────────────────────────────────── */}
-      {(() => {
+      {!researchOnly && (() => {
         const above = volumeState.current >= currentThreshold && currentThreshold > 0
         const statusColor = !liveData?.intradayBars?.length ? THEME.colors.secondary : above ? LIME : RED
         const statusGlyph = above ? '✓' : '✗'
@@ -1054,7 +1062,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
       })()}
 
       {/* ── Action banner. Always visible above the chart on this tab. ─────── */}
-      {(() => {
+      {!researchOnly && (() => {
         const banner = buildActionBanner(mtfAlignment, levelMap)
         return (
           <div style={{
@@ -1075,7 +1083,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
 
       <div style={{ position: 'relative', width: '100%', height: 'clamp(320px, 48vh, 560px)', minHeight: 300, background: THEME.colors.background, border: `1px solid ${BORDER}`, borderRadius: 5 }}>
         <div ref={wrapRef} style={{ width: '100%', height: '100%' }} />
-        {!liveData?.intradayBars?.length && <div className="eq-chart-unavailable"><EmptyState title="Waiting for verified market observations">The chart will populate from your authenticated Massive connection. No sample candles or prices are substituted.</EmptyState></div>}
+        {!liveData?.intradayBars?.length && <div className="eq-chart-unavailable"><EmptyState title={researchOnly ? "No bars for this session" : "Waiting for verified market observations"}>{researchOnly ? "No verified minute bars were supplied for this date. Select Last completed session for historical review, or check Data Health." : "The chart will populate from your authenticated Massive connection. No sample candles or prices are substituted."}</EmptyState></div>}
         <div ref={profileOverlayRef} style={{ position: 'absolute', top: 0, right: 60, width: 60, height: '100%', pointerEvents: 'none' }} />
 
         {/* ── Top-right bias indicator + score panel ─────────────────────── */}
@@ -1240,7 +1248,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
         {noData && (
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 8, pointerEvents: 'none' }}>
             <div style={{ fontSize: 12, fontFamily: MONO, color: THEME.colors.secondary }}>Waiting for bars...</div>
-            <div style={{ fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary }}>Add a Massive API key in Command to populate the chart.</div>
+            <div style={{ fontSize: 10, fontFamily: MONO, color: THEME.colors.secondary }}>No bars are supplied for this date. Check the session and Data Health.</div>
           </div>
         )}
       </div>
@@ -1270,7 +1278,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
       })()}
 
       {/* Market Structure Panel */}
-      {(() => {
+      {!researchOnly && (() => {
         if (!liveData?.intradayBars?.length) return <div className="eq-no-structure"><strong>Market structure not evaluated</strong><span>Verified bars are required before a trend, strength or setup score can be shown.</span></div>
         const a = currentAnalysis
         const mtf = mtfAnalysis
@@ -1360,7 +1368,7 @@ export default function ChartTab({ liveData, levelMap, trades, ticker, customLev
         )
       })()}
 
-      <div style={{ background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 5, padding: '10px 14px' }}>
+      <div hidden={researchOnly} style={{ background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 5, padding: '10px 14px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <span style={{ fontSize: 9, fontFamily: MONO, color: THEME.colors.secondary, textTransform: 'uppercase', letterSpacing: '0.14em' }}>Nearest 5 Levels</span>
           {levelMap?.setupQuality && (

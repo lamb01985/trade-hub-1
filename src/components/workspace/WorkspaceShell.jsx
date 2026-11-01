@@ -4,7 +4,7 @@ import { PRIMARY_NAV, NAV_GROUPS } from './navigation.js'
 import { StatusBadge } from './primitives.jsx'
 import { BRAND } from '../../lib/brand.js'
 
-export default function WorkspaceShell({ active, onNavigate, ticker, onTicker, session, connected, freshness, status, actions, children }) {
+export default function WorkspaceShell({ active, onNavigate, ticker, onTicker, session, connected, freshness, status, actions, primaryNav = PRIMARY_NAV, navGroups = NAV_GROUPS, connectionLabel, showSignOut = true, children }) {
   const [collapsed,setCollapsed]=useState(false),[mobile,setMobile]=useState(false),[query,setQuery]=useState(ticker),[error,setError]=useState('')
   const [openGroups,setOpenGroups]=useState({}),toggleRef=useRef(null),drawerRef=useRef(null),mainRef=useRef(null),searchRef=useRef(null)
   useEffect(()=>{setQuery(ticker);setError('')},[ticker])
@@ -24,8 +24,8 @@ export default function WorkspaceShell({ active, onNavigate, ticker, onTicker, s
     {mobile && <button className="eq-drawer-scrim" aria-label="Close navigation" onClick={closeMobile}/>}
     <aside id="edge-workspace-navigation" className="eq-sidebar" ref={drawerRef} aria-label="Workspace navigation" role={mobile?'dialog':undefined} aria-modal={mobile||undefined}>
       <div className="eq-sidebar-brand"><span className="eq-mark" aria-hidden="true"><span/><span/><span/></span><div className="eq-brand-lockup"><strong>{BRAND.name}</strong><span>{BRAND.tagline}</span></div><button className="eq-icon-button eq-mobile-close" aria-label="Close sidebar" onClick={closeMobile}><X size={18}/></button></div>
-      <nav><div className="eq-nav-caption">Workspace</div>{PRIMARY_NAV.map(navItem)}
-        <div className="eq-nav-divider"/>{NAV_GROUPS.map(group=>{
+      <nav><div className="eq-nav-caption">Workspace</div>{primaryNav.map(navItem)}
+        <div className="eq-nav-divider"/>{navGroups.map(group=>{
           const selected=group.items.some(item=>item.id===active.id),open=openGroups[group.label]??selected,Icon=group.icon
           return <div className="eq-nav-group" key={group.label}><button className={`eq-group-toggle ${selected?'has-active':''}`} aria-label={group.label} aria-expanded={open&&!collapsed} onClick={()=>{if(collapsed)setCollapsed(false);setOpenGroups(prev=>({...prev,[group.label]:!open||collapsed}))}} title={collapsed?group.label:undefined}><Icon size={17}/><span>{group.label}</span>{open?<ChevronDown size={13}/>:<ChevronRight size={13}/>}</button>{open&&!collapsed&&<div className="eq-nav-children">{group.items.map(navItem)}</div>}</div>
         })}</nav>
@@ -34,7 +34,7 @@ export default function WorkspaceShell({ active, onNavigate, ticker, onTicker, s
     <div className="eq-main" inert={mobile?'':undefined}>
       <header className="eq-topbar"><div className="eq-topbar-context"><button ref={toggleRef} className="eq-icon-button eq-mobile-menu" aria-label="Open navigation" aria-expanded={mobile} aria-controls="edge-workspace-navigation" onClick={()=>setMobile(true)}><Menu size={20}/></button><span className="eq-topbar-root">Workspace</span><ChevronRight className="eq-breadcrumb-chevron" size={13}/><strong>{active.label}</strong></div>
         <form className="eq-search" role="search" onSubmit={submit}><Search size={16}/><input ref={searchRef} aria-label="Search ticker" value={query} onChange={e=>{setQuery(e.target.value);setError('')}} placeholder="Search ticker…" maxLength={20}/><kbd><Command size={10}/> K</kbd><button type="submit" className="eq-sr-only">Open ticker</button></form>
-        <div className="eq-topbar-status"><span className="eq-session"><i/>{session}</span><StatusBadge tone={connected?'positive':'neutral'}>{connected?'REST connected':'Data unavailable'}</StatusBadge><button className="eq-icon-button eq-signout" aria-label="Sign out of EdgeIQ" title="Sign out" onClick={()=>window.dispatchEvent(new Event('edgeiq-request-signout'))}><LogOut size={17}/></button></div>
+        <div className="eq-topbar-status"><span className="eq-session"><i/>{session}</span><StatusBadge tone={connected?'positive':'neutral'}>{connectionLabel || (connected?'REST connected':'Data unavailable')}</StatusBadge>{showSignOut && <button className="eq-icon-button eq-signout" aria-label="Sign out of EdgeIQ" title="Sign out" onClick={()=>window.dispatchEvent(new Event('edgeiq-request-signout'))}><LogOut size={17}/></button>}</div>
       </header>
       {error&&<p className="eq-search-error" role="alert">{error}</p>}
       <div className="eq-status-strip"><div className="eq-source-label"><span className={`eq-status-dot ${freshness?.fresh?'is-current':''}`}/><strong>{ticker}</strong><span>{freshness?.label || 'No verified quote'}</span></div>{status}<div className="eq-strip-actions">{actions}</div></div>

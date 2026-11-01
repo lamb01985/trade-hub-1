@@ -1,5 +1,7 @@
 # TradeHub Monday readiness — November 2, 2026
 
+> Historical initial audit at commit `2f2af69`. The owner subsequently configured a working key. See the [current integration report](MONDAY-2026-11-02-INTEGRATION.md); the rejected-key blocker below is no longer current.
+
 Decision: **NO-GO for live trading research until a valid approved server credential and real-time access are verified.** The desk is locally testable and fails explicitly. There is no verified current-session live feed on Sunday.
 
 ## Isolation and scope

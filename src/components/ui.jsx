@@ -97,6 +97,7 @@ export function Fld({ label, value, onChange, type = 'number', placeholder, step
       <div style={{ position: 'relative' }}>
         {prefix && <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: THEME.colors.secondary, fontFamily: MONO, fontSize: 13, pointerEvents: 'none' }}>{prefix}</span>}
         <input
+          aria-label={label}
           type={type}
           value={value}
           onInput={e => onChange(e.target.value)}
@@ -118,6 +119,7 @@ export function Sel({ label, value, onChange, options, small }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
       {label && <label style={{ fontSize: 11, letterSpacing: '0.02em', color: THEME.colors.secondary, textTransform: 'uppercase', fontFamily: MONO }}>{label}</label>}
       <select
+        aria-label={label}
         value={value}
         onChange={e => onChange(e.target.value)}
         style={{ background: THEME.colors.surface, border: `1px solid ${BORDER}`, borderRadius: 4, color: THEME.colors.text, fontFamily: MONO, fontSize: small ? 11 : 13, padding: small ? '6px 10px' : '9px 12px', outline: 'none', cursor: 'pointer', appearance: 'none' }}

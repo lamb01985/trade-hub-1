@@ -296,15 +296,32 @@ The gateway requires a dedicated service token of at least 32 random bytes and e
 
 The actual deployment subscription and field entitlements govern access; the older plan-name note above is not verification of Options Standard or this deployment account. See [implementation evidence](docs/market-data/M2-0-M2-1-IMPLEMENTATION-REPORT.md) for tests, residual browser-key exposure and required activation/release steps.
 
-## Monday November 2 live-data readiness desk
+## Monday November 2 trading workstation
 
-Use the isolated read-only desk with `npm run desk:live` and
-http://127.0.0.1:4190/?desk=live . It needs a valid server-only
-`POLYGON_API_KEY` or `MASSIVE_API_KEY`; the available engine key was rejected.
-No credentials were changed. Provider errors remain explicit, and no fixture
-replaces unavailable market data. Broker, AI and notification routes are blocked
-in this loopback launcher. The historical `preview:local` still disables feeds.
+The owner-configured key in ignored `.env.local` now works. Start the local,
+read-only workstation with `npm run desk:live`, then open
+http://127.0.0.1:4190/?desk=live . Configuration was preserved.
 
-See [verified access, startup, checks and Monday blockers](docs/market-data/MONDAY-2026-11-02-READINESS.md).
-The current recommendation is **NO-GO for live use** pending a valid approved
-server key, confirmed exchange rights and an active-session smoke test.
+The existing EdgeIQ workspace shell, chart and options components consume the
+canonical Massive adapter. Trading Desk has the ten-symbol watchlist, dated
+change/baseline, bid/ask, spread, levels, VWAP/EMAs and conditional plans. Options
+Intelligence has contract pricing and freshness. Detailed provenance is in Data
+Health. Today never silently falls back to historical bars; use Last completed
+session to review a dated session explicitly.
+
+Broker, AI and notification routes remain blocked in this loopback launcher.
+`preview:local` remains the historical fixture preview with feeds disabled.
+
+```bash
+npm test
+npm run build
+node scripts/verify-live-desk.mjs
+```
+
+The browser verifier now compares actual server responses against Massive with
+the existing local key; it does not depend on replay fixtures. It saves licensed
+evidence and screenshots only under ignored `.local/`.
+
+See [current integration and verification](docs/market-data/MONDAY-2026-11-02-INTEGRATION.md).
+The [initial readiness audit](docs/market-data/MONDAY-2026-11-02-READINESS.md)
+is historical: its rejected-key blocker was resolved by owner configuration.

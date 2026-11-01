@@ -1,5 +1,5 @@
 import { describe,it,expect } from 'vitest'
-import { sessionAt,previousSession,evidenceStatus,stockEvidence,validateBars,intradayContext } from '../src/lib/marketEvidence.js'
+import { sessionAt,previousSession,evidenceStatus,stockEvidence,validateBars,intradayContext, deskStructure, latestCompletedSession } from '../src/lib/marketEvidence.js'
 import { validateOptionIdentity } from '../src/lib/optionSnapshot.js'
 const now=Date.parse('2026-11-02T15:30:00Z')
 const bar=(t,c=100)=>({t,o:c,h:c+1,l:c-1,c,v:100,vw:c})
@@ -52,5 +52,38 @@ describe('Monday desk integrity',()=>{
     expect(validateOptionIdentity(raw,'QQQ',{expiry:'2026-11-02',strike:690})).toBe(raw)
     for(const [u,f] of [['SPY',{}],['QQQ',{expiry:'2026-11-03'}],['QQQ',{strike:700}],['QQQ',{type:'put'}]])expect(()=>validateOptionIdentity(raw,u,f)).toThrow()
     expect(()=>validateOptionIdentity({...raw,details:{...raw.details,strike_price:691}},'QQQ')).toThrow()
+  })
+})
+
+
+describe('workstation calculations',()=>{
+  it('dates session changes against the correct prior regular close',()=>{
+    const updated=Date.parse('2026-10-30T23:59:59Z')
+    const row=stockEvidence('QQQ',{ticker:'QQQ',updated:updated*1e6,lastTrade:{p:692.74,t:updated*1e6},lastQuote:{p:692.63,P:692.69,t:updated*1e6},prevDay:{c:715.34,h:718.07,l:711.62},day:{c:690.49}})
+    expect(row.change.date).toBe('2026-10-30');expect(row.change.baselineDate).toBe('2026-10-29')
+    expect(row.change.amount).toBeCloseTo(-22.6);expect(row.change.percent).toBeCloseTo(-22.6/715.34*100)
+    expect(row.spread).toBeCloseTo(0.06);expect(row.prior.close.value).toBe(715.34)
+    expect(row.regularClose.value).toBe(690.49)
+    expect(stockEvidence('QQQ',{ticker:'QQQ',updated:now*1e6,lastTrade:{p:692.74,t:updated*1e6},prevDay:{c:690.49}}).change.amount).toBeNull()
+  })
+  it('never infers a daily reference date from the receipt clock',()=>{
+    const row=stockEvidence('QQQ',{ticker:'QQQ',lastTrade:{p:692.74,t:now*1e6},prevDay:{c:690.49}})
+    expect(row.prior.close.date).toBeNull();expect(row.change.amount).toBeNull()
+  })
+  it('finds the completed session after overnight and early-close boundaries',()=>{
+    expect(latestCompletedSession(Date.parse('2026-11-01T18:00:00Z'))).toBe('2026-10-30')
+    expect(latestCompletedSession(Date.parse('2026-11-02T14:00:00Z'))).toBe('2026-10-30')
+    expect(latestCompletedSession(Date.parse('2026-11-02T21:16:00Z'))).toBe('2026-11-02')
+    expect(latestCompletedSession(Date.parse('2026-11-03T02:00:00Z'))).toBe('2026-11-02')
+    expect(latestCompletedSession(Date.parse('2026-11-27T18:16:00Z'))).toBe('2026-11-27')
+  })
+  it('reuses floor pivots without injecting round levels, scores or made-up targets',()=>{
+    const c={symbol:'QQQ',period:'completed',priorDate:'2026-10-29',previous:{data:[{h:110,l:90,c:100}]},bars:{data:[{c:105,timestamp:now}]},indicators:{ema9:104,ema20:103,ema50:102,vwap:101,sessions:{PREMARKET:{high:112,low:92}}}}
+    const s=deskStructure(c)
+    expect(s.pivots.PP).toBe(100);expect(s.pivots.R1).toBe(110);expect(s.pivots.S1).toBe(90)
+    expect(s.levelMap.levels.some(l=>l.type==='round')).toBe(false);expect(s.levelMap.setupQuality).toBeNull()
+    expect(s.scenarios[0].boundary).toBe(112);expect(s.scenarios[1].boundary).toBe(90)
+    expect(s.chartData.price).toBe(105);expect(s.chartData.isHistoricalFallback).toBe(true)
+    expect(deskStructure(null).scenarios.every(s=>s.boundary==null&&s.target==null)).toBe(true)
   })
 })
