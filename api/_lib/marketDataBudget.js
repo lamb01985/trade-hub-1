@@ -40,3 +40,16 @@ export function createMarketDataBudget(env = process.env, client = null) {
 }
 export async function admit(...args) { return createMarketDataBudget().admit(...args) }
 export async function release(...args) { return createMarketDataBudget().release(...args) }
+
+// Separate account-wide cooldown key; the existing shared Node/Python admission
+// policy script is unchanged. Long Retry-After values cannot be shortened by races.
+export const COOLDOWN_LUA = `local ttl=redis.call('PTTL',KEYS[1]); if ttl==-1 then return 86401 end; if ARGV[1]=='set' then if tonumber(ARGV[2])==86401 then redis.call('SET',KEYS[1],'manual_review_required');return 86401 end;local ms=tonumber(ARGV[2])*1000; if ttl<ms then redis.call('SET',KEYS[1],'provider429','PX',ms);ttl=ms end end; return math.max(0,math.ceil(ttl/1000))`
+export async function accountCooldown(scope,seconds=null,env=process.env,client=null) {
+ try {
+  const policy=budgetConfiguration(env)
+  if(scope!==policy.scope||seconds!==null&&(!Number.isInteger(seconds)||seconds<1||seconds>86401))throw Error('Invalid cooldown')
+  const retryAfter=await (client||store(env)).eval(COOLDOWN_LUA,[`md:{${scope}}:cooldown`],[seconds===null?'get':'set',seconds??0])
+  if(!Number.isInteger(retryAfter)||retryAfter<0||retryAfter>86401)throw Error('Invalid cooldown response')
+  return {available:true,retryAfter}
+ }catch{return {available:false,retryAfter:60}}
+}

@@ -4,7 +4,8 @@ import SessionResearch from './components/SessionResearch.jsx'
 import OptionsContracts from './components/OptionsContracts.jsx'
 import { DESK_SYMBOLS, evidenceLabel } from './lib/marketEvidence.js'
 import { PRIMARY_NAV } from './components/workspace/navigation.js'
-import ReadinessDesk from './components/ReadinessDesk.jsx'
+import OptionsResearch from './components/OptionsResearch.jsx'
+import CanonicalShell from './components/CanonicalShell.jsx'
 import { useThesisAvailability } from './hooks/useThesisAvailability.js'
 import WorkspaceShell from './components/workspace/WorkspaceShell.jsx'
 import Portfolio from './components/workspace/Portfolio.jsx'
@@ -119,18 +120,14 @@ function migrateSavedUniverses() {
 const defaultSettings = { dailyLossLimit: 500, maxTradesPerDay: 5, orPeriod: '15', alertsEnabled: false }
 const defaultPrep = { ticker: 'QQQ', orPeriod: '15', orbHigh: '', orbLow: '', sessionOpen: '', sessionClose: '', keyLevel: '', plannedStrike: '', plannedDTE: '1', ivNote: '', gamePlan: '', avoidNotes: '', dayReview: '', marketEvents: '', instrument: 'options' }
 
-const VERIFIED_WORKFLOW = import.meta.env.VITE_VERIFIED_LEVEL_WORKFLOW === 'true'
+const VERIFIED_WORKFLOW = true
 const WORKFLOW_NAV = [
   {...PRIMARY_NAV[0],id:'plan',label:'Plan',tab:'plan',sub:'watchlist'},
   {...PRIMARY_NAV.find(n=>n.id==='trade:chart'),id:'trade',label:'Trade',tab:'trade',sub:'map'},
   {...PRIMARY_NAV.find(n=>n.id==='review:journal'),id:'review',label:'Review',tab:'review',sub:'history'},
 ]
 
-export default function App() {
-  if (VERIFIED_WORKFLOW && new URLSearchParams(window.location.search).get('desk') !== 'live') return <LegacyApp/>
-  if (new URLSearchParams(window.location.search).get('desk') === 'live') return <ReadinessDesk />
-  return <ConfiguredApp />
-}
+export default function App() { return <LegacyApp/> }
 
 function ConfiguredApp() {
   const capabilities = useMarketData('capabilities')
@@ -592,7 +589,7 @@ function LegacyWorkspace({prep,setPrep,settings,setSettings,verifiedMarket=null}
   }) + ' CT' : 'timestamp unavailable'
   useEffect(()=>{
     if(!verifiedMarket)return
-    function restore(){const q=new URLSearchParams(window.location.search);const tab=q.get('workspace')||'plan',view=q.get('view')||(tab==='trade'?'map':tab==='review'?'history':'watchlist');if(['plan','trade','review'].includes(tab))setActiveTab(tab);if(tab==='plan')setPlanSubTab(view);if(tab==='trade')setTradeSubTab(view);if(tab==='review')setReviewSubTab(view);const symbol=q.get('symbol');if(DESK_SYMBOLS.includes(symbol))setPrep(p=>prepForSymbol(p,symbol))}
+    function restore(){const q=new URLSearchParams(window.location.search);const tab=q.get('workspace')||'plan',view=q.get('view')||(tab==='trade'?'map':tab==='review'?'history':'watchlist');if(['plan','trade','review','company'].includes(tab))setActiveTab(tab);if(tab==='plan')setPlanSubTab(view);if(tab==='trade')setTradeSubTab(view);if(tab==='review')setReviewSubTab(view);const symbol=q.get('symbol');if(DESK_SYMBOLS.includes(symbol))setPrep(p=>prepForSymbol(p,symbol))}
     window.addEventListener('popstate',restore);return()=>window.removeEventListener('popstate',restore)
   },[!!verifiedMarket])
   function workflowUrl(tab,view,symbol=selectedTicker,hash='') {
@@ -623,56 +620,7 @@ function LegacyWorkspace({prep,setPrep,settings,setSettings,verifiedMarket=null}
   }
 
   return (
-    <WorkspaceShell active={verifiedMarket?{id:activeTab,label:`${activeTab==='plan'?'Plan':activeTab==='trade'?'Trade':'Review'} / ${activeTab==='plan'?planSubTab:activeTab==='trade'?tradeSubTab:reviewSubTab}`} : activeNavigation(activeTab, activeTab === 'plan' ? planSubTab : activeTab === 'trade' ? tradeSubTab : activeTab === 'review' ? reviewSubTab : null, companyView)}
-      primaryNav={verifiedMarket?WORKFLOW_NAV:undefined} navGroups={verifiedMarket?[]:undefined} showSignOut={!verifiedMarket}
-      onNavigate={navigateWorkspace} ticker={selectedTicker} onTicker={selectTicker}
-      session={session.replaceAll('-', ' ')} connected={liveData.connected}
-      freshness={priceStatus}
-      status={verifiedMarket?<span>Massive · source {priceTime} · delay unverified unless supplied by provider</span>:<><ServiceStatus freshness={priceStatus} ticker={selectedTicker} data={selectedData} priceTime={priceTime} events={todayHighImpact} onCalendar={() => {setActiveTab('plan');setPlanSubTab('calendar')}}/>{todayHighImpact.length > 0 && <button className="eq-event-chip" onClick={() => {setActiveTab('plan');setPlanSubTab('calendar')}}>{todayHighImpact.length} high-impact event{todayHighImpact.length > 1 ? 's' : ''} today</button>}</>}
-      actions={<>{verifiedMarket?<button className="eq-button" disabled={verifiedMarket.feed.loading||verifiedMarket.context.loading||Math.max(verifiedMarket.feed.retryAt||0,verifiedMarket.context.retryAt||0)>verifiedMarket.now} onClick={verifiedMarket.refresh}>Refresh map</button>:<ApiHealthIndicator/>}            {lockedOut && (
-              <span style={{ fontSize: 9, color: RED, fontFamily: MONO, border: `1px solid ${RED}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.1em' }}>LOCKED</span>
-            )}
-            {selectedData && priceStatus.fresh && fullLevelMap.setupQuality === 'ON LEVEL' && (
-              <button onClick={() => { setActiveTab('trade'); setTradeSubTab('chart') }} title="Jump to Trade / Chart" style={{ fontSize: 9, color: LIME, fontFamily: MONO, background: 'transparent', border: `1px solid ${LIME}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.1em', animation: 'hdrpulse 1.5s infinite', cursor: 'pointer' }}>ON LEVEL →</button>
-            )}
-            {selectedData && priceStatus.fresh && fullLevelMap.setupQuality === 'APPROACHING' && (
-              <button onClick={() => { setActiveTab('trade'); setTradeSubTab('chart') }} title="Jump to Trade / Chart" style={{ fontSize: 9, color: YELLOW, fontFamily: MONO, background: 'transparent', border: `1px solid ${YELLOW}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.1em', cursor: 'pointer' }}>APPROACHING →</button>
-            )}
-            {headerOpenSummary && headerOpenAny && (
-              <button onClick={() => { setActiveTab('review'); setReviewSubTab('journal') }} title="Jump to Review / Journal" style={{ fontSize: 9, color: headerOpenPnl >= 0 ? LIME : RED, fontFamily: MONO, background: 'transparent', border: `1px solid ${(headerOpenPnl >= 0 ? LIME : RED)}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.06em', cursor: 'pointer', fontWeight: 700 }}>
-                {headerOpenSummary} {headerOpenPnl >= 0 ? '+' : ''}${Math.abs(headerOpenPnl).toFixed(0)}
-              </button>
-            )}
-            {(() => {
-              const count = setupEvaluation?.triggers?.length || 0
-              if (count === 0) return null
-              return (
-                <button
-                  onClick={() => { setActiveTab('plan'); setPlanSubTab('setups') }}
-                  title="Setups triggered (Plan / Setups)"
-                  style={{ fontSize: 9, color: RED, fontFamily: MONO, background: 'transparent', border: `1px solid ${RED}55`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.08em', cursor: 'pointer', fontWeight: 700, animation: 'hdrpulse 1.5s infinite' }}
-                >
-                  {count} SETUP{count === 1 ? '' : 'S'} TRIGGERED →
-                </button>
-              )
-            })()}
-            {schwab.isConnected && schwab.dayTrades > 0 && (() => {
-              const c = schwab.dayTrades >= 3 ? RED : schwab.dayTrades >= 2 ? YELLOW : THEME.colors.secondary
-              return (
-                <span title="Pattern Day Trader count, round-trip option trades today" style={{ fontSize: 9, color: c, fontFamily: MONO, border: `1px solid ${c}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.1em' }}>
-                  PDT: {schwab.dayTrades}/3{schwab.dayTrades >= 3 ? ' NO MORE' : ''}
-                </span>
-              )
-            })()}
-            {selectedData && priceStatus.fresh && mtfAlignment.score > 0 && (() => {
-              const c = mtfAlignment.score >= 85 ? LIME : mtfAlignment.score >= 70 ? LIME : mtfAlignment.score >= 55 ? YELLOW : mtfAlignment.score >= 40 ? THEME.colors.orange : RED
-              return (
-                <button onClick={() => { setActiveTab('trade'); setTradeSubTab('chart') }} title={`${mtfAlignment.label}, jump to Trade / Chart`} style={{ fontSize: 9, color: c, fontFamily: MONO, background: 'transparent', border: `1px solid ${c}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.1em', cursor: 'pointer' }}>ALIGN: {mtfAlignment.score} →</button>
-              )
-            })()}</>}>
-
-
-      {verifiedMarket && <><nav aria-label="Plan Trade Review" className="workflow-tabs">{WORKFLOW_NAV.map(item=><button key={item.id} aria-pressed={activeTab===item.tab} onClick={()=>navigateWorkspace(item)}>{item.label}</button>)}</nav><nav aria-label="Workflow tools" className="workflow-tabs">{(activeTab==='plan'?[['watchlist','Ranked watchlist'],['prep',"Tomorrow's Prep"],['levels','Levels']]:activeTab==='trade'?[['map','Live Level Map'],['chart','Chart'],['iv','Options']]:[['history','Archived reports'],['journal','Journal']]).map(([sub,label])=><button key={sub} aria-pressed={(activeTab==='plan'?planSubTab:activeTab==='trade'?tradeSubTab:reviewSubTab)===sub} onClick={()=>navigateWorkspace({tab:activeTab,sub})}>{label}</button>)}</nav></>}
+    <CanonicalShell activeTab={activeTab} sub={activeTab==='plan'?planSubTab:activeTab==='trade'?tradeSubTab:reviewSubTab} onNavigate={navigateWorkspace} ticker={selectedTicker} onTicker={selectTicker} session={session} freshness={priceStatus.label} onRefresh={verifiedMarket.refresh} refreshing={verifiedMarket.feed.loading||verifiedMarket.context.loading||Math.max(verifiedMarket.feed.retryAt||0,verifiedMarket.context.retryAt||0)>verifiedMarket.now}>
       {/* Content. TRADE gets a wider container so the chart has room. */}
       <div className="eq-content-body">
         {activeTab === 'overview' && <Overview ticker={selectedTicker} liveData={liveData} multiData={liveDataMulti?.data || {}} watchlist={botWatchlist} trades={trades} setups={setups} levelMap={fullLevelMap} onNavigate={navigateWorkspace} onTicker={selectTicker} onLogTrade={() => openQuickLog(null)} connected={liveData.connected} session={session} schwab={schwab} aiCapability={aiCapability} events={calendarEvents}/>}
@@ -682,6 +630,8 @@ function LegacyWorkspace({prep,setPrep,settings,setSettings,verifiedMarket=null}
         {activeTab === 'trade' && <PageHeading eyebrow="Execution workspace" title="Trading Desk" description={`${selectedTicker} · Chart, levels and execution tools. Decisions grounded in verified observations.`}/>}
 
 
+        {activeTab==='trade' && tradeSubTab==='calc' && <p role="status">The legacy calculator awaits validation against the canonical feed. The Options Intelligence scenario calculator remains available for exact observed contracts.</p>}
+        {activeTab==='plan' && ['focus','wheel','movers','universe','setups','playbook','calendar'].includes(planSubTab) && <p role="status">This tool awaits validation against the canonical Massive feed. Use Level Map and Tomorrow’s Prep for verified observations. Saved settings remain available in this browser.</p>}
         {activeTab === 'plan' && (
           <div className="eq-legacy-content" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
 
@@ -880,7 +830,7 @@ function LegacyWorkspace({prep,setPrep,settings,setSettings,verifiedMarket=null}
 
 
             {verifiedMarket && tradeSubTab==='map' && <section id="live-level-map" tabIndex={-1}><h1>{selectedTicker} Live Level Map</h1><Levels ticker={selectedTicker} onSelectTicker={selectTicker} onOpenLiveMap={openLiveMap} liveData={liveData} planningState={verifiedMarket} settings={settings} onSettingsChange={setSettings}/></section>}
-            {verifiedMarket && tradeSubTab==='iv' && <OptionsContracts key={selectedTicker} ticker={selectedTicker} lockedUnderlying/>}
+            {verifiedMarket && tradeSubTab==='iv' && <OptionsResearch key={selectedTicker} ticker={selectedTicker} lockedUnderlying technicalContext={verifiedMarket.contextData}/>}
             <div style={{ display: tradeSubTab === 'chart' ? 'block' : 'none' }}>
               <ErrorBoundary label="Chart">
                 {(!verifiedMarket||tradeSubTab==='chart') && <ChartTab
@@ -1052,7 +1002,7 @@ function LegacyWorkspace({prep,setPrep,settings,setSettings,verifiedMarket=null}
       )}
 
       <NotificationOverlay />
-    </WorkspaceShell>
+    </CanonicalShell>
   )
 }
 

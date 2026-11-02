@@ -1,0 +1,621 @@
+{
+  "schema_version": "thesis-company-v1",
+  "request_id": "0dd8cf9a-11bd-4d6f-a129-e23cfba910c2",
+  "profile": "EDGEIQ_LOCAL_RESEARCH",
+  "generated_at": "2026-10-31T21:57:54.982442+00:00",
+  "as_of": "2026-10-31",
+  "source_type": "SEC_EDGAR",
+  "issuer": {
+    "symbol": "AMD",
+    "cik": "0000002488",
+    "name": "ADVANCED MICRO DEVICES INC",
+    "sic": 3674
+  },
+  "periods": [
+    {
+      "start": "2024-12-29",
+      "end": "2025-12-27",
+      "facts": {
+        "revenue": {
+          "value": 34639000000,
+          "unit": "USD",
+          "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+          "start": "2024-12-29",
+          "end": "2025-12-27",
+          "filed": "2026-02-04",
+          "accession": "0000002488-26-000018",
+          "source_url": "https://www.sec.gov/Archives/edgar/data/2488/000000248826000018/0000002488-26-000018-index.html"
+        },
+        "net_income": {
+          "value": 4269000000,
+          "unit": "USD",
+          "concept": "IncomeLossFromContinuingOperations",
+          "start": "2024-12-29",
+          "end": "2025-12-27",
+          "filed": "2026-02-04",
+          "accession": "0000002488-26-000018",
+          "source_url": "https://www.sec.gov/Archives/edgar/data/2488/000000248826000018/0000002488-26-000018-index.html"
+        },
+        "cfo": {
+          "value": 6493000000,
+          "unit": "USD",
+          "concept": "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations",
+          "start": "2024-12-29",
+          "end": "2025-12-27",
+          "filed": "2026-02-04",
+          "accession": "0000002488-26-000018",
+          "source_url": "https://www.sec.gov/Archives/edgar/data/2488/000000248826000018/0000002488-26-000018-index.html"
+        },
+        "capex": {
+          "value": 974000000,
+          "unit": "USD",
+          "concept": "PaymentsToAcquirePropertyPlantAndEquipment",
+          "start": "2024-12-29",
+          "end": "2025-12-27",
+          "filed": "2026-02-04",
+          "accession": "0000002488-26-000018",
+          "source_url": "https://www.sec.gov/Archives/edgar/data/2488/000000248826000018/0000002488-26-000018-index.html"
+        },
+        "cash": null,
+        "assets": null,
+        "liabilities": null,
+        "equity": null,
+        "current_assets": null,
+        "current_liabilities": null,
+        "debt_current": null,
+        "debt_noncurrent": null,
+        "eps": null
+      }
+    },
+    {
+      "start": "2023-12-31",
+      "end": "2024-12-28",
+      "facts": {
+        "revenue": {
+          "value": 25785000000,
+          "unit": "USD",
+          "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+          "start": "2023-12-31",
+          "end": "2024-12-28",
+          "filed": "2026-02-04",
+          "accession": "0000002488-26-000018",
+          "source_url": "https://www.sec.gov/Archives/edgar/data/2488/000000248826000018/0000002488-26-000018-index.html"
+        },
+        "net_income": {
+          "value": 1641000000,
+          "unit": "USD",
+          "concept": "IncomeLossFromContinuingOperations",
+          "start": "2023-12-31",
+          "end": "2024-12-28",
+          "filed": "2026-02-04",
+          "accession": "0000002488-26-000018",
+          "source_url": "https://www.sec.gov/Archives/edgar/data/2488/000000248826000018/0000002488-26-000018-index.html"
+        },
+        "cfo": {
+          "value": 3041000000,
+          "unit": "USD",
+          "concept": "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations",
+          "start": "2023-12-31",
+          "end": "2024-12-28",
+          "filed": "2026-02-04",
+          "accession": "0000002488-26-000018",
+          "source_url": "https://www.sec.gov/Archives/edgar/data/2488/000000248826000018/0000002488-26-000018-index.html"
+        },
+        "capex": {
+          "value": 636000000,
+          "unit": "USD",
+          "concept": "PaymentsToAcquirePropertyPlantAndEquipment",
+          "start": "2023-12-31",
+          "end": "2024-12-28",
+          "filed": "2026-02-04",
+          "accession": "0000002488-26-000018",
+          "source_url": "https://www.sec.gov/Archives/edgar/data/2488/000000248826000018/0000002488-26-000018-index.html"
+        },
+        "cash": null,
+        "assets": null,
+        "liabilities": null,
+        "equity": null,
+        "current_assets": null,
+        "current_liabilities": null,
+        "debt_current": null,
+        "debt_noncurrent": null,
+        "eps": null
+      }
+    },
+    {
+      "start": "2023-01-01",
+      "end": "2023-12-30",
+      "facts": {
+        "revenue": {
+          "value": 22680000000,
+          "unit": "USD",
+          "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+          "start": "2023-01-01",
+          "end": "2023-12-30",
+          "filed": "2026-02-04",
+          "accession": "0000002488-26-000018",
+          "source_url": "https://www.sec.gov/Archives/edgar/data/2488/000000248826000018/0000002488-26-000018-index.html"
+        },
+        "net_income": {
+          "value": 854000000,
+          "unit": "USD",
+          "concept": "IncomeLossFromContinuingOperations",
+          "start": "2023-01-01",
+          "end": "2023-12-30",
+          "filed": "2026-02-04",
+          "accession": "0000002488-26-000018",
+          "source_url": "https://www.sec.gov/Archives/edgar/data/2488/000000248826000018/0000002488-26-000018-index.html"
+        },
+        "cfo": {
+          "value": 1667000000,
+          "unit": "USD",
+          "concept": "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations",
+          "start": "2023-01-01",
+          "end": "2023-12-30",
+          "filed": "2026-02-04",
+          "accession": "0000002488-26-000018",
+          "source_url": "https://www.sec.gov/Archives/edgar/data/2488/000000248826000018/0000002488-26-000018-index.html"
+        },
+        "capex": {
+          "value": 546000000,
+          "unit": "USD",
+          "concept": "PaymentsToAcquirePropertyPlantAndEquipment",
+          "start": "2023-01-01",
+          "end": "2023-12-30",
+          "filed": "2026-02-04",
+          "accession": "0000002488-26-000018",
+          "source_url": "https://www.sec.gov/Archives/edgar/data/2488/000000248826000018/0000002488-26-000018-index.html"
+        },
+        "cash": null,
+        "assets": null,
+        "liabilities": null,
+        "equity": null,
+        "current_assets": null,
+        "current_liabilities": null,
+        "debt_current": null,
+        "debt_noncurrent": null,
+        "eps": null
+      }
+    }
+  ],
+  "metrics": {
+    "revenue": {
+      "value": 34639000000,
+      "unit": "USD",
+      "formula": "Reported annual fact",
+      "inputs": [
+        {
+          "value": 34639000000,
+          "unit": "USD",
+          "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+          "start": "2024-12-29",
+          "end": "2025-12-27",
+          "filed": "2026-02-04",
+          "accession": "0000002488-26-000018",
+          "source_url": "https://www.sec.gov/Archives/edgar/data/2488/000000248826000018/0000002488-26-000018-index.html"
+        }
+      ]
+    },
+    "net_income": {
+      "value": 4269000000,
+      "unit": "USD",
+      "formula": "Reported net income; operating scope CONTINUING",
+      "inputs": [
+        {
+          "value": 4269000000,
+          "unit": "USD",
+          "concept": "IncomeLossFromContinuingOperations",
+          "start": "2024-12-29",
+          "end": "2025-12-27",
+          "filed": "2026-02-04",
+          "accession": "0000002488-26-000018",
+          "source_url": "https://www.sec.gov/Archives/edgar/data/2488/000000248826000018/0000002488-26-000018-index.html"
+        }
+      ]
+    },
+    "cfo": {
+      "value": 6493000000,
+      "unit": "USD",
+      "formula": "Reported cfo; operating scope CONTINUING",
+      "inputs": [
+        {
+          "value": 6493000000,
+          "unit": "USD",
+          "concept": "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations",
+          "start": "2024-12-29",
+          "end": "2025-12-27",
+          "filed": "2026-02-04",
+          "accession": "0000002488-26-000018",
+          "source_url": "https://www.sec.gov/Archives/edgar/data/2488/000000248826000018/0000002488-26-000018-index.html"
+        }
+      ]
+    },
+    "capex": {
+      "value": 974000000,
+      "unit": "USD",
+      "formula": "Reported annual fact",
+      "inputs": [
+        {
+          "value": 974000000,
+          "unit": "USD",
+          "concept": "PaymentsToAcquirePropertyPlantAndEquipment",
+          "start": "2024-12-29",
+          "end": "2025-12-27",
+          "filed": "2026-02-04",
+          "accession": "0000002488-26-000018",
+          "source_url": "https://www.sec.gov/Archives/edgar/data/2488/000000248826000018/0000002488-26-000018-index.html"
+        }
+      ]
+    },
+    "cash": {
+      "value": null,
+      "unit": "USD",
+      "formula": "Reported annual fact",
+      "inputs": []
+    },
+    "assets": {
+      "value": null,
+      "unit": "USD",
+      "formula": "Reported annual fact",
+      "inputs": []
+    },
+    "liabilities": {
+      "value": null,
+      "unit": "USD",
+      "formula": "Reported annual fact",
+      "inputs": []
+    },
+    "equity": {
+      "value": null,
+      "unit": "USD",
+      "formula": "Reported annual fact",
+      "inputs": []
+    },
+    "current_assets": {
+      "value": null,
+      "unit": "USD",
+      "formula": "Reported annual fact",
+      "inputs": []
+    },
+    "current_liabilities": {
+      "value": null,
+      "unit": "USD",
+      "formula": "Reported annual fact",
+      "inputs": []
+    },
+    "debt_current": {
+      "value": null,
+      "unit": "USD",
+      "formula": "Reported annual fact",
+      "inputs": []
+    },
+    "debt_noncurrent": {
+      "value": null,
+      "unit": "USD",
+      "formula": "Reported annual fact",
+      "inputs": []
+    },
+    "eps": {
+      "value": null,
+      "unit": "USD/shares",
+      "formula": "Reported annual fact",
+      "inputs": []
+    },
+    "fcf": {
+      "value": 5519000000,
+      "unit": "USD",
+      "formula": "Continuing-operations operating cash flow - continuing-operations cash PPE purchases",
+      "inputs": [
+        {
+          "value": 6493000000,
+          "unit": "USD",
+          "concept": "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations",
+          "start": "2024-12-29",
+          "end": "2025-12-27",
+          "filed": "2026-02-04",
+          "accession": "0000002488-26-000018",
+          "source_url": "https://www.sec.gov/Archives/edgar/data/2488/000000248826000018/0000002488-26-000018-index.html"
+        },
+        {
+          "value": 974000000,
+          "unit": "USD",
+          "concept": "PaymentsToAcquirePropertyPlantAndEquipment",
+          "start": "2024-12-29",
+          "end": "2025-12-27",
+          "filed": "2026-02-04",
+          "accession": "0000002488-26-000018",
+          "source_url": "https://www.sec.gov/Archives/edgar/data/2488/000000248826000018/0000002488-26-000018-index.html"
+        }
+      ]
+    },
+    "debt": {
+      "value": null,
+      "unit": "USD",
+      "formula": "Observed current + noncurrent long-term debt (limited debt proxy)",
+      "inputs": []
+    },
+    "net_margin": {
+      "value": 12.32425878,
+      "unit": "percent",
+      "formula": "Continuing-operations net income / continuing-operations revenue \u00d7 100",
+      "inputs": [
+        {
+          "value": 4269000000,
+          "unit": "USD",
+          "concept": "IncomeLossFromContinuingOperations",
+          "start": "2024-12-29",
+          "end": "2025-12-27",
+          "filed": "2026-02-04",
+          "accession": "0000002488-26-000018",
+          "source_url": "https://www.sec.gov/Archives/edgar/data/2488/000000248826000018/0000002488-26-000018-index.html"
+        },
+        {
+          "value": 34639000000,
+          "unit": "USD",
+          "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+          "start": "2024-12-29",
+          "end": "2025-12-27",
+          "filed": "2026-02-04",
+          "accession": "0000002488-26-000018",
+          "source_url": "https://www.sec.gov/Archives/edgar/data/2488/000000248826000018/0000002488-26-000018-index.html"
+        }
+      ]
+    },
+    "cash_conversion": {
+      "value": 1.5209651,
+      "unit": "ratio",
+      "formula": "Continuing-operations operating cash flow / positive continuing-operations net income",
+      "inputs": [
+        {
+          "value": 6493000000,
+          "unit": "USD",
+          "concept": "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations",
+          "start": "2024-12-29",
+          "end": "2025-12-27",
+          "filed": "2026-02-04",
+          "accession": "0000002488-26-000018",
+          "source_url": "https://www.sec.gov/Archives/edgar/data/2488/000000248826000018/0000002488-26-000018-index.html"
+        },
+        {
+          "value": 4269000000,
+          "unit": "USD",
+          "concept": "IncomeLossFromContinuingOperations",
+          "start": "2024-12-29",
+          "end": "2025-12-27",
+          "filed": "2026-02-04",
+          "accession": "0000002488-26-000018",
+          "source_url": "https://www.sec.gov/Archives/edgar/data/2488/000000248826000018/0000002488-26-000018-index.html"
+        }
+      ]
+    },
+    "current_ratio": {
+      "value": null,
+      "unit": "ratio",
+      "formula": "Current assets / positive current liabilities",
+      "inputs": []
+    },
+    "debt_assets": {
+      "value": null,
+      "unit": "ratio",
+      "formula": "Limited debt proxy / positive assets",
+      "inputs": []
+    },
+    "revenue_yoy": {
+      "value": 34.33779329,
+      "unit": "percent",
+      "formula": "Consecutive annual revenue / prior annual revenue - 1, \u00d7 100",
+      "inputs": [
+        {
+          "value": 34639000000,
+          "unit": "USD",
+          "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+          "start": "2024-12-29",
+          "end": "2025-12-27",
+          "filed": "2026-02-04",
+          "accession": "0000002488-26-000018",
+          "source_url": "https://www.sec.gov/Archives/edgar/data/2488/000000248826000018/0000002488-26-000018-index.html"
+        },
+        {
+          "value": 25785000000,
+          "unit": "USD",
+          "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+          "start": "2023-12-31",
+          "end": "2024-12-28",
+          "filed": "2026-02-04",
+          "accession": "0000002488-26-000018",
+          "source_url": "https://www.sec.gov/Archives/edgar/data/2488/000000248826000018/0000002488-26-000018-index.html"
+        }
+      ]
+    },
+    "prior_revenue_yoy": {
+      "value": 13.69047619,
+      "unit": "percent",
+      "formula": "Prior consecutive annual revenue growth",
+      "inputs": [
+        {
+          "value": 25785000000,
+          "unit": "USD",
+          "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+          "start": "2023-12-31",
+          "end": "2024-12-28",
+          "filed": "2026-02-04",
+          "accession": "0000002488-26-000018",
+          "source_url": "https://www.sec.gov/Archives/edgar/data/2488/000000248826000018/0000002488-26-000018-index.html"
+        },
+        {
+          "value": 22680000000,
+          "unit": "USD",
+          "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+          "start": "2023-01-01",
+          "end": "2023-12-30",
+          "filed": "2026-02-04",
+          "accession": "0000002488-26-000018",
+          "source_url": "https://www.sec.gov/Archives/edgar/data/2488/000000248826000018/0000002488-26-000018-index.html"
+        }
+      ]
+    },
+    "growth_acceleration": {
+      "value": 20.6473171,
+      "unit": "percentage_points",
+      "formula": "Revenue YoY - prior revenue YoY",
+      "inputs": [
+        {
+          "value": 34639000000,
+          "unit": "USD",
+          "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+          "start": "2024-12-29",
+          "end": "2025-12-27",
+          "filed": "2026-02-04",
+          "accession": "0000002488-26-000018",
+          "source_url": "https://www.sec.gov/Archives/edgar/data/2488/000000248826000018/0000002488-26-000018-index.html"
+        },
+        {
+          "value": 25785000000,
+          "unit": "USD",
+          "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+          "start": "2023-12-31",
+          "end": "2024-12-28",
+          "filed": "2026-02-04",
+          "accession": "0000002488-26-000018",
+          "source_url": "https://www.sec.gov/Archives/edgar/data/2488/000000248826000018/0000002488-26-000018-index.html"
+        },
+        {
+          "value": 22680000000,
+          "unit": "USD",
+          "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+          "start": "2023-01-01",
+          "end": "2023-12-30",
+          "filed": "2026-02-04",
+          "accession": "0000002488-26-000018",
+          "source_url": "https://www.sec.gov/Archives/edgar/data/2488/000000248826000018/0000002488-26-000018-index.html"
+        }
+      ]
+    },
+    "margin_change": {
+      "value": 5.96009357,
+      "unit": "percentage_points",
+      "formula": "Net margin - prior consecutive annual net margin",
+      "inputs": [
+        {
+          "value": 4269000000,
+          "unit": "USD",
+          "concept": "IncomeLossFromContinuingOperations",
+          "start": "2024-12-29",
+          "end": "2025-12-27",
+          "filed": "2026-02-04",
+          "accession": "0000002488-26-000018",
+          "source_url": "https://www.sec.gov/Archives/edgar/data/2488/000000248826000018/0000002488-26-000018-index.html"
+        },
+        {
+          "value": 34639000000,
+          "unit": "USD",
+          "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+          "start": "2024-12-29",
+          "end": "2025-12-27",
+          "filed": "2026-02-04",
+          "accession": "0000002488-26-000018",
+          "source_url": "https://www.sec.gov/Archives/edgar/data/2488/000000248826000018/0000002488-26-000018-index.html"
+        },
+        {
+          "value": 1641000000,
+          "unit": "USD",
+          "concept": "IncomeLossFromContinuingOperations",
+          "start": "2023-12-31",
+          "end": "2024-12-28",
+          "filed": "2026-02-04",
+          "accession": "0000002488-26-000018",
+          "source_url": "https://www.sec.gov/Archives/edgar/data/2488/000000248826000018/0000002488-26-000018-index.html"
+        },
+        {
+          "value": 25785000000,
+          "unit": "USD",
+          "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+          "start": "2023-12-31",
+          "end": "2024-12-28",
+          "filed": "2026-02-04",
+          "accession": "0000002488-26-000018",
+          "source_url": "https://www.sec.gov/Archives/edgar/data/2488/000000248826000018/0000002488-26-000018-index.html"
+        }
+      ]
+    }
+  },
+  "assessments": {
+    "quality": {
+      "state": "GREEN",
+      "reason": "Financial-quality proxy: earnings cash conversion, not a moat assessment.",
+      "assumptions": [
+        "Positive earnings and annual operating cash flow; no qualitative quality inference."
+      ],
+      "counterarguments": [
+        "Working-capital timing and one-time items can distort cash conversion."
+      ]
+    },
+    "profitability": {
+      "state": "GREEN",
+      "reason": "Annual net margin 12.32%.",
+      "assumptions": [
+        "Net income and revenue use the same fiscal period and USD."
+      ],
+      "counterarguments": [
+        "Unusual gains or expenses can distort reported margins."
+      ]
+    },
+    "growth": {
+      "state": "GREEN",
+      "reason": "Revenue growth 34.34%; acceleration 20.65 points.",
+      "assumptions": [
+        "Three consecutive annual periods; no quarterly or segment forecast."
+      ],
+      "counterarguments": [
+        "Acquisitions, currency and fiscal changes can explain growth."
+      ]
+    },
+    "financial_health": {
+      "state": "UNKNOWN",
+      "reason": "Required annual evidence is incomplete.",
+      "assumptions": [
+        "No missing inputs are treated as zero."
+      ],
+      "counterarguments": [
+        "Additional filings or context can change this assessment."
+      ]
+    },
+    "valuation": {
+      "state": "UNKNOWN",
+      "reason": "Verified market price, forecasts and a valuation model are not supplied.",
+      "assumptions": [
+        "No missing inputs are treated as zero."
+      ],
+      "counterarguments": [
+        "Additional filings or context can change this assessment."
+      ]
+    },
+    "entry": {
+      "state": "UNKNOWN",
+      "reason": "Options/stock liquidity, borrow and technical entry evidence are not supplied.",
+      "assumptions": [
+        "No missing inputs are treated as zero."
+      ],
+      "counterarguments": [
+        "Additional filings or context can change this assessment."
+      ]
+    }
+  },
+  "scores": {
+    "long_financial": null,
+    "short_deterioration": null,
+    "long_coverage": 0.75,
+    "short_coverage": 0.8,
+    "policy_version": "thesis-annual-financial-v2"
+  },
+  "quality": {
+    "freshness": "ANNUAL_ONLY",
+    "confidence": "LOW",
+    "warnings": [
+      "Policy v2: continuing-operations FCF, margins and cash conversion require matched source scope, period, unit and accession. Total amounts are not substitutes.",
+      "Annual statements only; interim results, valuation, management quality and execution are not assessed.",
+      "Financial screen scores are unvalidated research heuristics, not expected returns or bankruptcy probabilities."
+    ]
+  },
+  "readiness": "NOT_EVALUATED"
+}

@@ -1,3 +1,4 @@
+import {FINANCIAL_POLICY,assertFinancialPolicy} from './financialScopePolicy.js'
 const FACTS=['revenue','net_income','cfo','capex','cash','assets','liabilities','equity','current_assets','current_liabilities','debt_current','debt_noncurrent','eps']
 const METRICS=[...FACTS,'fcf','debt','net_margin','cash_conversion','current_ratio','debt_assets','revenue_yoy','prior_revenue_yoy','growth_acceleration','margin_change']
 const DIMENSIONS=['quality','profitability','growth','financial_health','valuation','entry']
@@ -29,9 +30,10 @@ export function assertThesisReport(report,{symbol,asOf,profile,fixture}={}) {
   object(report.scores,['long_financial','short_deterioration','long_coverage','short_coverage','policy_version'])
   for(const key of ['long_coverage','short_coverage'])if(!finite(report.scores[key])||report.scores[key]<0||report.scores[key]>1)fail()
   for(const [key,coverage] of [['long_financial','long_coverage'],['short_deterioration','short_coverage']])if(report.scores[key]!==null && (!finite(report.scores[key])||report.scores[key]<0||report.scores[key]>100||report.scores[coverage]!==1))fail()
-  if(report.scores.policy_version!=='thesis-annual-financial-v1')fail()
+  if(!['thesis-annual-financial-v1',FINANCIAL_POLICY].includes(report.scores.policy_version))fail()
   object(report.quality,['freshness','confidence','warnings'])
   if(!['ANNUAL_ONLY','STALE','INSUFFICIENT'].includes(report.quality.freshness)||!['LOW','MEDIUM'].includes(report.quality.confidence)||!strings(report.quality.warnings))fail()
   if(report.quality.freshness!=='ANNUAL_ONLY' && (report.scores.long_financial!==null||report.scores.short_deterioration!==null))fail()
+  if(report.scores.policy_version===FINANCIAL_POLICY)assertFinancialPolicy(report)
   return report
 }

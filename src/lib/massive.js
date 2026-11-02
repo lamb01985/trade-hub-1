@@ -115,20 +115,25 @@ async function waitForNextSlot() {
 
 async function fetchWithTimeout(url, options) {
   const controller = new AbortController()
+  const cancel = () => controller.abort()
+  options.signal?.addEventListener('abort', cancel, {once:true})
+  if(options.signal?.aborted)controller.abort()
   const timer = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS)
   try {
     return await fetch(url, { ...options, signal: controller.signal })
   } catch (err) {
+    if(options.signal?.aborted){const cancelled=new Error('Options request cancelled');cancelled.cancelled=true;throw cancelled}
     if (err?.name === 'AbortError') throw new Error(`request timed out after ${CLIENT_TIMEOUT_MS / 1000}s`)
     throw err
   } finally {
     clearTimeout(timer)
+    options.signal?.removeEventListener('abort',cancel)
   }
 }
 
 async function throttledFetch(url, rawOptions = {}, generation = sessionGeneration) {
   assertSession(generation)
-  const { priority = false, noRateRetry = false, ...options } = rawOptions
+  const { priority = false, noRateRetry=false, attempts = MAX_RETRIES, ...options } = rawOptions
   // Short-circuit: this endpoint pattern has already 403'd on this session,
   // so don't waste a request slot. We synthesize a Response-shape object the
   // callers can branch on, identical to what fetch would have produced.
@@ -144,7 +149,7 @@ async function throttledFetch(url, rawOptions = {}, generation = sessionGenerati
     }
   }
 
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+  for (let attempt = 0; attempt < attempts; attempt++) {
     if (!priority) await waitForNextSlot()
     assertSession(generation)
     try {
@@ -166,8 +171,8 @@ async function throttledFetch(url, rawOptions = {}, generation = sessionGenerati
       }
       if (r.status === 429) {
         recordRateLimit({ url: shortUrl(url), attempt })
-        if (noRateRetry) return r
-        if (attempt < MAX_RETRIES - 1) {
+        if(noRateRetry)return r
+        if (attempt < attempts - 1) {
           const waitMs = (attempt + 1) * 2000
           // eslint-disable-next-line no-console
           console.warn(`[Polygon] rate-limited, retrying in ${waitMs}ms`)
@@ -176,16 +181,16 @@ async function throttledFetch(url, rawOptions = {}, generation = sessionGenerati
         }
         return r
       }
-      if (!r.ok && r.status >= 500 && attempt < MAX_RETRIES - 1) {
+      if (!r.ok && r.status >= 500 && attempt < attempts - 1) {
         recordFailure({ url: shortUrl(url), status: r.status, attempt })
         await new Promise(res => setTimeout(res, 1000 * (attempt + 1)))
         continue
       }
       return r
     } catch (err) {
-      if (err.authRequired || err.sessionChanged) throw err
+      if (err.authRequired || err.sessionChanged || err.cancelled) throw err
       assertSession(generation)
-      if (attempt === MAX_RETRIES - 1) {
+      if (attempt === attempts - 1) {
         recordFailure({ url: shortUrl(url), message: err?.message || 'fetch failed' })
         throw err
       }
@@ -275,11 +280,7 @@ async function get(path, params = {}, options = {}) {
     }
     const err = new Error(`Polygon API ${res.status}: ${text.slice(0, 120)}`)
     err.status = res.status
-    if (res.status === 429) {
-      const hint = res.headers?.get?.('Retry-After')
-      const seconds = /^\d+$/.test(hint || '') ? Number(hint) : null
-      err.retryAfter = Number.isInteger(seconds) && seconds >= 1 && seconds <= 86400 ? seconds : 60
-    }
+    if(res.status===429){const hint=res.headers?.get?.('Retry-After');const seconds=/^\d+$/.test(hint||'')?Number(hint):Math.ceil((Date.parse(hint)-Date.now())/1000);err.retryAfter=Number.isInteger(seconds)&&seconds>=1&&seconds<=86400?seconds:60}
     err.unavailable = res.status === 403
     throw err
   }
@@ -743,4 +744,51 @@ if (typeof window !== 'undefined') {
   window.addEventListener('tradehub-operator-logout', invalidateOperatorSession)
   window.addEventListener('tradehub-operator-expired', invalidateOperatorSession)
   window.addEventListener('tradehub-market-session-reset', invalidateOperatorSession)
+}
+
+// Explicit, user-initiated research acquisition. Each page uses canonical auth,
+// throttling and the existing server account budget. No independent polling.
+export async function getOptionsResearch(ticker, {expiry='', maxPages=3, signal}={}) {
+  const symbol=String(ticker||'').trim().toUpperCase()
+  if (!/^[A-Z][A-Z0-9.-]{0,9}$/.test(symbol) || !Number.isInteger(maxPages) || maxPages<1 || maxPages>4) throw Error('Invalid options request bounds')
+  if (expiry && (!/^\d{4}-\d{2}-\d{2}$/.test(expiry) || new Date(expiry).toISOString().slice(0,10)!==expiry || expiry<marketDate())) throw Error('Select a valid unexpired expiration')
+  signal=signal?AbortSignal.any([signal,AbortSignal.timeout(25000)]):AbortSignal.timeout(25000)
+  const {optionCursor}=await import('./optionPagination.js')
+  const contracts=[], seen=new Set(), cursors=new Set(), requests=[]
+  let cursor=null, hasMore=true, error=null, pages=0, retryAfter=null
+  const deadline=Date.now()+25000
+  for (;pages<maxPages && hasMore;pages++) {
+    try {
+      if(Date.now()>=deadline)throw Error('Options acquisition deadline reached')
+      if (signal?.aborted) throw Error('Options request cancelled')
+      const data=await get(`/v3/snapshot/options/${symbol}`, cursor?{cursor,research:'v1'}:{research:'v1',...(expiry?{expiration_date:expiry}:{'expiration_date.gte':marketDate()}),sort:'expiration_date',order:'asc',limit:250},{priority:true,signal,attempts:1})
+      if (!['OK','DELAYED'].includes(data.status) || !Array.isArray(data.results) || data.results.length>250) throw Error('Invalid or denied options response')
+      const batch=data.results.map(raw=>normalizeOption(validateOptionIdentity(raw,symbol,{expiry:expiry||undefined,minExpiry:marketDate()}),symbol))
+      for (const c of batch) {if (seen.has(c.symbol)) throw Error('Duplicate contract across options pages');seen.add(c.symbol)}
+      contracts.push(...batch);requests.push({requestId:data.request_id||null,status:data.status,receivedAt:new Date().toISOString()})
+      hasMore=Boolean(data.next_url);cursor=optionCursor(data.next_url,symbol)
+      if (cursor && cursors.has(cursor)) throw Error('Repeated options pagination cursor')
+      if (cursor)cursors.add(cursor)
+    } catch(e) {if(e.authRequired||e.sessionChanged||e.cancelled||signal?.aborted||!contracts.length)throw e;retryAfter=e.retryAfter??null;error=e.status===429?'Provider/request budget rate limit':e.status===403?'Provider entitlement denied':e.message;hasMore=true;break}
+  }
+  return {symbol,expiry,contracts,pages:requests.length,retryAfter,hasMore,complete:!hasMore,error,requests,fetchedAt:new Date().toISOString(),provider:'Massive',coverageScope:expiry?'SELECTED_EXPIRATION':'UNEXPIRED_CHAIN_WINDOW',entitlement:'SNAPSHOT_RESPONSE_OBSERVED_NOT_ACCOUNT_PLAN_CERTIFICATION'}
+}
+
+
+// Optional, manually requested single-contract evidence. At most three calls;
+// all use the same account admission, no retries and fixed provider paths.
+export async function getOptionEvidence(contract,{date,signal}={}) {
+  validateOptionIdentity({details:{ticker:contract.symbol,strike_price:contract.strike,expiration_date:contract.expiry,contract_type:contract.type}},contract.underlying)
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||new Date(date).toISOString().slice(0,10)!==date||date>marketDate())throw Error('Invalid evidence date')
+  const start=new Date(Date.parse(date+'T12:00:00Z')-40*86400000).toISOString().slice(0,10),end=new Date(Date.parse(date+'T12:00:00Z')-86400000).toISOString().slice(0,10)
+  const resources=[['trades',`/v3/trades/${contract.symbol}`,{timestamp:date,limit:1000,sort:'timestamp',order:'asc'}],['quotes',`/v3/quotes/${contract.symbol}`,{timestamp:date,limit:1000,sort:'timestamp',order:'asc'}],['daily',`/v2/aggs/ticker/${contract.symbol}/range/1/day/${start}/${end}`,{adjusted:'true',sort:'asc',limit:1000}]]
+  signal=signal?AbortSignal.any([signal,AbortSignal.timeout(25000)]):AbortSignal.timeout(25000)
+  const result={};const deadline=Date.now()+25000
+  for(const [kind,path,params]of resources){
+    if(signal?.aborted)throw Error('Evidence cancelled')
+    if(Date.now()>=deadline){result[kind]={error:'DEADLINE'};break}
+    try{const d=await get(path,{...params,research:'v1'},{priority:true,signal,attempts:1});if(!['OK','DELAYED'].includes(d.status)||d.ticker&&d.ticker!==contract.symbol||!Array.isArray(d.results)||d.results.length>1000)throw Error('Invalid evidence response');result[kind]={kind,contract:contract.symbol,provider:'Massive',source:'https://api.massive.com'+path+'?'+new URLSearchParams(params),requestedDate:date,range:kind==='daily'?{start,end}:null,fetchedAt:new Date().toISOString(),requestId:d.request_id||null,results:d.results,complete:!d.next_url}}
+    catch(e){if(e.authRequired||e.sessionChanged||e.cancelled)throw e;result[kind]={error:e.status===403?'NOT_ENTITLED':e.status===429?'RATE_LIMITED':e.status===503?'BUDGET_OR_SERVICE_UNAVAILABLE':'UNAVAILABLE',retryAfter:e.retryAfter??null};if(e.status===429||e.status===503)break}
+  }
+  return result
 }

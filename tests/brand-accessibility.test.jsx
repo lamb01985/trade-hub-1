@@ -23,5 +23,5 @@ it('keeps dark text readable on filled accent buttons and installs the same CSS 
 })
 it('labels the brand and financial states without relying on color', () => {
   render(<><Brand />{['GREEN', 'YELLOW', 'RED', 'UNKNOWN'].map(state => <FinancialStatus key={state} state={state} />)}</>)
-  for (const label of ['EdgeIQ', 'Find your edge.', 'Positive', 'Caution', 'Negative', 'Insufficient data']) expect(screen.getByText(label)).toBeTruthy()
+  for (const label of ['TradeHub', 'Plan → Trade → Review', 'Positive', 'Caution', 'Negative', 'Insufficient data']) expect(screen.getByText(label)).toBeTruthy()
 })

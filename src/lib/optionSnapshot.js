@@ -23,7 +23,8 @@ export function normalizeOption(raw, underlying) {
   return {
     symbol: d.ticker || '', underlying, type: d.contract_type || '',
     strike: num(d.strike_price), expiry: d.expiration_date || '',
-    sharesPerContract: num(d.shares_per_contract),
+    sharesPerContract: num(d.shares_per_contract), exerciseStyle: d.exercise_style || 'UNSPECIFIED',
+    quoteSource: 'Massive last_quote', dayTime: providerTime(raw.day?.last_updated), underlyingTimeframe: raw.underlying_asset?.timeframe || 'UNSPECIFIED',
     bid, ask, spread, spreadPct: spread != null ? spread / ((ask + bid) / 2) * 100 : null,
     quoteTime: providerTime(q.last_updated), quoteTimeframe: q.timeframe || 'UNSPECIFIED',
     last: num(t.price), tradeTime: providerTime(t.sip_timestamp || t.last_updated), tradeTimeframe: t.timeframe || 'UNSPECIFIED',
