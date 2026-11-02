@@ -11,3 +11,10 @@ scripts/release
 data
 *.pem
 *.crt
+# Inactive services are deliberately absent from this read-only candidate.
+api/schwab
+api/ai
+api/notify-email.js
+api/notify-telegram.js
+api/calendar-earnings.js
+api/polygon/ws-auth.js

@@ -47,6 +47,7 @@ Actual provider-backed browser acceptance: 2026-11-02T01:25:59Z (November 1 Cent
 | QQQ | 2026-10-30 | 698.63 | 683.45 | 690.49 |
 | SPY | 2026-10-30 | 761.46 | 750.36 | 755.72 |
 | NVDA | 2026-10-30 | 209.06 | 200.9199 | 204.64 |
+| AMD | 2026-10-30 | 520.3956 | 492.21 | 504.8 |
 
 Completed minute arrays were compared to provider responses; dated historical VWAP/EMAs use those bars. Current Monday bar arrays were empty and indicators unavailable on Sunday. Simulated Monday premarket high changed on the one-minute context poll; provider error cleared the map. Simulations are not claims of observed Monday trading.
 
@@ -72,3 +73,11 @@ Open http://127.0.0.1:4214/ . Launcher reads only existing approved market confi
 4. Complete hosted authenticated workflows and validate market open/premarket transition with real contemporaneous provider timestamps. Sunday historical acceptance does not verify Monday live entitlements/delay.
 5. Restore and validate held original tools before calling consolidation complete.
 6. After all gates pass, review the exact candidate diff and hosted results. Owner must explicitly approve production promotion; release owner then promotes the approved immutable deployment in the existing Vercel project, verifies the production alias/commit, and retains the prior deployment as rollback. No promotion has been authorized or performed.
+
+## Final provider smoke and deployment packaging
+
+At 2026-11-02T01:29:16Z, all ten normalized stock/ETF records matched an independent Massive snapshot response, including trade/quote identity and timestamps. Their source trades were Friday October 30 at approximately 23:58–00:00 UTC; these are stale/closed observations on Sunday, not live Sunday prices. Equity delay remains UNVERIFIED because snapshots do not establish the subscribed delay. AMD prior-session OHLCV matched the provider; Monday current bars remained empty. A bounded five-contract QQQ snapshot succeeded; quote timeframe REAL-TIME in the source does not make Friday quotes current on Sunday. VIX returned NOT_ENTITLED; ES/NQ remain CONTRACT_AND_ENTITLEMENT_UNVERIFIED. No entitlement upgrade or broader options history entitlement is inferred.
+
+The first protected-preview attempt built successfully but Vercel rejected its output for exceeding the existing Hobby 12-function cap. No plan was changed. The candidate packaging now excludes inactive broker, AI, notification, calendar, and retired websocket functions rather than activating those services. Active authenticated desk, proxy, intelligence, market and thesis routes remain. package.json explicitly declares ESM so server modules preserve import.meta and their traced admission Lua resource.
+
+Independent source review found no unsafe fallback, current-session relabeling, or budget bypass. Unavailable-tab, financial-policy and thesis-status-authentication findings were remediated and reviewed again. This does not certify Monday's live feed or unresolved financial acceptance.
