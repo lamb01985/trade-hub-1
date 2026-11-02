@@ -81,3 +81,13 @@ At 2026-11-02T01:29:16Z, all ten normalized stock/ETF records matched an indepen
 The first protected-preview attempt built successfully but Vercel rejected its output for exceeding the existing Hobby 12-function cap. No plan was changed. The candidate packaging now excludes inactive broker, AI, notification, calendar, and retired websocket functions rather than activating those services. Active authenticated desk, proxy, intelligence, market and thesis routes remain. package.json explicitly declares ESM so server modules preserve import.meta and their traced admission Lua resource.
 
 Independent source review found no unsafe fallback, current-session relabeling, or budget bypass. Unavailable-tab, financial-policy and thesis-status-authentication findings were remediated and reviewed again. This does not certify Monday's live feed or unresolved financial acceptance.
+
+## Protected preview result
+
+Application commit **57863ff31f0bcaeb1c6e466ab6d12035219c20e3** is READY at:
+
+https://trade-hub-1-27dofny6y-sarah-lambertsons-projects.vercel.app
+
+Deployment dpl_FXsp68ojrSLtWiW8ZW66tXfFDkco belongs to the existing canonical project, targets preview (no production target or alias), and reports branch integration/tradehub-canonical-release and the exact commit above. Unauthenticated HEAD at 2026-11-02T01:32:32Z returned HTTP 302 to Vercel SSO, no-store, HSTS and X-Frame-Options DENY. This verifies perimeter protection, not application authentication. No bypass secret or new credential was created. Hosted sign-in, market routes and Company research acceptance remain BLOCKED by the configuration gates above; they are not marked preview-verified. Existing production alias still resolves to dpl_6QRHhw9REyUJGQwx9LdaXqo5R15N. No merge or production promotion occurred.
+
+The code branch was pushed to the canonical GitHub remote. Later documentation-only commits do not change the immutable preview application commit. Recommendation: GO for local historical Monday preparation with the verified Level Map; NO-GO for production promotion or treating the incomplete consolidated workstation as fully accepted.
