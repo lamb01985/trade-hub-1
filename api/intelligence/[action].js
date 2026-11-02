@@ -1,5 +1,4 @@
 import { AccessError, privateResponse, sendFailure, requireOperator, login, logout, jsonBody, reserve } from '../_lib/access.js'
-import { loadSample } from '../_lib/reports.js'
 
 export default async function handler(req, res) {
   privateResponse(res)
@@ -21,6 +20,7 @@ export default async function handler(req, res) {
     if (req.method !== 'GET') throw new AccessError(405, 'method_not_allowed')
     const operator = await requireOperator(req)
     if (!await reserve(`th:report:reads:${operator}:${Math.floor(Date.now() / 60000)}`, 1, 30, 120)) throw new AccessError(429, 'report_rate_limited')
+    const { loadSample } = await import('../_lib/reports.js')
     return res.status(200).json(await loadSample())
   } catch (error) { sendFailure(res, error) }
 }
