@@ -109,11 +109,14 @@ export async function requestNotificationPermission() {
 }
 
 // Level monitoring — call on every price update
-let prevPrice = null
+const previousByTicker = new Map()
+export function resetLevelAlerts(ticker='QQQ') { previousByTicker.delete(ticker) }
 
 export function checkLevelAlerts(price, levels, settings = {}) {
   if (!price || !levels?.length || !settings.alertsEnabled) return []
   const fired = []
+  const ticker = settings.ticker || 'QQQ'
+  const prevPrice = previousByTicker.get(ticker)
 
   for (const level of levels) {
     const dist = Math.abs(price - level.price)
@@ -121,8 +124,8 @@ export function checkLevelAlerts(price, levels, settings = {}) {
     // Approaching alert (within $0.25)
     if (dist < 0.25 && dist > 0.02) {
       const side = price > level.price ? 'approaching from above' : 'approaching from below'
-      const id = `approach-${level.label}-${Math.round(level.price * 100)}`
-      const didFire = fireAlert(id, `QQQ Near ${level.label}`, `$${price.toFixed(2)} — ${side} $${level.price.toFixed(2)}`, Sounds.levelTouch, 60000)
+      const id = `approach-${ticker}-${level.label}-${Math.round(level.price * 100)}`
+      const didFire = fireAlert(id, `${ticker} Near ${level.label}`, `$${price.toFixed(2)} — ${side} $${level.price.toFixed(2)}`, Sounds.levelTouch, 60000)
       if (didFire) fired.push({ type: 'approach', level, price })
     }
 
@@ -131,21 +134,21 @@ export function checkLevelAlerts(price, levels, settings = {}) {
       const crossed = (prevPrice < level.price && price >= level.price) || (prevPrice > level.price && price <= level.price)
       if (crossed) {
         const dir = price >= level.price ? '▲ BROKE ABOVE' : '▼ BROKE BELOW'
-        const id = `break-${level.label}-${Math.round(level.price * 100)}-${Math.round(price * 10)}`
-        const didFire = fireAlert(id, `${dir} ${level.label}`, `QQQ $${price.toFixed(2)} crossed ${level.label} at $${level.price.toFixed(2)}`, Sounds.levelBreak, 5000)
+        const id = `break-${ticker}-${level.label}-${Math.round(level.price * 100)}-${Math.round(price * 10)}`
+        const didFire = fireAlert(id, `${dir} ${level.label}`, `${ticker} $${price.toFixed(2)} crossed ${level.label} at $${level.price.toFixed(2)}`, Sounds.levelBreak, 5000)
         if (didFire) fired.push({ type: 'break', direction: dir, level, price })
       }
     }
 
     // Confluence alert
     if (dist < 0.30 && level.confluence >= 2) {
-      const id = `confluence-${level.label}`
+      const id = `confluence-${ticker}-${level.label}`
       const didFire = fireAlert(id, `Confluence Zone: ${level.label}`, `${level.confluence + 1} levels stacked near $${level.price.toFixed(2)}`, Sounds.confluence, 120000)
       if (didFire) fired.push({ type: 'confluence', level, price })
     }
   }
 
-  prevPrice = price
+  previousByTicker.set(ticker,price)
   return fired
 }
 

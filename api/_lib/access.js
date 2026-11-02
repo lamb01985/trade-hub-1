@@ -6,7 +6,7 @@ const scrypt = promisify(crypto.scrypt)
 const SESSION_SECONDS = 8 * 60 * 60
 const LOGIN_WINDOW_SECONDS = 15 * 60
 const MAX_LOGIN_ATTEMPTS = 10
-const cookieName = () => localMode() && process.env.TRADEHUB_LOCAL_DESK === 'true' ? 'th_desk_operator' : 'th_operator'
+const cookieName = () => localMode() && process.env.TRADEHUB_LEVEL_REPAIR === 'true' ? 'th_level_repair_operator' : localMode() && process.env.TRADEHUB_LOCAL_DESK === 'true' ? 'th_desk_operator' : 'th_operator'
 let redis
 const memory = new Map()
 export function localMode() {

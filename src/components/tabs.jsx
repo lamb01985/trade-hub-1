@@ -1,3 +1,4 @@
+import { chicagoDate } from '../lib/marketEvidence.js'
 import { THEME } from '../lib/theme.js'
 // ── ORB Tab ───────────────────────────────────────────────────────────────────
 import { useState, useEffect, useRef, useMemo } from 'react'
@@ -1755,6 +1756,17 @@ export function PrepTab({ prep, onPrepChange, onSendToORB, settings, liveData, a
   }
 
   async function runLoadMarketData() {
+    if (liveData?.verified) {
+      const want=(prep.ticker||'').toUpperCase()
+      if(liveData.dataTicker!==want || !liveData.prevDay) { setLoadError('Verified source levels unavailable for this ticker. No saved or archived value was substituted.');return }
+      const pd=liveData.prevDay
+      const first=liveData.intradayBars?.find(b=>b.session==='REGULAR')
+      const next={orbHigh:f2(pd.high),orbLow:f2(pd.low),sessionClose:f2(pd.close),sessionOpen:first?.o!=null?f2(first.o):'',keyLevel:liveData.pivots?.PP!=null?f2(liveData.pivots.PP):'',plannedStrike:prep.plannedContract?.underlying===want?prep.plannedStrike:''}
+      onPrepChange({...latestPrepRef.current,...next,marketSourceDate:pd.date,planningDate:liveData.planning?.date})
+      setMissingFields({sessionOpen:!next.sessionOpen,plannedStrike:!next.plannedStrike})
+      setDataLoaded(true);setLoadError('');return
+    }
+
     // eslint-disable-next-line no-console
     console.log('[Load Market Data] clicked')
     let price = null
@@ -2267,14 +2279,15 @@ STRUCTURED (parsing block, do not modify the format): output exactly one JSON ob
             </Btn>
           )}
           <Btn small variant={hasClaudeKey ? 'lime' : 'ghost'} onClick={generateBrief} disabled={!hasClaudeKey || aiLoading}>
-            {aiLoading ? '✦ Writing...' : hasClaudeKey ? '✦ Generate AI Brief' : 'Verify AI → Command'}
+            {liveData?.verified?'AI inactive in this local repair':aiLoading ? '✦ Writing...' : hasClaudeKey ? '✦ Generate AI Brief' : 'Verify AI → Command'}
           </Btn>
           <div style={{ fontSize: 12, color: LIME, fontFamily: MONO, fontWeight: 700 }}>
-            {new Date(todayStr() + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+            {new Date((liveData?.verified?(liveData.planning?.date||chicagoDate(liveData.now)):todayStr()) + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone:'America/Chicago',weekday: 'long', month: 'long', day: 'numeric' })}
           </div>
         </div>
       </div>
 
+      {liveData?.verified && <p role="status">Current Chicago date {chicagoDate(liveData.now)} · Planning {liveData.planning?.date||'date unavailable'} · previous regular session {liveData.prevDay?.date||'unavailable'} · Massive. Load Market Data copies a manual plan snapshot; it never replaces the verified current map. Saved plans remain manual/history.</p>}
       {priceWarning && (
         <div style={{ background: THEME.colors.surface, border: `1px solid ${YELLOW}`, borderRadius: 4, padding: '10px 16px', fontSize: 11, fontFamily: MONO, color: YELLOW, fontWeight: 700 }}>⚠ {priceWarning}</div>
       )}
@@ -2287,7 +2300,7 @@ STRUCTURED (parsing block, do not modify the format): output exactly one JSON ob
         <div style={{ background: THEME.colors.negativeSurface, border: `1px solid ${RED}`, borderRadius: 4, padding: '10px 16px', fontSize: 11, fontFamily: MONO, color: RED, fontWeight: 700 }}>⚠ {loadError}</div>
       )}
 
-      {!hasClaudeKey && (
+      {!hasClaudeKey && !liveData?.verified && (
         <div style={{ background: THEME.colors.positiveSurface, border: `1px solid ${LIME}22`, borderRadius: 5, padding: '12px 16px', display: 'flex', gap: 10, alignItems: 'center' }}>
           <span style={{ fontSize: 11, fontFamily: MONO, color: THEME.colors.positive }}>
             ✦ Verify authenticated server AI in the <strong style={{ color: LIME }}>Command</strong> tab to enable AI game plan generation — gets your thesis, key levels, entry conditions, and ideal setup in one click.
@@ -2543,7 +2556,7 @@ STRUCTURED (parsing block, do not modify the format): output exactly one JSON ob
               At {prep.orPeriod === '5' ? '8:35' : prep.orPeriod === '30' ? '9:00' : '8:45'} CT, load into ORB tab and verify in IV tab.
             </div>
           </div>
-          <Btn onClick={() => onSendToORB({ ticker: prep.ticker, orbHigh: prep.orbHigh, orbLow: prep.orbLow, orPeriod: prep.orPeriod })}>Load into ORB →</Btn>
+          <Btn onClick={() => onSendToORB({ ticker: prep.ticker, orbHigh: prep.orbHigh, orbLow: prep.orbLow, orPeriod: prep.orPeriod })}>{liveData?.verified?'Open verified live map →':'Load into ORB →'}</Btn>
         </div>
       )}
 

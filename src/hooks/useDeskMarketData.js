@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { eastern } from '../lib/marketEvidence.js'
+import { eastern, planningSessionDate } from '../lib/marketEvidence.js'
 
 async function request(params, signal) {
   const response = await fetch(`/api/desk?${new URLSearchParams(params)}`, {cache:'no-store',signal})
@@ -34,7 +34,7 @@ function usePolling(params, interval, refresh) {
       }
       try {
         const data = await request(JSON.parse(key), deadline.signal)
-        const parts = [data.stocks,data.vix,data.bars,data.previous].filter(Boolean)
+        const parts = [data.stocks,data.vix,data.bars,data.previous,data.completed].filter(Boolean)
         if (parts.some(part=>part.error==='RATE_LIMITED')) delay = Math.max(delay,60000)
         backoff(parts.map(part=>part.retryAfter))
         if (active) setState({key,data:paused?null:data,error:paused?'Automatic refresh paused: invalid provider retry time. Check Data Health before retrying manually.':null,loading:false,retryAt:!paused && parts.some(part=>part.error==='RATE_LIMITED'||part.retryAfter!==undefined)?Date.now()+delay:null})
@@ -58,6 +58,6 @@ export function useDeskMarketData(symbol, period, refresh = 0) {
   useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(timer)},[])
   const feed = usePolling({action:'watchlist'},30000,refresh)
   // Date is part of identity: bars cannot persist across the Eastern midnight rollover.
-  const context = usePolling({action:'context',symbol,period,date:eastern(now).date},60000,refresh)
+  const context = usePolling({action:'context',symbol,period,date:period==='plan'?planningSessionDate(now):eastern(now).date},60000,refresh)
   return {feed,context,now}
 }

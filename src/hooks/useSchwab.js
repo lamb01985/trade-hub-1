@@ -39,7 +39,7 @@ async function getJson(url, opts = {}) {
   return data
 }
 
-export function useSchwab() {
+export function useSchwab({enabled=true}={}) {
   const [account, setAccount] = useState(null)   // { accountNumber, buyingPower, ... , positions }
   const [loading, setLoading] = useState(false)
   const [lastError, setLastError] = useState(null)
@@ -51,6 +51,7 @@ export function useSchwab() {
   // Pulls /api/schwab/account. Treats NOT_CONNECTED / REFRESH_EXPIRED as
   // "not connected" without surfacing as an error.
   const refreshAccount = useCallback(async () => {
+    if (!enabled) return null
     setLoading(true)
     try {
       const data = await getJson('/api/schwab/account')
@@ -72,12 +73,13 @@ export function useSchwab() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [enabled])
 
   // On mount: probe account state once. Re-poll every 60s if connected.
   // Also handle the `?schwab_connected=1` query that the callback redirect
   // appends to mark a fresh successful connection.
   useEffect(() => {
+    if (!enabled) return
     let alive = true
     let pollId = null
 
@@ -105,7 +107,7 @@ export function useSchwab() {
     }
     init()
     return () => { alive = false; if (pollId) clearInterval(pollId) }
-  }, [refreshAccount])
+  }, [refreshAccount,enabled])
 
   // Cached fetch: returns cached value if newer than CACHE_TTL_MS, else
   // hits the network and updates the cache.

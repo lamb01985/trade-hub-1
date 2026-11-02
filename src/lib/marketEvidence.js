@@ -122,3 +122,46 @@ export function evidenceLabel(observation, now = Date.now()) {
   const status = evidenceStatus(observation.timestamp,{now,kind:observation.kind,timeframe:observation.timeframe})
   return ({MARKET_CLOSED:'Market closed · recorded',PREVIOUS_SESSION:'Previous session',STALE:'Stale',DELAYED:'Delayed',RECENT:'Recent',RECENT_DELAY_UNVERIFIED:'Recent · delay unverified',TIME_UNVERIFIED:'Timestamp unverified',CALENDAR_UNVERIFIED:'Calendar unverified',OPTIONS_SESSION_UNVERIFIED_OR_CLOSED:'Options closed / session unverified'})[status] || status
 }
+
+export function chicagoDate(now = Date.now()) {
+  return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(now))
+}
+export function planningSessionDate(now = Date.now()) {
+  const p=eastern(now)
+  const close=['2026-11-27','2026-12-24'].includes(p.date)?780:960
+  let date=p.date
+  if (sessionAt(now)==='CALENDAR_UNVERIFIED') return null
+  if (!['Sat','Sun'].includes(p.weekday)&&!MARKET_HOLIDAYS_2026[date]&&p.minute<close+15) return date
+  do {date=new Date(Date.parse(`${date}T12:00:00Z`)+86400000).toISOString().slice(0,10)}
+  while(['Sat','Sun'].includes(eastern(Date.parse(`${date}T12:00:00Z`)).weekday)||MARKET_HOLIDAYS_2026[date])
+  return date.startsWith('2026-')?date:null
+}
+
+// Current planning map always owns the prior bar for its target session.
+// Completed-session indicators/extended references keep their own explicit date.
+export function planningStructure(context) {
+  const base=deskStructure(context)
+  const ind=context?.indicators, past=context?.completedIndicators, date=context?.priorDate
+  const extras=[]
+  function add(price,label,sourceDate,kind) {
+    if(Number.isFinite(price)&&price>0)extras.push({price,label,type:kind,sourceDate,kind})
+  }
+  for(const period of [9,20,50])add(ind?.[`ema${period}`],`EMA${period}`,context?.date,'current-indicator')
+  const ah=past?.sessions?.AFTER_HOURS
+  add(ah?.high,`Prior after-hours high (${date})`,date,'extended-reference')
+  add(ah?.low,`Prior after-hours low (${date})`,date,'extended-reference')
+  add(ah?.last,`Prior after-hours last (${date})`,date,'extended-reference')
+  add(past?.vwap,`Prior RTH VWAP (${date})`,date,'historical-indicator')
+  for(const period of [9,20,50])add(past?.[`ema${period}`],`Prior EMA${period} (${date})`,date,'historical-indicator')
+  const levels=[...base.levelMap.levels.map(l=>({...l,sourceDate:['structure','pivot','pivot-r','pivot-s'].includes(l.type)?date:context?.date})),...extras].sort((a,b)=>b.price-a.price)
+  const scenarios=base.scenarios.map(s=>({...s,target:s.boundary==null?null:levels.filter(l=>s.side==='Bullish'?l.price>s.boundary:l.price<s.boundary).sort((a,b)=>s.side==='Bullish'?a.price-b.price:b.price-a.price)[0]??null}))
+  // Only clusters of actual observed/calculated references, with no invented band padding.
+  const tolerance=base.previous?.close>0?base.previous.close*0.0005:null
+  const clusters=[]
+  for(const level of [...levels].sort((a,b)=>a.price-b.price)) {
+    const group=clusters.at(-1)
+    if(group&&tolerance!=null&&level.price-group.low<=tolerance){group.high=level.price;group.labels.push(level.label)}
+    else clusters.push({low:level.price,high:level.price,labels:[level.label]})
+  }
+  return {...base,scenarios,levelMap:{...base.levelMap,levels},zones:clusters.filter(g=>g.labels.length>1),zoneTolerance:tolerance}
+}

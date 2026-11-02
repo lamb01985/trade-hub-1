@@ -46,3 +46,21 @@ it('requests Monday bars and rejects Friday data rather than silently relabeling
     expect(r.body.bars).toEqual({data:null,error:'INVALID_BAR'});expect(r.body.indicators).toBeNull()
   } finally {vi.useRealTimers()}
 })
+it('Monday preparation asks for Friday references and keeps current Monday bars distinct',async()=>{
+ vi.useFakeTimers();vi.setSystemTime(new Date('2026-11-02T01:30:00Z'))
+ const fetcher=vi.fn(async url=>{
+  const path=new URL(url).pathname
+  return new Response(JSON.stringify(path.includes('/day/')?{ticker:'QQQ',results:[{t:Date.parse('2026-10-30T04:00:00Z'),o:697.21,h:698.63,l:683.45,c:690.49,v:10}]}:{ticker:'QQQ',resultsCount:0}),{status:200})
+ })
+ vi.stubGlobal('fetch',fetcher)
+ try{
+  const r=res();await desk(await req({action:'context',symbol:'QQQ',period:'plan'}),r)
+  expect(r.body.date).toBe('2026-11-02');expect(r.body.priorDate).toBe('2026-10-30')
+  expect(r.body.previous.data[0].c).toBe(690.49);expect(r.body.bars.data).toEqual([]);expect(r.body.indicators.vwap).toBeNull()
+  expect(fetcher.mock.calls.map(call=>new URL(call[0]).pathname)).toEqual([
+   '/v2/aggs/ticker/QQQ/range/1/minute/2026-11-02/2026-11-02',
+   '/v2/aggs/ticker/QQQ/range/1/day/2026-10-30/2026-10-30',
+   '/v2/aggs/ticker/QQQ/range/1/minute/2026-10-30/2026-10-30',
+  ])
+ }finally{vi.useRealTimers()}
+})

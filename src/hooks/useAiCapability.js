@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-export function useAiCapability() {
+export function useAiCapability({enabled=true}={}) {
   const [status, setStatus] = useState({ available: false, message: 'Sign in to verify server AI configuration.' })
   useEffect(() => {
+    if (!enabled) return
     let alive = true
     async function refresh() {
       try {
@@ -13,6 +14,6 @@ export function useAiCapability() {
     refresh()
     window.addEventListener('tradehub-operator-session', refresh)
     return () => { alive = false; window.removeEventListener('tradehub-operator-session', refresh) }
-  }, [])
+  }, [enabled])
   return status
 }

@@ -1,4 +1,5 @@
 import { THEME } from '../lib/theme.js'
+import { evidenceLabel, chicagoDate } from '../lib/marketEvidence.js'
 import { isLocalServicePreview, LOCAL_MARKET_LIMITATION } from '../lib/localPreview.js'
 import { useState, useMemo } from 'react'
 import SessionResearch from './SessionResearch.jsx'
@@ -178,7 +179,11 @@ function SetupBadge({ quality, nearestAbove, nearestBelow, price, atr, vwapData,
   )
 }
 
-export default function Levels({ liveData, ticker, onSelectTicker, orbHigh, orbLow, settings, onSettingsChange, mtfAlignment, putThesis }) {
+export default function Levels(props) {
+  return props.liveData?.verified ? <VerifiedLevels {...props}/> : <LegacyLevels {...props}/>
+}
+
+function LegacyLevels({ liveData, ticker, onSelectTicker, orbHigh, orbLow, settings, onSettingsChange, mtfAlignment, putThesis }) {
   const [customLabel, setCustomLabel] = useState('')
   const [customPrice, setCustomPrice] = useState('')
   const [customLevelsByTicker, setCustomLevelsByTicker] = useState({})
@@ -512,4 +517,24 @@ export default function Levels({ liveData, ticker, onSelectTicker, orbHigh, orbL
       )}
     </div>
   )
+}
+
+function VerifiedLevels({liveData,ticker,onSelectTicker,onOpenLiveMap,settings,onSettingsChange,planningState}) {
+  const [filter,setFilter]=useState('all')
+  const context=liveData.planning,structure=liveData.structure
+  const price=liveData.price,ind=context?.indicators,past=context?.completedIndicators,pd=context?.previous?.data?.[0]
+  const levels=structure.levelMap.levels.filter(l=>filter==='all'||filter==='structure'&&['structure','extended-reference'].includes(l.type)||filter==='pivot'&&l.type.startsWith('pivot')||filter==='indicator'&&['vwap','current-indicator','historical-indicator'].includes(l.type))
+  const above=price!=null?levels.filter(l=>l.price>price):levels,below=price!=null?levels.filter(l=>l.price<=price):[]
+  async function enableAlerts(){const granted=await requestNotificationPermission();if(granted)onSettingsChange({...settings,alertsEnabled:true})}
+  return <div className="verified-level-map" data-testid="verified-level-map" style={{display:'flex',flexDirection:'column',gap:18}}>
+    <div style={{display:'flex',justifyContent:'space-between',flexWrap:'wrap',gap:12}}><div><SLabel>Plan → Trade → Review · verified Massive references</SLabel><Heading>Level Map</Heading></div><div><span>Current Chicago date: {chicagoDate(liveData.now)}</span><p>Trading plan: <strong>{context?.date||'Verifying'}</strong></p><p>Previous regular session: <strong>{context?.priorDate||'Unavailable'}</strong></p></div></div>
+    <p role="status">{liveData.loadingContext?'Loading verified market map…':liveData.contextError||liveData.feedError||`Latest completed references loaded · ${context?.priorDate||'unavailable'}.`} {evidenceLabel(planningState?.row?.trade,liveData.now)}. No historical bar is presented as current-session data.</p>
+    <Card><SLabel>Observed levels · {ticker}</SLabel><div className="verified-level-stats">{[['Previous high',pd?.h],['Previous low',pd?.l],['Previous close',pd?.c],['Current premarket high',ind?.sessions?.PREMARKET?.high],['Current premarket low',ind?.sessions?.PREMARKET?.low],['Current RTH VWAP',ind?.vwap],['Current EMA9',ind?.ema9],['Current EMA20',ind?.ema20],['Current EMA50',ind?.ema50]].map(([label,value])=><div key={label}><small>{label}</small><strong>{value==null?'Unavailable':`$${value.toFixed(4)}`}</strong></div>)}</div><p>Current RTH bar source: {ind?.lastTimestamp?new Date(ind.lastTimestamp).toLocaleString('en-US',{timeZone:'America/Chicago',timeZoneName:'short'}):'Unavailable'} · {liveData.barQuality||'TIME_UNVERIFIED'}. Premarket source: {ind?.sessions?.PREMARKET?.timestamp?new Date(ind.sessions.PREMARKET.timestamp).toLocaleString('en-US',{timeZone:'America/Chicago',timeZoneName:'short'}):'Unavailable'}. Stale indicators are dated references, not current confirmation.</p><p>Prior levels: {context?.priorDate||'unavailable'} daily aggregate. Current indicators/premarket: {context?.date||'unavailable'} completed minutes only. RTH indicators need sufficient current-session bars.</p><p>Trade source: {liveData.priceTimestamp?new Date(liveData.priceTimestamp).toLocaleString('en-US',{timeZone:'America/Chicago',timeZoneName:'short'}):'Unavailable'} · quote source: {liveData.quoteTimestamp?new Date(liveData.quoteTimestamp).toLocaleString('en-US',{timeZone:'America/Chicago',timeZoneName:'short'}):'Unavailable'} · Massive.</p></Card>
+    <SessionResearch ticker={ticker} onSelectTicker={onSelectTicker} onOpenLiveMap={onOpenLiveMap} current={{state:planningState,structure,context,now:liveData.now}}/>
+    <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>{[['all','All Levels'],['structure','Structure / extended'],['pivot','Pivots'],['indicator','Indicators / dated references']].map(([id,label])=><Pill key={id} label={label} active={id===filter} onClick={()=>setFilter(id)}/>)}</div>
+    <Card style={{padding:0,overflow:'hidden'}}><SLabel style={{padding:14}}>Observed / calculated ladder · distances versus last recorded trade</SLabel>{above.map(l=><LevelRow key={l.label} level={{...l,sublabel:`${l.sourceDate||'Date unavailable'} · ${l.type}`}} currentPrice={price}/>)}{price!=null&&<CurrentPriceMarker price={price}/>} {below.map(l=><LevelRow key={l.label} level={{...l,sublabel:`${l.sourceDate||'Date unavailable'} · ${l.type}`}} currentPrice={price}/>)}{!levels.length&&<p style={{padding:20}}>Map unavailable: no validated source levels supplied.</p>}</Card>
+    <Card><SLabel>Nearby reference zones · calculated clusters</SLabel>{structure.zones.length?structure.zones.map((z,i)=><p key={i}>${f2(z.low)}–${f2(z.high)} · {z.labels.join(' / ')}</p>):<p>No nearby clusters supplied; no artificial zone is drawn.</p>}<p>References are grouped only when their full price span is within 0.05% of the previous close. Bounds are actual constituent prices, not a predicted trading range or an entry signal.</p></Card>
+    <Card><SLabel>Previous completed-session indicators / extended hours · {context?.priorDate||'unavailable'}</SLabel><p>{context?.completed?.error||'Historical references only; not current VWAP/EMAs or overnight coverage.'}</p><div className="verified-level-stats">{[['Prior RTH VWAP',past?.vwap],['Prior EMA9',past?.ema9],['Prior EMA20',past?.ema20],['Prior EMA50',past?.ema50],['Prior after-hours high',past?.sessions?.AFTER_HOURS?.high],['Prior after-hours low',past?.sessions?.AFTER_HOURS?.low]].map(([label,value])=><div key={label}><small>{label}</small><strong>{value==null?'Unavailable':`$${value.toFixed(4)}`}</strong></div>)}</div><p>Prior RTH bar source: {past?.lastTimestamp?new Date(past.lastTimestamp).toLocaleString('en-US',{timeZone:'America/Chicago',timeZoneName:'short'}):'Unavailable'} · prior extended bar source: {past?.sessions?.AFTER_HOURS?.timestamp?new Date(past.sessions.AFTER_HOURS.timestamp).toLocaleString('en-US',{timeZone:'America/Chicago',timeZoneName:'short'}):'Unavailable'}.</p><p>20:00–04:00 ET overnight coverage unavailable. No ETF, futures or other-session price is substituted.</p></Card>
+    <Card><SLabel>Alerts interface</SLabel><Btn small onClick={settings.alertsEnabled?()=>onSettingsChange({...settings,alertsEnabled:false}):enableAlerts}>{settings.alertsEnabled?'Disable Alerts':'Enable Alerts + Sound'}</Btn><p>{!settings.alertsEnabled?'Not armed.':liveData.alertEligible?'Monitoring timestamped current regular-session observations.':'Monitoring paused: closed, stale or wrong-session source. No alerts from archived data.'} Browser alerts are informational, not entry confirmations.</p>{liveData.lastAlerts?.map((a,i)=><p key={i}>{a.symbol} · {a.type} · {a.level.label} · ${f2(a.price)} · {new Date(a.timestamp).toLocaleString('en-US',{timeZone:'America/Chicago'})}</p>)}</Card>
+  </div>
 }

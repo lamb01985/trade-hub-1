@@ -1,3 +1,9 @@
+import { prepForSymbol } from './lib/workflowNavigation.js'
+import { useVerifiedPlanning } from './hooks/useVerifiedPlanning.js'
+import SessionResearch from './components/SessionResearch.jsx'
+import OptionsContracts from './components/OptionsContracts.jsx'
+import { DESK_SYMBOLS, evidenceLabel } from './lib/marketEvidence.js'
+import { PRIMARY_NAV } from './components/workspace/navigation.js'
 import ReadinessDesk from './components/ReadinessDesk.jsx'
 import { useThesisAvailability } from './hooks/useThesisAvailability.js'
 import WorkspaceShell from './components/workspace/WorkspaceShell.jsx'
@@ -113,7 +119,15 @@ function migrateSavedUniverses() {
 const defaultSettings = { dailyLossLimit: 500, maxTradesPerDay: 5, orPeriod: '15', alertsEnabled: false }
 const defaultPrep = { ticker: 'QQQ', orPeriod: '15', orbHigh: '', orbLow: '', sessionOpen: '', sessionClose: '', keyLevel: '', plannedStrike: '', plannedDTE: '1', ivNote: '', gamePlan: '', avoidNotes: '', dayReview: '', marketEvents: '', instrument: 'options' }
 
+const VERIFIED_WORKFLOW = import.meta.env.VITE_VERIFIED_LEVEL_WORKFLOW === 'true'
+const WORKFLOW_NAV = [
+  {...PRIMARY_NAV[0],id:'plan',label:'Plan',tab:'plan',sub:'watchlist'},
+  {...PRIMARY_NAV.find(n=>n.id==='trade:chart'),id:'trade',label:'Trade',tab:'trade',sub:'map'},
+  {...PRIMARY_NAV.find(n=>n.id==='review:journal'),id:'review',label:'Review',tab:'review',sub:'history'},
+]
+
 export default function App() {
+  if (VERIFIED_WORKFLOW && new URLSearchParams(window.location.search).get('desk') !== 'live') return <LegacyApp/>
   if (new URLSearchParams(window.location.search).get('desk') === 'live') return <ReadinessDesk />
   return <ConfiguredApp />
 }
@@ -141,15 +155,25 @@ function ResearchOnlyWorkspace({onExit}) {
 }
 
 function LegacyApp() {
-  const [activeTab, setActiveTab] = useState(() => intelligenceFromSearch(window.location.search) ? 'plan' : 'overview')
+  const [prep,setPrep]=useLocalStorage('th-prep',defaultPrep)
+  const [settings,setSettings]=useLocalStorage('th-settings',defaultSettings)
+  useEffect(()=>{if(!VERIFIED_WORKFLOW)return;const symbol=new URLSearchParams(window.location.search).get('symbol');if(DESK_SYMBOLS.includes(symbol))setPrep(p=>prepForSymbol(p,symbol))},[])
+  return VERIFIED_WORKFLOW ? <VerifiedPlanningBridge prep={prep} setPrep={setPrep} settings={settings} setSettings={setSettings}/> : <LegacyWorkspace prep={prep} setPrep={setPrep} settings={settings} setSettings={setSettings}/>
+}
+function VerifiedPlanningBridge(props) {
+  const market=useVerifiedPlanning((props.prep.ticker||'QQQ').toUpperCase(),props.settings)
+  return <LegacyWorkspace {...props} verifiedMarket={market}/>
+}
+function LegacyWorkspace({prep,setPrep,settings,setSettings,verifiedMarket=null}) {
+  const [activeTab, setActiveTab] = useState(() => verifiedMarket ? new URLSearchParams(window.location.search).get('workspace') || 'plan' : intelligenceFromSearch(window.location.search) ? 'plan' : 'overview')
   // Sub-tab state per top tab. In-memory only: switching top tabs preserves
   // your last sub-tab within each, but reload resets to defaults (same model
   // as activeTab, which resets via session each load).
-  const [planSubTab, setPlanSubTab] = useState(() => intelligenceFromSearch(window.location.search) ? 'intelligence' : 'watchlist')
-  const [tradeSubTab, setTradeSubTab] = useState('chart')
+  const [planSubTab, setPlanSubTab] = useState(() => verifiedMarket && new URLSearchParams(window.location.search).get('workspace')==='plan' ? new URLSearchParams(window.location.search).get('view')||'watchlist' : intelligenceFromSearch(window.location.search) ? 'intelligence' : 'watchlist')
+  const [tradeSubTab, setTradeSubTab] = useState(() => verifiedMarket ? new URLSearchParams(window.location.search).get('view')||'map' : 'chart')
   const [intelligenceView, setIntelligenceView] = useState(null)
   const [companyView, setCompanyView] = useState('company')
-  const [reviewSubTab, setReviewSubTab] = useState('journal')
+  const [reviewSubTab, setReviewSubTab] = useState(() => verifiedMarket ? (new URLSearchParams(window.location.search).get('workspace')==='review'?new URLSearchParams(window.location.search).get('view')||'history':'history') : 'journal')
   useEffect(() => {
     const open = () => { setActiveTab('review'); setReviewSubTab('research') }
     window.addEventListener('tradehub-open-research', open)
@@ -166,10 +190,8 @@ function LegacyApp() {
   // a sweep of every gate in this commit. Child components no longer call
   // any data-fetch function with this value.
   const apiKey = 'server-managed'
-  const aiCapability = useAiCapability()
+  const aiCapability = useAiCapability({enabled:!verifiedMarket})
   const [trades, setTrades] = useLocalStorage('th-trades', [])
-  const [settings, setSettings] = useLocalStorage('th-settings', defaultSettings)
-  const [prep, setPrep] = useLocalStorage('th-prep', defaultPrep)
   const [savedPreps, setSavedPreps] = useLocalStorage('th-saved-preps', {})
   const [orbPrefill, setOrbPrefill] = useState(null)
   const [calcPrefill, setCalcPrefill] = useState(null)
@@ -178,7 +200,7 @@ function LegacyApp() {
   const [showGlossary, setShowGlossary] = useState(false)
   const [quickLogOpen, setQuickLogOpen] = useState(false)
   const [editingTrade, setEditingTrade] = useState(null)
-  const schwab = useSchwab()
+  const schwab = useSchwab({enabled:!verifiedMarket})
   const [schwabToast, setSchwabToast] = useState('')
   // The connected-toast fires once when the hook transitions to connected.
   const schwabPrevConnectedRef = useRef(schwab.isConnected)
@@ -244,19 +266,21 @@ function LegacyApp() {
     orbLow: parseFloat(orbPrefill?.orbLow || prep.orbLow) || null,
   }), [orbPrefill, prep])
 
-  const liveData = useLiveData(prep.ticker || 'QQQ', null, settings)
+  const legacyData = useLiveData(verifiedMarket ? null : prep.ticker || 'QQQ', null, settings)
+  const liveData = verifiedMarket?.bundle || legacyData
 
   // Multi-ticker bundle for the bot's watchlist. Independent of the active
   // ticker (the active ticker is in liveData above).
-  const liveDataMulti = useLiveDataMulti(botWatchlist)
+  const liveDataMulti = useLiveDataMulti(verifiedMarket?[]:botWatchlist)
 
   // Multi-ticker bundle for the wheel scanner's watchlist (separate from bot).
-  const wheelDataMulti = useLiveDataMulti(wheelWatchlist)
+  const wheelDataMulti = useLiveDataMulti(verifiedMarket?[]:wheelWatchlist)
 
   // Setup engine: live-subscribe to the union of every active setup's
   // universe PLUS the symbols of every focused ticker so the Focus tab
   // always has live data for the dashboards.
   const setupTickers = useMemo(() => {
+    if (verifiedMarket) return []
     const seen = new Set()
     const out = []
     for (const s of setups || []) {
@@ -275,7 +299,7 @@ function LegacyApp() {
     }
     return out
   }, [setups, savedUniverses, focusedTickers])
-  const setupDataMulti = useLiveDataMulti(setupTickers)
+  const setupDataMulti = useLiveDataMulti(verifiedMarket?[]:setupTickers)
 
   // 252-day daily bars per setup ticker, used by buildSnapshot for EMAs, RSI,
   // MACD, and 52W high/low. Cached in a ref; refreshed when tickers change
@@ -322,7 +346,7 @@ function LegacyApp() {
   }, [setupDataMulti, setupTickersKey, histVersion])
 
   const setupEvaluation = useMemo(
-    () => evaluateAllSetups(setups, setupSnapshots, { savedUniverses }),
+    () => evaluateAllSetups(verifiedMarket?[]:setups, verifiedMarket?{}:setupSnapshots, { savedUniverses }),
     [setups, setupSnapshots, savedUniverses]
   )
 
@@ -421,7 +445,7 @@ function LegacyApp() {
   }, [customLevels, liveData.preMarket])
 
   // Merge liveData into a full level map for the Levels tab
-  const fullLevelMap = useMemo(() => buildLevelMap(liveData.price, {
+  const legacyLevelMap = useMemo(() => verifiedMarket ? null : buildLevelMap(liveData.price, {
     pivots: liveData.pivots,
     fibs: manualFibs,
     vwapData: liveData.vwapData,
@@ -437,9 +461,11 @@ function LegacyApp() {
     // when no new price tick arrives (thin after-hours tape).
     session: getSession(),
   }), [liveData, manualFibs, levelMapInput, enrichedCustomLevels, _priceTick])
+  const fullLevelMap = verifiedMarket?.structure.levelMap || legacyLevelMap
 
   // Multi-timeframe alignment — computed once, fanned out to header / Levels / Chart / Checklist / AI brief
   const mtfAlignment = useMemo(() => {
+    if (verifiedMarket) return {score:0,mtf:null,direction:0,label:'Not evaluated',confidence:'Not validated'}
     const mtf = computeMTF(liveData.intradayBars)
     if (!mtf) return { mtf: null, score: 0, direction: 'NO DATA', confidence: 'NONE', label: 'NO DATA', recommendation: 'Waiting for bars.' }
     return { mtf, ...alignmentScore(mtf, liveData.rvol) }
@@ -560,30 +586,50 @@ function LegacyApp() {
   const selectedTicker = (prep.ticker || 'QQQ').toUpperCase()
   const selectedData = verifiedBundle(selectedTicker, liveData)
   const session = getSession()
-  const priceStatus = tradeFreshness(selectedData?.priceTimestamp)
+  const priceStatus = verifiedMarket?{fresh:verifiedMarket.quality==='RECENT',label:evidenceLabel(verifiedMarket.row?.trade,verifiedMarket.now)}:tradeFreshness(selectedData?.priceTimestamp)
   const priceTime = selectedData?.priceTimestamp ? new Date(selectedData.priceTimestamp).toLocaleString('en-US', {
     timeZone: 'America/Chicago', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit',
   }) + ' CT' : 'timestamp unavailable'
+  useEffect(()=>{
+    if(!verifiedMarket)return
+    function restore(){const q=new URLSearchParams(window.location.search);const tab=q.get('workspace')||'plan',view=q.get('view')||(tab==='trade'?'map':tab==='review'?'history':'watchlist');if(['plan','trade','review'].includes(tab))setActiveTab(tab);if(tab==='plan')setPlanSubTab(view);if(tab==='trade')setTradeSubTab(view);if(tab==='review')setReviewSubTab(view);const symbol=q.get('symbol');if(DESK_SYMBOLS.includes(symbol))setPrep(p=>prepForSymbol(p,symbol))}
+    window.addEventListener('popstate',restore);return()=>window.removeEventListener('popstate',restore)
+  },[!!verifiedMarket])
+  function workflowUrl(tab,view,symbol=selectedTicker,hash='') {
+    if (!verifiedMarket) return
+    const query=new URLSearchParams({workspace:tab,view,symbol})
+    window.history.pushState({},'',`/?${query}${hash}`)
+  }
+  function openLiveMap(symbol) {
+    selectTicker(symbol,false)
+    setActiveTab('trade');setTradeSubTab('map')
+    workflowUrl('trade','map',symbol,'#live-level-map')
+    requestAnimationFrame(()=>{const target=document.getElementById('live-level-map');target?.scrollIntoView({block:'start'});target?.focus({preventScroll:true})})
+  }
   function navigateWorkspace(item) {
+    workflowUrl(item.tab,item.sub||'watchlist')
     setActiveTab(item.tab)
     if (item.tab === 'plan' && item.sub) { setPlanSubTab(item.sub); if (item.sub === 'intelligence') setIntelligenceView(item.intelligence || null) }
     if (item.tab === 'trade' && item.sub) setTradeSubTab(item.sub)
     if (item.tab === 'review' && item.sub) setReviewSubTab(item.sub)
     if (item.tab === 'company') setCompanyView(item.view || 'company')
   }
-  function selectTicker(ticker) {
+  function selectTicker(ticker,updateRoute=true) {
+    if (verifiedMarket && !DESK_SYMBOLS.includes(ticker)) return
+    if (verifiedMarket && updateRoute) workflowUrl(activeTab,activeTab==='plan'?planSubTab:activeTab==='trade'?tradeSubTab:reviewSubTab,ticker,activeTab==='trade'&&tradeSubTab==='map'?'#live-level-map':'')
     if (ticker === selectedTicker) return
     setOrbPrefill(null); setCalcPrefill(null); setManualFibs(null); setCustomLevels([])
-    setPrep(p => ({ ...p, ticker, orbHigh: '', orbLow: '', sessionOpen: '', sessionClose: '', keyLevel: '', plannedStrike: '', plannedDTE: '', plannedContract: null, ivNote: '', gamePlan: '', avoidNotes: '', marketEvents: '' }))
+    setPrep(p => prepForSymbol(p,ticker))
   }
 
   return (
-    <WorkspaceShell active={activeNavigation(activeTab, activeTab === 'plan' ? planSubTab : activeTab === 'trade' ? tradeSubTab : activeTab === 'review' ? reviewSubTab : null, companyView)}
+    <WorkspaceShell active={verifiedMarket?{id:activeTab,label:`${activeTab==='plan'?'Plan':activeTab==='trade'?'Trade':'Review'} / ${activeTab==='plan'?planSubTab:activeTab==='trade'?tradeSubTab:reviewSubTab}`} : activeNavigation(activeTab, activeTab === 'plan' ? planSubTab : activeTab === 'trade' ? tradeSubTab : activeTab === 'review' ? reviewSubTab : null, companyView)}
+      primaryNav={verifiedMarket?WORKFLOW_NAV:undefined} navGroups={verifiedMarket?[]:undefined} showSignOut={!verifiedMarket}
       onNavigate={navigateWorkspace} ticker={selectedTicker} onTicker={selectTicker}
       session={session.replaceAll('-', ' ')} connected={liveData.connected}
       freshness={priceStatus}
-      status={<><ServiceStatus freshness={priceStatus} ticker={selectedTicker} data={selectedData} priceTime={priceTime} events={todayHighImpact} onCalendar={() => {setActiveTab('plan');setPlanSubTab('calendar')}}/>{todayHighImpact.length > 0 && <button className="eq-event-chip" onClick={() => {setActiveTab('plan');setPlanSubTab('calendar')}}>{todayHighImpact.length} high-impact event{todayHighImpact.length > 1 ? 's' : ''} today</button>}</>}
-      actions={<><ApiHealthIndicator />            {lockedOut && (
+      status={verifiedMarket?<span>Massive · source {priceTime} · delay unverified unless supplied by provider</span>:<><ServiceStatus freshness={priceStatus} ticker={selectedTicker} data={selectedData} priceTime={priceTime} events={todayHighImpact} onCalendar={() => {setActiveTab('plan');setPlanSubTab('calendar')}}/>{todayHighImpact.length > 0 && <button className="eq-event-chip" onClick={() => {setActiveTab('plan');setPlanSubTab('calendar')}}>{todayHighImpact.length} high-impact event{todayHighImpact.length > 1 ? 's' : ''} today</button>}</>}
+      actions={<>{verifiedMarket?<button className="eq-button" disabled={verifiedMarket.feed.loading||verifiedMarket.context.loading||Math.max(verifiedMarket.feed.retryAt||0,verifiedMarket.context.retryAt||0)>verifiedMarket.now} onClick={verifiedMarket.refresh}>Refresh map</button>:<ApiHealthIndicator/>}            {lockedOut && (
               <span style={{ fontSize: 9, color: RED, fontFamily: MONO, border: `1px solid ${RED}44`, borderRadius: 3, padding: '3px 9px', letterSpacing: '0.1em' }}>LOCKED</span>
             )}
             {selectedData && priceStatus.fresh && fullLevelMap.setupQuality === 'ON LEVEL' && (
@@ -626,6 +672,7 @@ function LegacyApp() {
             })()}</>}>
 
 
+      {verifiedMarket && <><nav aria-label="Plan Trade Review" className="workflow-tabs">{WORKFLOW_NAV.map(item=><button key={item.id} aria-pressed={activeTab===item.tab} onClick={()=>navigateWorkspace(item)}>{item.label}</button>)}</nav><nav aria-label="Workflow tools" className="workflow-tabs">{(activeTab==='plan'?[['watchlist','Ranked watchlist'],['prep',"Tomorrow's Prep"],['levels','Levels']]:activeTab==='trade'?[['map','Live Level Map'],['chart','Chart'],['iv','Options']]:[['history','Archived reports'],['journal','Journal']]).map(([sub,label])=><button key={sub} aria-pressed={(activeTab==='plan'?planSubTab:activeTab==='trade'?tradeSubTab:reviewSubTab)===sub} onClick={()=>navigateWorkspace({tab:activeTab,sub})}>{label}</button>)}</nav></>}
       {/* Content. TRADE gets a wider container so the chart has room. */}
       <div className="eq-content-body">
         {activeTab === 'overview' && <Overview ticker={selectedTicker} liveData={liveData} multiData={liveDataMulti?.data || {}} watchlist={botWatchlist} trades={trades} setups={setups} levelMap={fullLevelMap} onNavigate={navigateWorkspace} onTicker={selectTicker} onLogTrade={() => openQuickLog(null)} connected={liveData.connected} session={session} schwab={schwab} aiCapability={aiCapability} events={calendarEvents}/>}
@@ -641,8 +688,8 @@ function LegacyApp() {
 
             {planSubTab === 'intelligence' && <Suspense fallback={<p>Loading intelligence...</p>}><MarketIntelligence key={intelligenceView || 'default'} initialView={intelligenceView || intelligenceFromSearch(window.location.search) || 'map'}/></Suspense>}
             <div style={{ display: planSubTab === 'watchlist' ? 'flex' : 'none', flexDirection: 'column', gap: 24 }}>
-              <PreMarketSummarySection liveData={liveData} ticker={prep.ticker || 'QQQ'} />
-              <WatchlistTab
+              {!verifiedMarket && <PreMarketSummarySection liveData={liveData} ticker={prep.ticker || 'QQQ'} />}
+              {verifiedMarket ? <SessionResearch ticker={selectedTicker} onSelectTicker={selectTicker} onOpenLiveMap={openLiveMap} current={{state:verifiedMarket,context:verifiedMarket.contextData,structure:verifiedMarket.structure,now:verifiedMarket.now}}/> : (<WatchlistTab
                 apiKey={apiKey}
                 savedPreps={savedPreps}
                 onSendToPrep={entry => {
@@ -670,12 +717,12 @@ function LegacyApp() {
                   setAutoLoadPrepTrigger(n => n + 1)
                 }}
                 onLoadSavedPrep={saved => { const { dateSaved, ...data } = saved; setPrep(p => ({ ...p, ...data })); setPlanSubTab('prep') }}
-              />
+              />)}
             </div>
 
             <div style={{ display: planSubTab === 'focus' ? 'block' : 'none' }}>
               <ErrorBoundary label="Focus">
-                <Focus
+                {!verifiedMarket && (<Focus
                   focusedTickers={focusedTickers}
                   onFocusedTickersChange={setFocusedTickers}
                   setups={setups}
@@ -685,18 +732,18 @@ function LegacyApp() {
                   savedUniverses={savedUniverses}
                   accountValue={accountValue}
                   apiKey={apiKey}
-                />
+                />)}
               </ErrorBoundary>
             </div>
 
             <div style={{ display: planSubTab === 'wheel' ? 'block' : 'none' }}>
               <ErrorBoundary label="Wheel">
-                <WheelScanner
+                {!verifiedMarket && (<WheelScanner
                   watchlist={wheelWatchlist}
                   onWatchlistChange={setWheelWatchlist}
                   liveDataMulti={wheelDataMulti?.data || {}}
                   apiKey={apiKey}
-                />
+                />)}
               </ErrorBoundary>
             </div>
 
@@ -704,7 +751,7 @@ function LegacyApp() {
               <PrepTab
                 prep={prep}
                 onPrepChange={setPrep}
-                onSendToORB={fill => { setOrbPrefill(fill); setActiveTab('trade'); setTradeSubTab('orb') }}
+                onSendToORB={fill => { if(verifiedMarket){openLiveMap(prep.ticker||'QQQ');return} setOrbPrefill(fill); setActiveTab('trade'); setTradeSubTab('orb') }}
                 settings={settings}
                 liveData={liveData}
                 aiCapability={aiCapability}
@@ -719,13 +766,13 @@ function LegacyApp() {
 
             <div style={{ display: planSubTab === 'playbook' ? 'block' : 'none' }}>
               <ErrorBoundary label="Playbook">
-                <Playbook trades={trades} settings={settings} lockedOut={lockedOut} prep={prep} />
+                {!verifiedMarket && (<Playbook trades={trades} settings={settings} lockedOut={lockedOut} prep={prep} />)}
               </ErrorBoundary>
             </div>
 
             <div style={{ display: planSubTab === 'calendar' ? 'block' : 'none' }}>
               <ErrorBoundary label="Calendar">
-                <CalendarTab putTheses={derivedPutTheses} apiKey={apiKey} />
+                {!verifiedMarket && (<CalendarTab putTheses={derivedPutTheses} apiKey={apiKey} />)}
               </ErrorBoundary>
             </div>
 
@@ -733,10 +780,9 @@ function LegacyApp() {
               <ErrorBoundary label="Levels">
                 <Levels
                   ticker={(prep.ticker || 'QQQ').toUpperCase()}
-                  onSelectTicker={ticker => {
-                    setOrbPrefill(null)
-                    setPrep(p => ({ ...p, ticker, orbHigh: '', orbLow: '', keyLevel: '' }))
-                  }}
+                  onSelectTicker={selectTicker}
+                  onOpenLiveMap={openLiveMap}
+                  planningState={verifiedMarket}
                   liveData={{ ...liveData, lastAlerts: liveData.lastAlerts }}
                   orbHigh={orbPrefill?.orbHigh || prep.orbHigh}
                   orbLow={orbPrefill?.orbLow || prep.orbLow}
@@ -750,18 +796,18 @@ function LegacyApp() {
 
             <div style={{ display: planSubTab === 'movers' ? 'block' : 'none' }}>
               <ErrorBoundary label="Movers">
-                <MoversScanner
+                {!verifiedMarket && (<MoversScanner
                   apiKey={apiKey}
                   setups={setups}
                   onSetupsChange={setSetups}
                   savedUniverses={savedUniverses}
-                />
+                />)}
               </ErrorBoundary>
             </div>
 
             <div style={{ display: planSubTab === 'universe' ? 'block' : 'none' }}>
               <ErrorBoundary label="Universe">
-                <UniverseBuilder
+                {!verifiedMarket && (<UniverseBuilder
                   apiKey={apiKey}
                   savedUniverses={savedUniverses}
                   onSavedUniversesChange={setSavedUniverses}
@@ -773,7 +819,7 @@ function LegacyApp() {
                     setPendingSetupSeed({ ...templatePartial, universe: { type: 'list', tickers } })
                     setActiveTab('plan'); setPlanSubTab('setups')
                   }}
-                />
+                />)}
               </ErrorBoundary>
             </div>
 
@@ -793,7 +839,7 @@ function LegacyApp() {
                       onConsumeSeed={() => setPendingSetupSeed(null)}
                     />
                 */}
-                <CorePlaybook onOpenChart={() => { setActiveTab('trade'); setTradeSubTab('chart') }} />
+                {!verifiedMarket && (<CorePlaybook onOpenChart={() => { setActiveTab('trade'); setTradeSubTab('chart') }} />)}
               </ErrorBoundary>
             </div>
 
@@ -833,10 +879,13 @@ function LegacyApp() {
           <div className="eq-legacy-content" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
 
 
+            {verifiedMarket && tradeSubTab==='map' && <section id="live-level-map" tabIndex={-1}><h1>{selectedTicker} Live Level Map</h1><Levels ticker={selectedTicker} onSelectTicker={selectTicker} onOpenLiveMap={openLiveMap} liveData={liveData} planningState={verifiedMarket} settings={settings} onSettingsChange={setSettings}/></section>}
+            {verifiedMarket && tradeSubTab==='iv' && <OptionsContracts key={selectedTicker} ticker={selectedTicker} lockedUnderlying/>}
             <div style={{ display: tradeSubTab === 'chart' ? 'block' : 'none' }}>
               <ErrorBoundary label="Chart">
-                <ChartTab
-                  liveData={selectedData || {price:null,intradayBars:[],dataTicker:null}}
+                {(!verifiedMarket||tradeSubTab==='chart') && <ChartTab
+                  researchOnly={!!verifiedMarket}
+                  liveData={verifiedMarket?verifiedMarket.structure.chartData:selectedData || {price:null,intradayBars:[],dataTicker:null}}
                   levelMap={fullLevelMap}
                   trades={trades}
                   ticker={prep.ticker || 'QQQ'}
@@ -846,21 +895,21 @@ function LegacyApp() {
                   putThesis={derivedPutTheses[(prep.ticker || 'QQQ').toUpperCase()]}
                   volumeThresholds={volumeThresholds}
                   onVolumeThresholdsChange={setVolumeThresholds}
-                />
+                />}
               </ErrorBoundary>
             </div>
 
             <div style={{ display: tradeSubTab === 'bot' ? 'flex' : 'none', flexDirection: 'column', gap: 24 }}>
               <ErrorBoundary label="Check gate">
-                <InlineCheckGate
+                {!verifiedMarket && (<InlineCheckGate
                   liveData={liveData}
                   levelMap={fullLevelMap}
                   mtfAlignment={mtfAlignment}
                   ticker={prep.ticker || 'QQQ'}
-                />
+                />)}
               </ErrorBoundary>
               <ErrorBoundary label="Bot">
-                <Bot
+                {!verifiedMarket && (<Bot
                   activeTicker={(prep.ticker || 'QQQ').toUpperCase()}
                   livePrice={liveData?.price ?? null}
                   intradayBars={liveData?.intradayBars || []}
@@ -873,22 +922,22 @@ function LegacyApp() {
                   watchlist={botWatchlist}
                   onWatchlistChange={setBotWatchlist}
                   liveDataMulti={liveDataMulti?.data || {}}
-                />
+                />)}
               </ErrorBoundary>
             </div>
 
             <div style={{ display: tradeSubTab === 'orb' ? 'block' : 'none' }}>
-              <ORBTab
+              {!verifiedMarket && (<ORBTab
                 settings={settings}
                 onSendToCalc={fill => { setCalcPrefill(fill); setTradeSubTab('calc') }}
                 prepFill={orbPrefill}
                 liveData={liveData}
                 savedPreps={savedPreps}
-              />
+              />)}
             </div>
 
             <div style={{ display: tradeSubTab === 'iv' ? 'block' : 'none' }}>
-              <IVAnalyzerTab
+              {!verifiedMarket && (<IVAnalyzerTab
                 ticker={prep.ticker || 'QQQ'}
                 onSendToPrep={contract => {
                   setPrep(p => ({ ...p,
@@ -903,11 +952,11 @@ function LegacyApp() {
                   setCalcPrefill({ ticker: contract.underlying, optType: contract.type, strike: contract.strike, expiry: contract.expiry, dte: daysToExpiry(contract.expiry), source: 'MASSIVE_OPTIONS' })
                   setTradeSubTab('calc')
                 }}
-              />
+              />)}
             </div>
 
             <div style={{ display: tradeSubTab === 'calc' ? 'block' : 'none' }}>
-              <CalculatorTab
+              {!verifiedMarket && (<CalculatorTab
                 prefill={calcPrefill}
                 onLogTrade={handleLogTrade}
                 checklistPassed={checklistComplete}
@@ -918,11 +967,11 @@ function LegacyApp() {
                 schwab={schwab}
                 prep={prep}
                 liveData={liveData}
-              />
+              />)}
             </div>
 
             <div style={{ display: tradeSubTab === 'command' ? 'block' : 'none' }}>
-              <Command
+              {!verifiedMarket && (<Command
                 trades={trades}
                 settings={settings}
                 onSettingsChange={setSettings}
@@ -936,7 +985,7 @@ function LegacyApp() {
                 levelMap={fullLevelMap}
                 todayEvents={todayHighImpact}
                 schwab={schwab}
-              />
+              />)}
             </div>
           </div>
           )
@@ -946,6 +995,7 @@ function LegacyApp() {
           <div className="eq-legacy-content" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
 
 
+            {verifiedMarket && reviewSubTab==='history' && <><h1>Archived reports · historical only</h1><p>This saved October 30 plan uses October 29 observations. It is not the current trading map.</p><SessionResearch ticker={selectedTicker} onSelectTicker={selectTicker} onOpenLiveMap={openLiveMap} supportedSymbols={DESK_SYMBOLS}/></>}
             {reviewSubTab === 'research' && <Suspense fallback={<p>Loading research history...</p>}><ResearchLedger/></Suspense>}
             <div style={{ display: reviewSubTab === 'journal' ? 'block' : 'none' }}>
               <ErrorBoundary label="Journal">
@@ -964,12 +1014,12 @@ function LegacyApp() {
 
             <div style={{ display: reviewSubTab === 'outcomes' ? 'block' : 'none' }}>
               <ErrorBoundary label="Outcomes">
-                <OutcomesAnalyzer
+                {!verifiedMarket && (<OutcomesAnalyzer
                   setups={setups}
                   onSetupsChange={setSetups}
                   apiKey={apiKey}
                   onJumpToSetups={() => { setActiveTab('plan'); setPlanSubTab('setups') }}
-                />
+                />)}
               </ErrorBoundary>
             </div>
 
