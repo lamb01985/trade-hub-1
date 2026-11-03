@@ -6,9 +6,8 @@
 // run `vercel env pull .env.development.local` so vite dev sees it via
 // process.env on the API side.
 //
-// Path allowlist: only stocks endpoints. Options paths are blocked because
-// the current Polygon plan returns 403 for them — letting them through just
-// wastes a roundtrip and pollutes server logs.
+// Explicit data paths only. Subscription entitlements are enforced by Massive,
+// not guessed from an old account configuration in the app.
 
 const POLYGON_BASE = 'https://api.polygon.io'
 const FETCH_TIMEOUT_MS = 10_000
@@ -23,13 +22,12 @@ const ALLOWED_PREFIXES = [
   '/v3/reference/tickers/',
   '/v3/reference/short-interest',
   '/vX/reference/financials',
+  '/v3/snapshot/options/',
 ]
 
 // Block these explicitly even if they would otherwise match an allowed
 // prefix. The plan-tier 403 wall makes them a waste of a serverless call.
-const BLOCKED_PREFIXES = [
-  '/v3/snapshot/options/',
-]
+const BLOCKED_PREFIXES = []
 
 export function isAllowedPath(path) {
   if (typeof path !== 'string' || !path.startsWith('/')) return false
