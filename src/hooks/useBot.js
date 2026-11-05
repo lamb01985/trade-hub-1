@@ -294,6 +294,9 @@ export function useBot({
 
   // ── Event side effects ────────────────────────────────────────────────────
   function handleEvent(e, ticker) {
+    // Legacy multi-symbol bundles do not carry verified source/session time.
+    // Preserve the engine, but never announce actionable states from them.
+    if (!liveDataMulti?.[ticker]?.verified || !liveDataMulti[ticker]?.alertEligible) return
     switch (e.type) {
       case 'watch':
         playSetupForming()

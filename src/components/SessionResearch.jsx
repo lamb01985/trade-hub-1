@@ -4,14 +4,14 @@ import { BLUE, LIME, YELLOW, MONO, BORDER, f2 } from '../constants.js'
 import { marketDateStr } from '../lib/massive.js'
 import { RESEARCH_SESSION, RESEARCH_SOURCE, RESEARCH_AS_OF, SESSION_RESEARCH, researchStatus } from '../lib/sessionResearch.js'
 
-export default function SessionResearch({ ticker, onSelectTicker }) {
+export default function SessionResearch({ ticker, onSelectTicker, onOpenLiveMap }) {
   const [expanded, setExpanded] = useState(ticker || 'QQQ')
   const status = researchStatus(marketDateStr())
   const item = SESSION_RESEARCH.find(row => row.ticker === expanded) || SESSION_RESEARCH[0]
   return (
     <Card>
       <div style={{ display: 'flex', gap: 12, justifyContent: 'space-between', flexWrap: 'wrap' }}>
-        <strong style={{ color: LIME }}>Session watchlist: {RESEARCH_SESSION}</strong>
+        <strong style={{ color: LIME }}>Historical session watchlist: {RESEARCH_SESSION}</strong>
         <span style={{ color: YELLOW, fontFamily: MONO, fontSize: 11 }}>{status} | CONDITIONAL, NOT LIVE SIGNALS</span>
       </div>
       <p style={{ color: '#aaa', fontSize: 12, lineHeight: 1.6 }}>
@@ -22,7 +22,7 @@ export default function SessionResearch({ ticker, onSelectTicker }) {
       </div>
       <div style={{ marginTop: 16, display: 'flex', gap: 12, justifyContent: 'space-between', flexWrap: 'wrap' }}>
         <strong>{item.ticker}: {item.thesis}</strong>
-        <Btn small onClick={() => onSelectTicker?.(item.ticker)}>Open {item.ticker} live map</Btn>
+        <Btn small onClick={() => (onOpenLiveMap||onSelectTicker)?.(item.ticker)}>Open {item.ticker} live map</Btn>
       </div>
       <p style={{ color: '#aaa', fontSize: 12 }}>Regular close ${f2(item.close)} | After-hours reference ${f2(item.afterHours)} (historical)</p>
       <div style={{ overflowX: 'auto' }}>

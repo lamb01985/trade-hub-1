@@ -77,14 +77,18 @@ export async function polygonFetch(path, params = {}) {
     const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
     try {
       const res = await fetch(url.toString(), { signal: controller.signal, redirect: 'error' })
-      if (res.status === 429 && attempt === 0) {
-        await new Promise(r => setTimeout(r, 500))
-        continue
+      // Let the map's single poller own backoff; never retry a throttled
+      // provider request immediately or discard its cooldown.
+      const hint = res.headers.get('Retry-After')
+      let retryAfter
+      if (res.status === 429 || hint != null) {
+        const seconds = hint == null ? 60 : /^\d+$/.test(hint) ? Number(hint) : Math.ceil((Date.parse(hint)-Date.now())/1000)
+        retryAfter = Number.isFinite(seconds)&&seconds>=1&&seconds<=86400 ? String(seconds) : '86401'
       }
       const body = await res.text()
       let parsed
       try { parsed = JSON.parse(body) } catch { throw new Error('Invalid provider response') }
-      return { status: res.status, body: JSON.stringify(redact(parsed, apiKey)), contentType: 'application/json' }
+      return { status: res.status, body: JSON.stringify(redact(parsed, apiKey)), contentType: 'application/json', ...(retryAfter === undefined ? {} : {retryAfter}) }
     } finally {
       clearTimeout(timer)
     }

@@ -1,0 +1,10 @@
+.git
+.local
+.env
+.env.*
+node_modules
+tests
+docs
+scripts
+*.pem
+*.crt

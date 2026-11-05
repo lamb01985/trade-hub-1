@@ -5,7 +5,12 @@ import { useLiveDataMulti } from './hooks/useLiveDataMulti.js'
 import { buildLevelMap } from './lib/levels.js'
 import { computeMTF, alignmentScore } from './lib/structure.js'
 import Command from './components/Command.jsx'
-import Levels from './components/Levels.jsx'
+import CurrentLevelMap from './components/CurrentLevelMap.jsx'
+import LevelOperatorGate from './components/LevelOperatorGate.jsx'
+import SessionResearch from './components/SessionResearch.jsx'
+import {useVerifiedPlanning} from './hooks/useVerifiedPlanning.js'
+import {prepForSymbol} from './lib/workflowNavigation.js'
+import {evidenceLabel} from './lib/marketEvidence.js'
 import ChartTab from './components/Chart.jsx'
 import InlineCheckGate from './components/InlineCheckGate.jsx'
 import CalendarTab from './components/Calendar.jsx'
@@ -90,14 +95,16 @@ function migrateSavedUniverses() {
 const defaultSettings = { dailyLossLimit: 500, maxTradesPerDay: 5, orPeriod: '15', alertsEnabled: false }
 const defaultPrep = { ticker: 'QQQ', orPeriod: '15', orbHigh: '', orbLow: '', sessionOpen: '', sessionClose: '', keyLevel: '', plannedStrike: '', plannedDTE: '1', ivNote: '', gamePlan: '', avoidNotes: '', dayReview: '', marketEvents: '', instrument: 'options' }
 
-export default function App() {
-  const [activeTab, setActiveTab] = useState(defaultTabForSession)
+export default function App() {return <LevelOperatorGate><TradingApp/></LevelOperatorGate>}
+
+function TradingApp() {
+  const [activeTab, setActiveTab] = useState(()=>new URLSearchParams(location.search).get('workspace')||'plan')
   // Sub-tab state per top tab. In-memory only: switching top tabs preserves
   // your last sub-tab within each, but reload resets to defaults (same model
   // as activeTab, which resets via session each load).
-  const [planSubTab, setPlanSubTab] = useState('watchlist')
-  const [tradeSubTab, setTradeSubTab] = useState('chart')
-  const [reviewSubTab, setReviewSubTab] = useState('journal')
+  const [planSubTab, setPlanSubTab] = useState(()=>new URLSearchParams(location.search).get('workspace')==='plan'?new URLSearchParams(location.search).get('view')||'levels':'levels')
+  const [tradeSubTab, setTradeSubTab] = useState(()=>new URLSearchParams(location.search).get('workspace')==='trade'?new URLSearchParams(location.search).get('view')||'map':'map')
+  const [reviewSubTab, setReviewSubTab] = useState(()=>new URLSearchParams(location.search).get('workspace')==='review'?new URLSearchParams(location.search).get('view')||'journal':'journal')
   // Increments whenever something external (Layer 2 → Prep, etc.) wants
   // PrepTab to auto-fire Load Market Data after the tab switch settles.
   const [autoLoadPrepTrigger, setAutoLoadPrepTrigger] = useState(0)
@@ -187,14 +194,38 @@ export default function App() {
     orbLow: parseFloat(orbPrefill?.orbLow || prep.orbLow) || null,
   }), [orbPrefill, prep])
 
-  const liveData = useLiveData(prep.ticker || 'QQQ', null, settings)
+  const market = useVerifiedPlanning((prep.ticker || 'QQQ').toUpperCase(),settings)
+  const liveData = market.bundle
+  function navigateWorkspace(tab,view=tab==='plan'?planSubTab:tab==='trade'?tradeSubTab:reviewSubTab) {
+    setActiveTab(tab)
+    if(tab==='plan')setPlanSubTab(view)
+    if(tab==='trade')setTradeSubTab(view)
+    if(tab==='review')setReviewSubTab(view)
+    history.pushState({},'',`/?${new URLSearchParams({workspace:tab,view,symbol:(prep.ticker||'QQQ').toUpperCase()})}`)
+  }
+  function selectMapSymbol(ticker) {
+    setOrbPrefill(null);setPrep(p=>prepForSymbol(p,ticker))
+    const query=new URLSearchParams({workspace:activeTab,view:activeTab==='trade'?tradeSubTab:planSubTab,symbol:ticker})
+    history.pushState({},'',`/?${query}`)
+  }
+  function openLiveMap(ticker) {
+    setOrbPrefill(null);setPrep(p=>prepForSymbol(p,ticker));setActiveTab('trade');setTradeSubTab('map')
+    history.pushState({},'',`/?${new URLSearchParams({workspace:'trade',view:'map',symbol:ticker})}#current-level-map`)
+    setTimeout(()=>document.getElementById('current-level-map')?.focus(),0)
+  }
+  useEffect(()=>{
+    const restore=()=>{const q=new URLSearchParams(location.search),symbol=q.get('symbol'),tab=q.get('workspace');if(symbol&&/^[A-Z]{1,5}$/.test(symbol))setPrep(p=>prepForSymbol(p,symbol));if(['plan','trade','review'].includes(tab))setActiveTab(tab);if(tab==='plan')setPlanSubTab(q.get('view')||'levels');if(tab==='trade')setTradeSubTab(q.get('view')||'map');if(tab==='review')setReviewSubTab(q.get('view')||'journal')}
+    restore();window.addEventListener('popstate',restore);return()=>window.removeEventListener('popstate',restore)
+  },[])
+  const currentMap=<CurrentLevelMap ticker={(prep.ticker||'QQQ').toUpperCase()} market={market} onSelectTicker={selectMapSymbol} onOpenLiveMap={openLiveMap} settings={settings} onSettingsChange={setSettings}/>
+
 
   // Multi-ticker bundle for the bot's watchlist. Independent of the active
   // ticker (the active ticker is in liveData above).
-  const liveDataMulti = useLiveDataMulti(botWatchlist)
+  const liveDataMulti = useLiveDataMulti(activeTab==='trade'&&tradeSubTab==='bot'?botWatchlist:[])
 
   // Multi-ticker bundle for the wheel scanner's watchlist (separate from bot).
-  const wheelDataMulti = useLiveDataMulti(wheelWatchlist)
+  const wheelDataMulti = useLiveDataMulti(activeTab==='plan'&&planSubTab==='wheel'?wheelWatchlist:[])
 
   // Setup engine: live-subscribe to the union of every active setup's
   // universe PLUS the symbols of every focused ticker so the Focus tab
@@ -218,7 +249,7 @@ export default function App() {
     }
     return out
   }, [setups, savedUniverses, focusedTickers])
-  const setupDataMulti = useLiveDataMulti(setupTickers)
+  const setupDataMulti = useLiveDataMulti(activeTab==='plan'&&['setups','focus'].includes(planSubTab)?setupTickers:[])
 
   // 252-day daily bars per setup ticker, used by buildSnapshot for EMAs, RSI,
   // MACD, and 52W high/low. Cached in a ref; refreshed when tickers change
@@ -227,7 +258,7 @@ export default function App() {
   const [histVersion, setHistVersion] = useState(0)
   const setupTickersKey = setupTickers.join('|')
   useEffect(() => {
-    if (!apiKey || setupTickers.length === 0) return
+    if (!apiKey || setupTickers.length === 0 || activeTab!=='plan' || !['setups','focus'].includes(planSubTab)) return
     let cancelled = false
     async function refresh() {
       const MAX_AGE = 30 * 60 * 1000
@@ -258,7 +289,7 @@ export default function App() {
       const bundle = bundles[t]
       const hist = setupHistRef.current[t]?.bars || []
       const snap = buildSnapshot(t, bundle, hist, {})
-      if (snap) out[t] = snap
+      if (snap && bundle?.verified && bundle?.alertEligible) out[t] = snap
     }
     return out
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -274,7 +305,7 @@ export default function App() {
   // triggered state from a previous session.
   const prevTriggerKeysRef = useRef(null)
   useEffect(() => {
-    if (!setupEvaluation) return
+    if (!setupEvaluation || !market.bundle.alertEligible) return
     const currentKeys = new Set(setupEvaluation.triggers.map(t => `${t.setupId}|${t.ticker}`))
     if (prevTriggerKeysRef.current === null) {
       prevTriggerKeysRef.current = currentKeys
@@ -364,22 +395,7 @@ export default function App() {
   }, [customLevels, liveData.preMarket])
 
   // Merge liveData into a full level map for the Levels tab
-  const fullLevelMap = useMemo(() => buildLevelMap(liveData.price, {
-    pivots: liveData.pivots,
-    fibs: manualFibs,
-    vwapData: liveData.vwapData,
-    prevDay: liveData.prevDay,
-    weeklyData: liveData.weeklyData,
-    orbHigh: levelMapInput.orbHigh,
-    orbLow: levelMapInput.orbLow,
-    sdZones: liveData.sdZones,
-    customLevels: enrichedCustomLevels,
-    volProfile: liveData.volProfile,
-    atr: liveData.atr,
-    // _priceTick re-runs this every 5s so the session flips at the bell even
-    // when no new price tick arrives (thin after-hours tape).
-    session: getSession(),
-  }), [liveData, manualFibs, levelMapInput, enrichedCustomLevels, _priceTick])
+  const fullLevelMap = market.structure.levelMap
 
   // Multi-timeframe alignment — computed once, fanned out to header / Levels / Chart / Checklist / AI brief
   const mtfAlignment = useMemo(() => {
@@ -520,7 +536,7 @@ export default function App() {
                 {apiKey ? 'connecting...' : 'no live data'}
               </span>
             )}
-            <ApiHealthIndicator />
+            <small>{evidenceLabel(market.row?.trade,market.now)}</small><ApiHealthIndicator />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {lockedOut && (
@@ -574,7 +590,7 @@ export default function App() {
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => navigateWorkspace(tab.id)}
                 style={{
                   background: 'transparent',
                   border: 'none',
@@ -653,10 +669,10 @@ export default function App() {
                 { id: 'glossary', label: 'Glossary' },
               ]}
               active={planSubTab}
-              onChange={setPlanSubTab}
+              onChange={view=>navigateWorkspace('plan',view)}
             />
 
-            <div style={{ display: planSubTab === 'watchlist' ? 'flex' : 'none', flexDirection: 'column', gap: 24 }}>
+            {planSubTab==='watchlist'&&<div style={{ display: planSubTab === 'watchlist' ? 'flex' : 'none', flexDirection: 'column', gap: 24 }}>
               <PreMarketSummarySection liveData={liveData} ticker={prep.ticker || 'QQQ'} />
               <WatchlistTab
                 apiKey={apiKey}
@@ -687,9 +703,9 @@ export default function App() {
                 }}
                 onLoadSavedPrep={saved => { const { dateSaved, ...data } = saved; setPrep(p => ({ ...p, ...data })); setPlanSubTab('prep') }}
               />
-            </div>
+            </div>}
 
-            <div style={{ display: planSubTab === 'focus' ? 'block' : 'none' }}>
+            {planSubTab==='focus'&&<div style={{ display: planSubTab === 'focus' ? 'block' : 'none' }}>
               <ErrorBoundary label="Focus">
                 <Focus
                   focusedTickers={focusedTickers}
@@ -703,9 +719,9 @@ export default function App() {
                   apiKey={apiKey}
                 />
               </ErrorBoundary>
-            </div>
+            </div>}
 
-            <div style={{ display: planSubTab === 'wheel' ? 'block' : 'none' }}>
+            {planSubTab==='wheel'&&<div style={{ display: planSubTab === 'wheel' ? 'block' : 'none' }}>
               <ErrorBoundary label="Wheel">
                 <WheelScanner
                   watchlist={wheelWatchlist}
@@ -714,9 +730,9 @@ export default function App() {
                   apiKey={apiKey}
                 />
               </ErrorBoundary>
-            </div>
+            </div>}
 
-            <div style={{ display: planSubTab === 'prep' ? 'block' : 'none' }}>
+            {planSubTab==='prep'&&<div style={{ display: planSubTab === 'prep' ? 'block' : 'none' }}>
               <PrepTab
                 prep={prep}
                 onPrepChange={setPrep}
@@ -731,40 +747,27 @@ export default function App() {
                 onVolumeThresholdsChange={setVolumeThresholds}
                 autoLoadTrigger={autoLoadPrepTrigger}
               />
-            </div>
+            </div>}
 
-            <div style={{ display: planSubTab === 'playbook' ? 'block' : 'none' }}>
+            {planSubTab==='playbook'&&<div style={{ display: planSubTab === 'playbook' ? 'block' : 'none' }}>
               <ErrorBoundary label="Playbook">
                 <Playbook trades={trades} settings={settings} lockedOut={lockedOut} prep={prep} />
               </ErrorBoundary>
-            </div>
+            </div>}
 
-            <div style={{ display: planSubTab === 'calendar' ? 'block' : 'none' }}>
+            {planSubTab==='calendar'&&<div style={{ display: planSubTab === 'calendar' ? 'block' : 'none' }}>
               <ErrorBoundary label="Calendar">
                 <CalendarTab putTheses={derivedPutTheses} apiKey={apiKey} />
               </ErrorBoundary>
-            </div>
+            </div>}
 
-            <div style={{ display: planSubTab === 'levels' ? 'block' : 'none' }}>
+            {planSubTab==='levels'&&<div style={{ display: planSubTab === 'levels' ? 'block' : 'none' }}>
               <ErrorBoundary label="Levels">
-                <Levels
-                  ticker={(prep.ticker || 'QQQ').toUpperCase()}
-                  onSelectTicker={ticker => {
-                    setOrbPrefill(null)
-                    setPrep(p => ({ ...p, ticker, orbHigh: '', orbLow: '', keyLevel: '' }))
-                  }}
-                  liveData={{ ...liveData, lastAlerts: liveData.lastAlerts }}
-                  orbHigh={orbPrefill?.orbHigh || prep.orbHigh}
-                  orbLow={orbPrefill?.orbLow || prep.orbLow}
-                  settings={settings}
-                  onSettingsChange={setSettings}
-                  mtfAlignment={mtfAlignment}
-                  putThesis={derivedPutTheses[(prep.ticker || 'QQQ').toUpperCase()]}
-                />
+                {currentMap}
               </ErrorBoundary>
-            </div>
+            </div>}
 
-            <div style={{ display: planSubTab === 'movers' ? 'block' : 'none' }}>
+            {planSubTab==='movers'&&<div style={{ display: planSubTab === 'movers' ? 'block' : 'none' }}>
               <ErrorBoundary label="Movers">
                 <MoversScanner
                   apiKey={apiKey}
@@ -773,9 +776,9 @@ export default function App() {
                   savedUniverses={savedUniverses}
                 />
               </ErrorBoundary>
-            </div>
+            </div>}
 
-            <div style={{ display: planSubTab === 'universe' ? 'block' : 'none' }}>
+            {planSubTab==='universe'&&<div style={{ display: planSubTab === 'universe' ? 'block' : 'none' }}>
               <ErrorBoundary label="Universe">
                 <UniverseBuilder
                   apiKey={apiKey}
@@ -791,9 +794,9 @@ export default function App() {
                   }}
                 />
               </ErrorBoundary>
-            </div>
+            </div>}
 
-            <div style={{ display: planSubTab === 'setups' ? 'block' : 'none' }}>
+            {planSubTab==='setups'&&<div style={{ display: planSubTab === 'setups' ? 'block' : 'none' }}>
               <ErrorBoundary label="Setups">
                 {/* Trigger engine UI archived. Original render kept as a
                     reference comment so re-enabling is a one-block paste back.
@@ -811,13 +814,13 @@ export default function App() {
                 */}
                 <CorePlaybook onOpenChart={() => { setActiveTab('trade'); setTradeSubTab('chart') }} />
               </ErrorBoundary>
-            </div>
+            </div>}
 
-            <div style={{ display: planSubTab === 'glossary' ? 'block' : 'none' }}>
+            {planSubTab==='glossary'&&<div style={{ display: planSubTab === 'glossary' ? 'block' : 'none' }}>
               <ErrorBoundary label="Glossary">
                 <GlossaryReference />
               </ErrorBoundary>
-            </div>
+            </div>}
           </div>
         )}
 
@@ -837,6 +840,7 @@ export default function App() {
           //   'command' risk controls + Polygon status + Schwab connection.
           const HIDDEN_TRADE_SUBTABS = []
           const TRADE_SUBTAB_CATALOG = [
+            { id: 'map', label: 'Live Level Map' },
             { id: 'chart', label: 'Chart' },
             { id: 'bot', label: 'Bot' },
             { id: 'orb', label: 'ORB' },
@@ -850,10 +854,11 @@ export default function App() {
             <SubNav
               tabs={tradeSubTabs}
               active={tradeSubTab}
-              onChange={setTradeSubTab}
+              onChange={view=>navigateWorkspace('trade',view)}
             />
 
-            <div style={{ display: tradeSubTab === 'chart' ? 'block' : 'none' }}>
+            {tradeSubTab==='map'&&<ErrorBoundary label="Live Level Map">{currentMap}</ErrorBoundary>}
+            {tradeSubTab==='chart'&&<div style={{ display: tradeSubTab === 'chart' ? 'block' : 'none' }}>
               <ErrorBoundary label="Chart">
                 <ChartTab
                   liveData={liveData}
@@ -868,9 +873,9 @@ export default function App() {
                   onVolumeThresholdsChange={setVolumeThresholds}
                 />
               </ErrorBoundary>
-            </div>
+            </div>}
 
-            <div style={{ display: tradeSubTab === 'bot' ? 'flex' : 'none', flexDirection: 'column', gap: 24 }}>
+            {tradeSubTab==='bot'&&<div style={{ display: tradeSubTab === 'bot' ? 'flex' : 'none', flexDirection: 'column', gap: 24 }}>
               <ErrorBoundary label="Check gate">
                 <InlineCheckGate
                   liveData={liveData}
@@ -895,9 +900,9 @@ export default function App() {
                   liveDataMulti={liveDataMulti?.data || {}}
                 />
               </ErrorBoundary>
-            </div>
+            </div>}
 
-            <div style={{ display: tradeSubTab === 'orb' ? 'block' : 'none' }}>
+            {tradeSubTab==='orb'&&<div style={{ display: tradeSubTab === 'orb' ? 'block' : 'none' }}>
               <ORBTab
                 settings={settings}
                 onSendToCalc={fill => { setCalcPrefill(fill); setTradeSubTab('calc') }}
@@ -905,13 +910,13 @@ export default function App() {
                 liveData={liveData}
                 savedPreps={savedPreps}
               />
-            </div>
+            </div>}
 
-            <div style={{ display: tradeSubTab === 'iv' ? 'block' : 'none' }}>
+            {tradeSubTab==='iv'&&<div style={{ display: tradeSubTab === 'iv' ? 'block' : 'none' }}>
               <IVAnalyzerTab apiKey={apiKey} instrument={prep.instrument || 'options'} />
-            </div>
+            </div>}
 
-            <div style={{ display: tradeSubTab === 'calc' ? 'block' : 'none' }}>
+            {tradeSubTab==='calc'&&<div style={{ display: tradeSubTab === 'calc' ? 'block' : 'none' }}>
               <CalculatorTab
                 prefill={calcPrefill}
                 onLogTrade={handleLogTrade}
@@ -924,9 +929,9 @@ export default function App() {
                 prep={prep}
                 liveData={liveData}
               />
-            </div>
+            </div>}
 
-            <div style={{ display: tradeSubTab === 'command' ? 'block' : 'none' }}>
+            {tradeSubTab==='command'&&<div style={{ display: tradeSubTab === 'command' ? 'block' : 'none' }}>
               <Command
                 trades={trades}
                 settings={settings}
@@ -943,7 +948,7 @@ export default function App() {
                 todayEvents={todayHighImpact}
                 schwab={schwab}
               />
-            </div>
+            </div>}
           </div>
           )
         })()}
@@ -952,15 +957,17 @@ export default function App() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             <SubNav
               tabs={[
+                { id: 'history', label: 'Historical Level Maps' },
                 { id: 'journal', label: 'Journal' },
                 { id: 'outcomes', label: 'Outcomes' },
                 { id: 'stats', label: 'Stats' },
               ]}
               active={reviewSubTab}
-              onChange={setReviewSubTab}
+              onChange={view=>navigateWorkspace('review',view)}
             />
 
-            <div style={{ display: reviewSubTab === 'journal' ? 'block' : 'none' }}>
+            {reviewSubTab==='history'&&<SessionResearch ticker={prep.ticker||'QQQ'} onOpenLiveMap={openLiveMap}/>}
+            {reviewSubTab==='journal'&&<div style={{ display: reviewSubTab === 'journal' ? 'block' : 'none' }}>
               <ErrorBoundary label="Journal">
                 <Journal
                   trades={trades}
@@ -973,9 +980,9 @@ export default function App() {
                   onAddTrades={list => setTrades(prev => [...prev, ...list])}
                 />
               </ErrorBoundary>
-            </div>
+            </div>}
 
-            <div style={{ display: reviewSubTab === 'outcomes' ? 'block' : 'none' }}>
+            {reviewSubTab==='outcomes'&&<div style={{ display: reviewSubTab === 'outcomes' ? 'block' : 'none' }}>
               <ErrorBoundary label="Outcomes">
                 <OutcomesAnalyzer
                   setups={setups}
@@ -984,11 +991,11 @@ export default function App() {
                   onJumpToSetups={() => { setActiveTab('plan'); setPlanSubTab('setups') }}
                 />
               </ErrorBoundary>
-            </div>
+            </div>}
 
-            <div style={{ display: reviewSubTab === 'stats' ? 'block' : 'none' }}>
+            {reviewSubTab==='stats'&&<div style={{ display: reviewSubTab === 'stats' ? 'block' : 'none' }}>
               <StatsTab trades={trades} />
-            </div>
+            </div>}
           </div>
         )}
       </div>
