@@ -11,6 +11,7 @@ import SessionResearch from './components/SessionResearch.jsx'
 import {useVerifiedPlanning} from './hooks/useVerifiedPlanning.js'
 import {prepForSymbol} from './lib/workflowNavigation.js'
 import {evidenceLabel} from './lib/marketEvidence.js'
+import SimpleStrategy from './components/SimpleStrategy.jsx'
 import ChartTab from './components/Chart.jsx'
 import InlineCheckGate from './components/InlineCheckGate.jsx'
 import CalendarTab from './components/Calendar.jsx'
@@ -842,6 +843,7 @@ function TradingApp() {
           const HIDDEN_TRADE_SUBTABS = []
           const TRADE_SUBTAB_CATALOG = [
             { id: 'map', label: 'Live Level Map' },
+            { id: 'simple', label: 'Simple Strategy' },
             { id: 'chart', label: 'Chart' },
             { id: 'bot', label: 'Bot' },
             { id: 'orb', label: 'ORB' },
@@ -859,6 +861,9 @@ function TradingApp() {
             />
 
             {tradeSubTab==='map'&&<ErrorBoundary label="Live Level Map">{currentMap}</ErrorBoundary>}
+            {tradeSubTab==='simple'&&<ErrorBoundary label="Simple Strategy">
+              <SimpleStrategy liveData={liveData} ticker={(prep.ticker || 'QQQ').toUpperCase()} active={true} lockedOut={lockedOut} maxTradesReached={maxTradesReached} />
+            </ErrorBoundary>}
             {tradeSubTab==='chart'&&<div style={{ display: tradeSubTab === 'chart' ? 'block' : 'none' }}>
               <ErrorBoundary label="Chart">
                 <ChartTab
