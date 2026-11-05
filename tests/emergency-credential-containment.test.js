@@ -1,4 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
+// Credential-containment unit tests isolate transport admission. Shared
+// cooldown persistence/denial is covered by p0-operator-auth.test.js.
+vi.mock('../api/_lib/access.js',()=>({providerCooldown:vi.fn(async()=>0)}))
 import tombstone from '../api/polygon/ws-auth.js'
 import proxy from '../api/polygon/proxy.js'
 import { isAllowedPath, polygonFetch } from '../api/_lib/polygon.js'

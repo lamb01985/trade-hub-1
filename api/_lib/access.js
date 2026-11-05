@@ -37,6 +37,19 @@ export async function stateDelete(key) {
   if (!localMode()) return store().del(key)
   memory.delete(key)
 }
+// One shared provider cooldown survives ticker changes and server cold starts.
+// Updates only extend it; an unbounded hint pauses until owner review.
+export async function providerCooldown(seconds) {
+  const key='th:massive:desk:cooldown',now=Date.now()
+  if(localMode()) {
+    const current=await stateGet(key)
+    const next=seconds===undefined?current:current?.paused||seconds>86400?{paused:true}:{until:Math.max(current?.until||0,now+seconds*1000)}
+    if(seconds!==undefined)await stateSet(key,next,86401)
+    return next?.paused?86401:Math.max(0,Math.ceil(((next?.until||0)-now)/1000))
+  }
+  const script=`local old=redis.call('GET',KEYS[1]); if old=='paused' then return 86401 end; local untilTime=tonumber(old or '0'); local seconds=tonumber(ARGV[2]); if seconds and seconds>86400 then redis.call('SET',KEYS[1],'paused'); return 86401 end; if seconds then untilTime=math.max(untilTime,tonumber(ARGV[1])+seconds*1000); redis.call('SET',KEYS[1],tostring(untilTime),'PX',math.max(1,untilTime-tonumber(ARGV[1]))) end; return math.max(0,math.ceil((untilTime-tonumber(ARGV[1]))/1000))`
+  return Number(await store().eval(script,[key],[now,seconds===undefined?'':seconds]))
+}
 // One atomic reservation survives cold starts and concurrent serverless requests.
 export async function reserve(key, amount, ceiling, seconds) {
   if (localMode()) {

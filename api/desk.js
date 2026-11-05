@@ -1,7 +1,7 @@
 import { polygonFetch } from './_lib/polygon.js'
 import { providerOperator, providerQuota } from './_lib/providerAccess.js'
 import { sendFailure, AccessError, privateResponse, requireOperator, login, logout, jsonBody } from './_lib/access.js'
-import { DESK_SYMBOLS, stockEvidence, observation, eastern, previousSession, validateBars, intradayContext, instrumentType, latestCompletedSession, planningSessionDate } from '../src/lib/marketEvidence.js'
+import { DESK_SYMBOLS, stockEvidence, observation, sessionAt, previousSession, validateBars, intradayContext, instrumentType, latestCompletedSession, planningSessionDate, levelMapSessionDate } from '../src/lib/marketEvidence.js'
 
 async function read(path, params={}) {
   const r=await polygonFetch(path,params)
@@ -42,13 +42,14 @@ export default async function handler(req,res) {
       return res.status(200).json({provider:'Massive',fetchedAt:new Date().toISOString(),stocks,vix,futures:{error:'CONTRACT_AND_ENTITLEMENT_UNVERIFIED',note:'ES/NQ require entitled futures contracts. No ETF substitution.'}})
     }
     if(action==='context' && DESK_SYMBOLS.includes(symbol) && ['current','completed','plan'].includes(period)) {
-      const date=period==='plan'?planningSessionDate():period==='completed'?latestCompletedSession():eastern().date
+      const date=period==='plan'?planningSessionDate():period==='completed'?latestCompletedSession():levelMapSessionDate()
       if (!date) throw new AccessError(503,'CALENDAR_UNVERIFIED')
       const prior=previousSession(date)
       const bars=await attempt(async()=>validateBars(symbol==='VIX'?'I:VIX':symbol,await read(`/v2/aggs/ticker/${symbol==='VIX'?'I:VIX':symbol}/range/1/minute/${date}/${date}`,{adjusted:'true',sort:'asc',limit:'50000'}),date))
       const previous=await attempt(async()=>validateBars(symbol==='VIX'?'I:VIX':symbol,await read(`/v2/aggs/ticker/${symbol==='VIX'?'I:VIX':symbol}/range/1/day/${prior}/${prior}`,{adjusted:'true',sort:'asc',limit:'50'}),prior,{daily:true}))
       const completed = ['plan','current'].includes(period) ? await attempt(async()=>validateBars(symbol==='VIX'?'I:VIX':symbol,await read(`/v2/aggs/ticker/${symbol==='VIX'?'I:VIX':symbol}/range/1/minute/${prior}/${prior}`,{adjusted:'true',sort:'asc',limit:'50000'}),prior)) : null
-      return res.status(200).json({symbol,period,provider:'Massive',date,priorDate:prior,...(completed?{completed,completedIndicators:completed.data?intradayContext(completed.data):null}:{}),fetchedAt:new Date().toISOString(),bars,previous,indicators:bars.data?intradayContext(bars.data):null})
+      const sessionDaily=period==='current'&&sessionAt()==='CLOSED'?await attempt(async()=>validateBars(symbol,await read(`/v2/aggs/ticker/${symbol}/range/1/day/${date}/${date}`,{adjusted:'true',sort:'asc',limit:'50'}),date,{daily:true})):null
+      return res.status(200).json({symbol,period,provider:'Massive',date,priorDate:prior,sessionDaily,...(completed?{completed,completedIndicators:completed.data?intradayContext(completed.data):null}:{}),fetchedAt:new Date().toISOString(),bars,previous,indicators:bars.data?intradayContext(bars.data):null})
     }
     throw new AccessError(400,'invalid_desk_request')
   }catch(e){sendFailure(res,e)}

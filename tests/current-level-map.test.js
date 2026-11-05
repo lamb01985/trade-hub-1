@@ -1,5 +1,5 @@
 import {it,expect} from 'vitest'
-import {currentLevelStructure,verifiedAlertInputs} from '../src/lib/marketEvidence.js'
+import {currentLevelStructure,verifiedAlertInputs,levelMapSessionDate} from '../src/lib/marketEvidence.js'
 
 const now=Date.parse('2026-11-04T15:30:00Z')
 function context() {
@@ -45,4 +45,19 @@ it('arms alerts only for matching real-time trades and regular-session bars',()=
   }
   const c=context();c.bars.data[0].timeframe='UNVERIFIED'
   expect(verifiedAlertInputs(row(),c,now)).toBe(false)
+})
+it('selects a dated completed-session map while closed, never as an intraday fallback',()=>{
+  expect(levelMapSessionDate(Date.parse('2026-11-07T16:00:00Z'))).toBe('2026-11-06')
+  expect(levelMapSessionDate(Date.parse('2026-11-09T08:00:00Z'))).toBe('2026-11-06')
+  expect(levelMapSessionDate(Date.parse('2026-11-09T09:00:00Z'))).toBe('2026-11-09')
+  expect(levelMapSessionDate(Date.parse('2026-11-26T16:00:00Z'))).toBe('2026-11-25')
+  const c=context(),closed=Date.parse('2026-11-05T03:00:00Z')
+  const s=currentLevelStructure(c,105,closed)
+  expect(s.completedReference).toBe(true)
+  expect(s.referenceScenarios[0].boundary).toBe(108)
+  expect(s.currentBarsAvailable).toBe(false)
+})
+it('uses the documented full-span clusters for every alert confluence value',()=>{
+  const s=currentLevelStructure(context(),105,now)
+  for(const l of s.levelMap.levels)expect(l.confluence).toBe((s.zones.find(z=>z.labels.includes(l.label))?.labels.length||1)-1)
 })

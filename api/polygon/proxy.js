@@ -27,6 +27,7 @@ export default async function handler(req, res) {
   }
   try {
     const result = await polygonFetch(path, params)
+    if(result.retryAfter!==undefined)res.setHeader('Retry-After',result.retryAfter)
     res.status(result.status)
     res.setHeader('content-type', result.contentType)
     res.send(result.body)

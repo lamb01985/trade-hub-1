@@ -1,14 +1,15 @@
 import {useEffect,useState} from 'react'
 import {useDeskMarketData} from './useDeskMarketData.js'
-import {currentLevelStructure,verifiedAlertInputs,evidenceStatus,eastern,planningSessionDate} from '../lib/marketEvidence.js'
+import {currentLevelStructure,verifiedAlertInputs,evidenceStatus,eastern,planningSessionDate,levelMapSessionDate} from '../lib/marketEvidence.js'
 import {checkLevelAlerts,resetLevelAlerts} from '../lib/alerts.js'
 export function useVerifiedPlanning(symbol,settings,period='current') {
   const [refreshToken,setRefreshToken]=useState(0),[lastAlerts,setLastAlerts]=useState([])
   const state=useDeskMarketData(symbol,period,refreshToken)
-  const expectedDate=period==='plan'?planningSessionDate(state.now):eastern(state.now).date
+  const expectedDate=period==='plan'?planningSessionDate(state.now):levelMapSessionDate(state.now)
   const context=state.context.data?.symbol===symbol&&state.context.data?.period===period&&state.context.data?.date===expectedDate?state.context.data:null
-  const structure=currentLevelStructure(context,state.feed.data?.stocks?.data?.find(r=>r.symbol===symbol)?.trade?.price,state.now)
   const row=state.feed.data?.stocks?.data?.find(r=>r.symbol===symbol)
+  const matchingTrade=row?.trade?.symbol===symbol&&!row?.trade?.error&&row?.trade?.timestamp&&eastern(row.trade.timestamp).date===context?.date
+  const structure=currentLevelStructure(context,matchingTrade?row.trade.price:null,state.now)
   const quality=evidenceStatus(row?.trade?.timestamp,{now:state.now,timeframe:row?.trade?.timeframe})
   const barQuality=evidenceStatus(context?.indicators?.lastTimestamp,{now:state.now,kind:'MINUTE_AGGREGATE'})
   const eligible=verifiedAlertInputs(row,context,state.now)

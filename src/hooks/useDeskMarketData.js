@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
-import { eastern, planningSessionDate, sessionAt } from '../lib/marketEvidence.js'
+import { eastern, planningSessionDate, sessionAt, levelMapSessionDate } from '../lib/marketEvidence.js'
+
+let providerRetryAt=0
 
 async function request(params, signal) {
   const response = await fetch(`/api/desk?${new URLSearchParams(params)}`, {cache:'no-store',signal})
@@ -21,6 +23,12 @@ function usePolling(params, interval, refresh) {
     const controller = new AbortController()
     setState(previous=>({key,data:null,error:null,loading:true,retryAt:null,lastSuccessfulAt:previous.key===key?previous.lastSuccessfulAt:null}))
     async function load() {
+      if(providerRetryAt>Date.now()) {
+        const paused=!Number.isFinite(providerRetryAt)
+        setState(previous=>({...previous,key,data:null,loading:false,error:paused?'Automatic refresh paused: provider retry time requires owner review.':'Provider cooldown; waiting before requesting another symbol.',retryAt:providerRetryAt}))
+        if(!paused)timer=setTimeout(load,providerRetryAt-Date.now())
+        return
+      }
       const deadline = new AbortController()
       const abort = () => deadline.abort()
       controller.signal.addEventListener('abort',abort,{once:true})
@@ -28,21 +36,21 @@ function usePolling(params, interval, refresh) {
       let delay = interval, paused = false
       function backoff(hints) {
         for (const hint of hints.filter(value=>value!==undefined)) {
-          if (!Number.isInteger(hint) || hint < 1 || hint > 86400) paused = true
-          else delay = Math.max(delay,hint*1000)
+          if (!Number.isInteger(hint) || hint < 1 || hint > 86400) {paused = true;providerRetryAt=Infinity}
+          else {delay = Math.max(delay,hint*1000);providerRetryAt=Math.max(providerRetryAt,Date.now()+hint*1000)}
         }
       }
       try {
         const data = await request(JSON.parse(key), deadline.signal)
-        const parts = [data.stocks,data.vix,data.bars,data.previous,data.completed].filter(Boolean)
+        const parts = [data.stocks,data.vix,data.bars,data.previous,data.completed,data.sessionDaily].filter(Boolean)
         if (parts.some(part=>part.error==='RATE_LIMITED')) delay = Math.max(delay,60000)
         backoff(parts.map(part=>part.retryAfter))
-        const validData=JSON.parse(key).action==='watchlist'?Array.isArray(data.stocks?.data)&&!data.stocks.error:Array.isArray(data.bars?.data)&&!data.bars.error&&Array.isArray(data.previous?.data)&&!data.previous.error
-        if (active) setState(previous=>({key,data:paused?null:data,error:paused?'Automatic refresh paused: invalid provider retry time. Check Data Health before retrying manually.':null,loading:false,retryAt:!paused && parts.some(part=>part.error==='RATE_LIMITED'||part.retryAfter!==undefined)?Date.now()+delay:null,lastSuccessfulAt:validData&&!paused?data.fetchedAt:previous.lastSuccessfulAt}))
+        const validData=JSON.parse(key).action==='watchlist'?Array.isArray(data.stocks?.data)&&!data.stocks.error:Array.isArray(data.bars?.data)&&!data.bars.error&&Array.isArray(data.previous?.data)&&!data.previous.error&&(!data.sessionDaily||Array.isArray(data.sessionDaily.data)&&!data.sessionDaily.error)
+        if (active) setState(previous=>({key,data:paused?null:data,error:paused?'Automatic refresh paused: invalid provider retry time. Check Data Health before retrying manually.':null,loading:false,retryAt:paused?Infinity:parts.some(part=>part.error==='RATE_LIMITED'||part.retryAfter!==undefined)?Math.max(providerRetryAt,Date.now()+delay):null,lastSuccessfulAt:validData&&!paused?data.fetchedAt:previous.lastSuccessfulAt}))
       } catch(error) {
         delay = Math.max(delay,60000)
         backoff([error.retryAfter])
-        if (active) setState(previous=>({key,data:null,error:paused?'Automatic refresh paused: invalid provider retry time. Check Data Health before retrying manually.':deadline.signal.aborted?'Refresh timed out':error.message,loading:false,retryAt:paused?null:Date.now()+delay,lastSuccessfulAt:previous.lastSuccessfulAt}))
+        if (active) setState(previous=>({key,data:null,error:paused?'Automatic refresh paused: invalid provider retry time. Check Data Health before retrying manually.':deadline.signal.aborted?'Refresh timed out':error.message,loading:false,retryAt:paused?Infinity:Math.max(providerRetryAt,Date.now()+delay),lastSuccessfulAt:previous.lastSuccessfulAt}))
       } finally {
         clearTimeout(timeout)
         controller.signal.removeEventListener('abort',abort)
@@ -60,6 +68,6 @@ export function useDeskMarketData(symbol, period, refresh = 0) {
   const closed=sessionAt(now)==='CLOSED'
   const feed = usePolling({action:'watchlist'},closed?300000:30000,refresh)
   // Date is part of identity: bars cannot persist across the Eastern midnight rollover.
-  const context = usePolling({action:'context',symbol,period,date:period==='plan'?planningSessionDate(now):eastern(now).date},closed?300000:60000,refresh)
+  const context = usePolling({action:'context',symbol,period,date:period==='plan'?planningSessionDate(now):levelMapSessionDate(now)},closed?300000:60000,refresh)
   return {feed,context,now}
 }

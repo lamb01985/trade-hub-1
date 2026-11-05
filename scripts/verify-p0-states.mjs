@@ -26,18 +26,21 @@ try{
  assert.ok(counts.watchlist>initial.watchlist);assert.ok(counts.context>initial.context)
  mode='wrongdate'
  await page.getByRole('button',{name:'Refresh current observations',exact:true}).click()
- await page.getByText('No validated map supplied.',{exact:true}).waitFor()
+ await page.getByText('No validated map supplied.',{exact:true}).filter({visible:true}).first().waitFor()
  assert.ok(!(await page.locator('#current-level-map').innerText()).includes('Current session high'))
  mode='cooldown'
  await page.getByRole('button',{name:'Refresh current observations',exact:true}).click()
  await page.getByText(/Provider cooldown until/).waitFor()
  const limited={...counts}
+ await page.getByLabel('Level Map symbol').selectOption('SPY')
+ await page.waitForTimeout(100)
+ assert.deepEqual(counts,limited,'Ticker switches must respect shared cooldown')
  await page.clock.fastForward(60000)
  assert.deepEqual(counts,limited)
  assert.equal(await page.getByRole('button',{name:'Refresh current observations',exact:true}).isDisabled(),true)
  await page.clock.fastForward(61000)
  await page.waitForTimeout(100)
  assert.ok(counts.watchlist>limited.watchlist)
- const result={syntheticOnly:true,checks:['Recent matching-session bars enable conditional boundaries and distinct targets','Unverified feed cannot arm alerts','Automatic observation and context refresh executes','Aging source timestamps pauses scenarios even after successful refresh','Wrong-date context clears calculations instead of relabeling them','429 cooldown prevents automatic and manual early retry'],counts}
+ const result={syntheticOnly:true,checks:['Recent matching-session bars enable conditional boundaries and distinct targets','Unverified feed cannot arm alerts','Automatic observation and context refresh executes','Aging source timestamps pauses scenarios even after successful refresh','Wrong-date context clears calculations instead of relabeling them','429 cooldown prevents automatic/manual early retry and ticker-switch bypass'],counts}
  writeFileSync('.local/incident/synthetic-state-acceptance.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result,null,2))
 }finally{await browser.close()}

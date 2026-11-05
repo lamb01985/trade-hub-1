@@ -91,6 +91,14 @@ export function latestCompletedSession(now = Date.now()) {
   return tradingDay && p.minute>=close+15 ? p.date : previousSession(p.date)
 }
 
+// Closed-market reference selection is explicit, never a fallback after a
+// failed current-session request. At the next supported session it changes to
+// that session's date, even when its bars have not arrived yet.
+export function levelMapSessionDate(now = Date.now()) {
+  if(sessionAt(now)==='CALENDAR_UNVERIFIED')return null
+  return sessionAt(now)==='CLOSED'?latestCompletedSession(now):eastern(now).date
+}
+
 // The only bridge to existing trading components. No chart/feed recalculation.
 export function deskStructure(context) {
   const pd = context?.previous?.data?.[0]
@@ -170,14 +178,15 @@ export function planningStructure(context) {
 // quote never promotes another date's indicators into today's structure.
 export function currentLevelStructure(context,price,now=Date.now()) {
   if(context?.period==='plan')return planningStructure(context)
-  const valid=context?.period==='current'&&context.date===eastern(now).date
+  const valid=context?.period==='current'&&context.date===levelMapSessionDate(now)
   const base=planningStructure(valid?context:null)
   const regular=valid?context.indicators?.sessions?.REGULAR:null
-  const extra=(regular?[{price:regular.high,label:'Current session high',type:'current-range',sourceDate:context.date},{price:regular.low,label:'Current session low',type:'current-range',sourceDate:context.date}]:[]).filter(l=>positive(l.price))
+  const extra=(regular?[{price:regular.high,label:sessionAt(now)==='CLOSED'?'Map-session high':'Current session high',type:'current-range',sourceDate:context.date},{price:regular.low,label:sessionAt(now)==='CLOSED'?'Map-session low':'Current session low',type:'current-range',sourceDate:context.date}]:[]).filter(l=>positive(l.price))
   const levels=[...base.levelMap.levels,...extra].sort((a,b)=>b.price-a.price)
   const located=Number.isFinite(price)&&price>0
   const nearest=(up)=>located?levels.filter(l=>up?l.price>price:l.price<price).sort((a,b)=>Math.abs(a.price-price)-Math.abs(b.price-price)):[]
   const resistance=nearest(true),support=nearest(false)
+  const referenceScenarios=base.scenarios.map((s,i)=>{const refs=i===0?resistance:support;return {...s,boundary:refs[0]?.price??null,target:refs.find(l=>i===0?l.price>refs[0]?.price:l.price<refs[0]?.price)??null}})
   const last=context?.bars?.data?.at(-1)
   const lastStatus=evidenceStatus(last?.timestamp??last?.t,{now,kind:'MINUTE_AGGREGATE',timeframe:last?.timeframe})
   const lastTime=normalizeTradeTimestamp(last?.timestamp??last?.t)
@@ -185,7 +194,8 @@ export function currentLevelStructure(context,price,now=Date.now()) {
   const scenarios=base.scenarios.map((s,i)=>{const refs=i===0?resistance:support;return {...s,boundary:currentBars?refs[0]?.price??null:null,target:currentBars?refs.find(l=>i===0?l.price>refs[0]?.price:l.price<refs[0]?.price)??null:null}})
   const groups=[]
   for(const l of [...levels].sort((a,b)=>a.price-b.price)){const g=groups.at(-1);if(g&&base.zoneTolerance!=null&&l.price-g.low<=base.zoneTolerance){g.high=l.price;g.labels.push(l.label)}else groups.push({low:l.price,high:l.price,labels:[l.label]})}
-  return {...base,scenarios,zones:groups.filter(g=>g.labels.length>1),levelMap:{...base.levelMap,levels},support:support.slice(0,5),resistance:resistance.slice(0,5),currentBarsAvailable:!!currentBars}
+  for(const l of levels)l.confluence=(groups.find(g=>g.labels.includes(l.label))?.labels.length||1)-1
+  return {...base,scenarios,referenceScenarios,zones:groups.filter(g=>g.labels.length>1),levelMap:{...base.levelMap,levels},support:support.slice(0,5),resistance:resistance.slice(0,5),currentBarsAvailable:!!currentBars,completedReference:valid&&sessionAt(now)==='CLOSED'}
 }
 export function verifiedAlertInputs(row,context,now=Date.now()) {
   if(sessionAt(now)!=='REGULAR'||row?.trade?.symbol!==row?.symbol||!positive(row?.trade?.price)||row?.trade?.kind!=='TRADE'||row?.trade?.session!=='REGULAR'||row?.error||row?.trade?.error)return false

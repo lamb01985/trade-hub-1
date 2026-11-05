@@ -15,7 +15,13 @@ beforeEach(()=>{
   backend.get.mockReset().mockImplementation(async k=>backend.values.get(k))
   backend.set.mockReset().mockImplementation(async(k,v)=>backend.values.set(k,v))
   backend.del.mockReset().mockImplementation(async k=>backend.values.delete(k))
-  backend.eval.mockReset().mockResolvedValue(1)
+  backend.eval.mockReset().mockImplementation(async(script,keys,args)=>{
+    if(keys[0]!=='th:massive:desk:cooldown')return 1
+    const current=backend.values.get(keys[0])||0
+    const until=args[1]?Math.max(current,Number(args[0])+Number(args[1])*1000):current
+    backend.values.set(keys[0],until)
+    return Math.max(0,Math.ceil((until-Number(args[0]))/1000))
+  })
   const salt='1'.repeat(32)
   for(const [k,v] of Object.entries({NODE_ENV:'production',TRADEHUB_LOCAL_AUTH:'false',TRADEHUB_LOCAL_PREVIEW:'false',TRADEHUB_APP_ORIGIN:origin,TRADEHUB_OPERATOR_ID:'test-owner',TRADEHUB_OPERATOR_PASSWORD_HASH:`${salt}:${crypto.scryptSync(password,salt,64).toString('hex')}`,KV_REST_API_URL:'https://synthetic-redis.example.test',KV_REST_API_TOKEN:'synthetic-token',POLYGON_API_KEY:'synthetic-provider-key'}))vi.stubEnv(k,v)
   vi.stubGlobal('fetch',vi.fn(async()=>new Response('{"tickers":[],"results":[]}',{status:200})))
@@ -57,4 +63,20 @@ it('preserves provider cooldown without immediate retry or secret exposure',asyn
   expect(r.body.stocks).toEqual({data:null,error:'RATE_LIMITED',retryAfter:120})
   expect(fetch).toHaveBeenCalledTimes(1) // one bounded snapshot; production adapter does not admit index snapshots
   expect(JSON.stringify(r.body)).not.toContain('synthetic-provider-key')
+  vi.resetModules()
+  await call('watchlist',{cookie})
+  expect(fetch).toHaveBeenCalledTimes(1)
+  const {polygonFetch}=await import('../api/_lib/polygon.js')
+  expect((await polygonFetch('/v2/last/trade/QQQ')).status).toBe(429)
+  expect(fetch).toHaveBeenCalledTimes(1)
+})
+it('stops remaining context calls after a non-JSON provider throttle',async()=>{
+  const signed=await call('login'),cookie=signed.headers['Set-Cookie'].split(';')[0]
+  fetch.mockImplementation(async()=>new Response('upstream unavailable',{status:429,headers:{'Retry-After':'120'}}))
+  const {default:handler}=await import('../api/desk.js'),res=response()
+  await handler({method:'GET',query:{action:'context',symbol:'QQQ',period:'current'},headers:{cookie}},res)
+  expect(fetch).toHaveBeenCalledTimes(1)
+  expect(res.body.bars.error).toBe('RATE_LIMITED')
+  expect(res.body.previous.retryAfter).toBeGreaterThanOrEqual(119)
+  expect(res.body.completed.retryAfter).toBeGreaterThanOrEqual(119)
 })

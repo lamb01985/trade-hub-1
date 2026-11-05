@@ -798,6 +798,7 @@ function TradingApp() {
 
             {planSubTab==='setups'&&<div style={{ display: planSubTab === 'setups' ? 'block' : 'none' }}>
               <ErrorBoundary label="Setups">
+                {setupTickers.some(t=>!setupDataMulti?.data?.[t]?.verified||!setupDataMulti?.data?.[t]?.alertEligible)&&<p role="status">Setup rules are preserved. Automatic setup alerts are paused until their symbol, source times and feed quality are verified.</p>}
                 {/* Trigger engine UI archived. Original render kept as a
                     reference comment so re-enabling is a one-block paste back.
                     <Setups
@@ -966,7 +967,7 @@ function TradingApp() {
               onChange={view=>navigateWorkspace('review',view)}
             />
 
-            {reviewSubTab==='history'&&<SessionResearch ticker={prep.ticker||'QQQ'} onOpenLiveMap={openLiveMap}/>}
+            {reviewSubTab==='history'&&<details><summary>Expand historical Level Maps · archived reports only</summary><SessionResearch ticker={prep.ticker||'QQQ'} onOpenLiveMap={openLiveMap}/></details>}
             {reviewSubTab==='journal'&&<div style={{ display: reviewSubTab === 'journal' ? 'block' : 'none' }}>
               <ErrorBoundary label="Journal">
                 <Journal

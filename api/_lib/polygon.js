@@ -10,6 +10,7 @@
 // the current Polygon plan returns 403 for them — letting them through just
 // wastes a roundtrip and pollutes server logs.
 
+import {providerCooldown} from './access.js'
 const POLYGON_BASE = 'https://api.polygon.io'
 const FETCH_TIMEOUT_MS = 10_000
 
@@ -65,6 +66,8 @@ export async function polygonFetch(path, params = {}) {
     const error = new Error('Invalid provider request'); error.code = 'invalid_provider_request'; error.statusCode = 400; throw error
   }
   const apiKey = requireApiKey()
+  const cooling=await providerCooldown()
+  if(cooling>0)return {status:429,body:'{"status":"ERROR","error":"provider_cooldown"}',contentType:'application/json',retryAfter:String(cooling)}
   const url = new URL(POLYGON_BASE + path)
   for (const [k, v] of Object.entries(params)) {
     if (v != null && v !== '') url.searchParams.set(k, String(v))
@@ -84,6 +87,11 @@ export async function polygonFetch(path, params = {}) {
       if (res.status === 429 || hint != null) {
         const seconds = hint == null ? 60 : /^\d+$/.test(hint) ? Number(hint) : Math.ceil((Date.parse(hint)-Date.now())/1000)
         retryAfter = Number.isFinite(seconds)&&seconds>=1&&seconds<=86400 ? String(seconds) : '86401'
+      }
+      if(res.status===429) {
+        await res.body?.cancel?.()
+        const saved=await providerCooldown(Number(retryAfter)||60)
+        return {status:429,body:'{"status":"ERROR","error":"provider_rate_limited"}',contentType:'application/json',retryAfter:String(saved||retryAfter)}
       }
       const body = await res.text()
       let parsed
